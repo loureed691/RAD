@@ -6,6 +6,13 @@ All notable changes to the RAD KuCoin Futures Trading Bot will be documented in 
 
 ### Fixed
 
+#### Margin Mode Mismatch Error (Code 330005)
+- **Problem**: Bot was failing to create orders with error "The order's margin mode does not match the selected one. Please switch and try again." (code: 330005)
+- **Root Cause**: While leverage was being set with cross margin mode, the order creation itself didn't explicitly specify the margin mode parameter
+- **Solution**: Added `params={"marginMode": "cross"}` to both `create_market_order()` and `create_limit_order()` methods in `kucoin_client.py`
+- **Impact**: Orders can now be created successfully with the correct margin mode matching the leverage setting
+- **Files**: `kucoin_client.py` lines 108, 133
+
 #### Futures Pair Detection Issue
 - **Problem**: Bot was only detecting 1 futures contract (quarterly BTC futures) instead of all available contracts
 - **Root Cause**: The `get_active_futures()` method in `kucoin_client.py` was only checking for `market.get('future')` which missed perpetual swaps
