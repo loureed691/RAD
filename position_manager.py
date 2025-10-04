@@ -2,7 +2,7 @@
 Position management with trailing stop loss
 """
 import time
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 from datetime import datetime
 from kucoin_client import KuCoinClient
 from logger import Logger
@@ -144,6 +144,79 @@ class Position:
             if new_take_profit < self.take_profit:
                 self.take_profit = new_take_profit
     
+    def calculate_intelligent_targets(self, current_price: float, support_resistance: Dict, 
+                                     side: str) -> Tuple[float, float]:
+        """
+        Calculate intelligent take profit and stop loss based on S/R levels
+        
+        Args:
+            current_price: Current market price
+            support_resistance: Dict with support/resistance levels
+            side: 'long' or 'short'
+        
+        Returns:
+            Tuple of (stop_loss, take_profit)
+        """
+        # Default targets
+        default_stop = current_price * 0.97 if side == 'long' else current_price * 1.03
+        default_tp = current_price * 1.05 if side == 'long' else current_price * 0.95
+        
+        if not support_resistance or (not support_resistance.get('support') and 
+                                      not support_resistance.get('resistance')):
+            return default_stop, default_tp
+        
+        if side == 'long':
+            # For longs: use nearest support below as stop, nearest resistance above as target
+            support_levels = support_resistance.get('support', [])
+            resistance_levels = support_resistance.get('resistance', [])
+            
+            # Find nearest support below current price
+            nearest_support = None
+            for level in support_levels:
+                if level['price'] < current_price:
+                    if nearest_support is None or level['price'] > nearest_support:
+                        nearest_support = level['price']
+            
+            # Find nearest resistance above current price
+            nearest_resistance = None
+            for level in resistance_levels:
+                if level['price'] > current_price:
+                    if nearest_resistance is None or level['price'] < nearest_resistance:
+                        nearest_resistance = level['price']
+            
+            # Set stop slightly below support
+            stop_loss = (nearest_support * 0.995) if nearest_support else default_stop
+            
+            # Set take profit slightly before resistance
+            take_profit = (nearest_resistance * 0.995) if nearest_resistance else default_tp
+            
+        else:  # short
+            # For shorts: use nearest resistance above as stop, nearest support below as target
+            support_levels = support_resistance.get('support', [])
+            resistance_levels = support_resistance.get('resistance', [])
+            
+            # Find nearest resistance above current price
+            nearest_resistance = None
+            for level in resistance_levels:
+                if level['price'] > current_price:
+                    if nearest_resistance is None or level['price'] < nearest_resistance:
+                        nearest_resistance = level['price']
+            
+            # Find nearest support below current price
+            nearest_support = None
+            for level in support_levels:
+                if level['price'] < current_price:
+                    if nearest_support is None or level['price'] > nearest_support:
+                        nearest_support = level['price']
+            
+            # Set stop slightly above resistance
+            stop_loss = (nearest_resistance * 1.005) if nearest_resistance else default_stop
+            
+            # Set take profit slightly above support
+            take_profit = (nearest_support * 1.005) if nearest_support else default_tp
+        
+        return stop_loss, take_profit
+
     def should_close(self, current_price: float) -> tuple[bool, str]:
         """Check if position should be closed"""
         if self.side == 'long':

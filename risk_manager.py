@@ -33,6 +33,70 @@ class RiskManager:
             'exchange': ['BNB', 'OKB', 'FTT']
         }
     
+    def analyze_order_book_imbalance(self, orderbook: Dict) -> Dict:
+        """
+        Analyze order book for bid/ask imbalance to optimize entry timing
+        
+        Args:
+            orderbook: Dict with 'bids' and 'asks' arrays
+        
+        Returns:
+            Dict with imbalance metrics
+        """
+        if not orderbook or 'bids' not in orderbook or 'asks' not in orderbook:
+            return {'imbalance': 0.0, 'signal': 'neutral', 'confidence': 0.0}
+        
+        try:
+            bids = orderbook['bids'][:20]  # Top 20 bids
+            asks = orderbook['asks'][:20]  # Top 20 asks
+            
+            if not bids or not asks:
+                return {'imbalance': 0.0, 'signal': 'neutral', 'confidence': 0.0}
+            
+            # Calculate total bid and ask volume
+            bid_volume = sum(float(bid[1]) for bid in bids)
+            ask_volume = sum(float(ask[1]) for ask in asks)
+            
+            total_volume = bid_volume + ask_volume
+            if total_volume == 0:
+                return {'imbalance': 0.0, 'signal': 'neutral', 'confidence': 0.0}
+            
+            # Calculate imbalance (-1 to 1, positive = more bids)
+            imbalance = (bid_volume - ask_volume) / total_volume
+            
+            # Calculate spread
+            best_bid = float(bids[0][0])
+            best_ask = float(asks[0][0])
+            spread_pct = (best_ask - best_bid) / best_bid
+            
+            # Determine signal strength
+            signal = 'neutral'
+            confidence = abs(imbalance)
+            
+            if imbalance > 0.15:  # Strong buy pressure
+                signal = 'bullish'
+            elif imbalance < -0.15:  # Strong sell pressure
+                signal = 'bearish'
+            elif abs(imbalance) < 0.05:  # Balanced
+                signal = 'neutral'
+            
+            # Tight spread indicates good liquidity
+            liquidity_score = 1.0 if spread_pct < 0.001 else 0.5
+            
+            return {
+                'imbalance': imbalance,
+                'signal': signal,
+                'confidence': confidence,
+                'spread_pct': spread_pct,
+                'liquidity_score': liquidity_score,
+                'bid_volume': bid_volume,
+                'ask_volume': ask_volume
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error analyzing order book: {e}")
+            return {'imbalance': 0.0, 'signal': 'neutral', 'confidence': 0.0}
+    
     def calculate_position_size(self, balance: float, entry_price: float, 
                                stop_loss_price: float, leverage: int) -> float:
         """

@@ -130,6 +130,9 @@ class TradingBot:
         indicators = Indicators.get_latest_indicators(df)
         volatility = indicators.get('bb_width', 0.03)
         
+        # Calculate support/resistance levels for intelligent profit targeting
+        support_resistance = Indicators.calculate_support_resistance(df, lookback=50)
+        
         # Calculate stop loss
         stop_loss_percentage = self.risk_manager.calculate_stop_loss_percentage(volatility)
         
