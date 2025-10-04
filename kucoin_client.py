@@ -114,7 +114,10 @@ class KuCoinClient:
     
     def create_limit_order(self, symbol: str, side: str, amount: float, 
                           price: float, leverage: int = 10) -> Optional[Dict]:
-        """Create a limit order with leverage"""
+        """Create a limit order with leverage.
+
+        Cross margin mode is enforced when setting leverage.
+        """
         try:
             # Set leverage first with cross margin mode
             self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
