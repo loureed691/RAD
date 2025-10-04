@@ -114,12 +114,12 @@ class SignalGenerator:
             signal = 'HOLD'
             confidence = 0.5
         
-        # Require minimum confidence threshold
-        if confidence < 0.6:
+        # Require minimum confidence threshold (lowered to 0.55 for more opportunities)
+        if confidence < 0.55:
             signal = 'HOLD'
             reasons['confidence'] = f'too low ({confidence:.2f})'
         
-        self.logger.debug(f"Signal: {signal}, Confidence: {confidence:.2f}, Reasons: {reasons}")
+        self.logger.info(f"Signal: {signal}, Confidence: {confidence:.2f}, Buy: {buy_signals}/{total_signals}, Sell: {sell_signals}/{total_signals}, Reasons: {reasons}")
         
         return signal, confidence, reasons
     
