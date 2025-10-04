@@ -300,7 +300,7 @@ Performance - Win Rate: 62.50%, Avg P/L: 1.23%, Total Trades: 48
    - Validates volatility-based stop loss
    - Confirms confidence-based adjustments
 
-**Test Coverage:** 11/11 tests passing (was 9/9)
+**Test Coverage:** 12/12 tests passing (was 9/9)
 
 ---
 
