@@ -3,7 +3,11 @@ Risk management system for the trading bot
 """
 from typing import Dict, List, Tuple
 from logger import Logger
-import numpy as np
+try:
+    import numpy as np
+except ImportError as e:
+    Logger.get_logger().error("Numpy is required but not installed. Please install numpy to proceed.")
+    raise
 
 class RiskManager:
     """Manage trading risk and position sizing"""
