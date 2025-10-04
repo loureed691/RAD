@@ -85,7 +85,7 @@ def test_logger_messages():
         print(f"✗ Logger messages error: {e}")
         return False
 
-def test_file_logging_no_ansi_codes():
+def test_file_logging_plain_text():
     """Test that file logging remains plain text without ANSI codes"""
     print("\nTesting file logging format...")
     try:
@@ -184,6 +184,47 @@ def test_logger_get():
         print(f"✗ get_logger test error: {e}")
         return False
 
+def test_unicode_emoji_handling():
+    """Test that Unicode emojis are handled correctly in logs"""
+    print("\nTesting Unicode emoji handling...")
+    try:
+        from logger import Logger
+        
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as f:
+            temp_log = f.name
+        
+        try:
+            logger = Logger.setup('INFO', temp_log)
+            
+            # Test various emojis that were causing issues
+            logger.info("🔎 Evaluating opportunity")
+            logger.info("⏸️  Waiting for next cycle")
+            logger.info("🚀 BOT STARTED SUCCESSFULLY!")
+            logger.info("⏱️  Check interval")
+            logger.info("📊 Max positions")
+            logger.info("💪 Leverage")
+            logger.info("✅ Trade executed")
+            logger.info("❌ Error in trading")
+            logger.info("🤖 Retraining ML model")
+            
+            # Verify messages were written to file correctly
+            with open(temp_log, 'r', encoding='utf-8') as f:
+                content = f.read()
+                assert '🔎 Evaluating opportunity' in content
+                assert '⏸️  Waiting for next cycle' in content
+                assert '🚀 BOT STARTED SUCCESSFULLY!' in content
+                assert '✅ Trade executed' in content
+            
+            print("✓ Unicode emojis handled correctly in file logs")
+            print("✓ Console output completed without encoding errors")
+            return True
+        finally:
+            if os.path.exists(temp_log):
+                os.remove(temp_log)
+    except Exception as e:
+        print(f"✗ Unicode emoji handling test error: {e}")
+        return False
+
 def run_all_tests():
     """Run all logger tests"""
     print("=" * 60)
@@ -197,6 +238,7 @@ def run_all_tests():
         test_file_logging_plain_text,
         test_colored_formatter,
         test_logger_get,
+        test_unicode_emoji_handling,
     ]
     
     results = []
