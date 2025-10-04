@@ -40,6 +40,12 @@ class Config:
     RETRAIN_INTERVAL = int(os.getenv('RETRAIN_INTERVAL', '86400'))
     ML_MODEL_PATH = os.getenv('ML_MODEL_PATH', 'models/signal_model.pkl')
     
+    # Performance Optimization Settings
+    MARKET_SCAN_CACHE_DURATION = int(os.getenv('MARKET_SCAN_CACHE_DURATION', '300'))  # 5 minutes
+    ML_PREDICTION_CACHE_DURATION = int(os.getenv('ML_PREDICTION_CACHE_DURATION', '300'))  # 5 minutes
+    MAX_PARALLEL_WORKERS = int(os.getenv('MAX_PARALLEL_WORKERS', '10'))  # Thread pool size
+    ENABLE_PERFORMANCE_MONITORING = os.getenv('ENABLE_PERFORMANCE_MONITORING', 'true').lower() == 'true'
+    
     @classmethod
     def auto_configure_from_balance(cls, available_balance: float):
         """

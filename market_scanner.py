@@ -18,9 +18,10 @@ class MarketScanner:
         self.signal_generator = SignalGenerator()
         self.logger = Logger.get_logger()
         
-        # Caching mechanism to avoid redundant scans
+        # Caching mechanism to avoid redundant scans (configurable)
+        from config import Config
         self.cache = {}
-        self.cache_duration = 300  # 5 minutes cache
+        self.cache_duration = Config.MARKET_SCAN_CACHE_DURATION
         self.last_full_scan = None
         self.scan_results_cache = []
     
@@ -126,7 +127,9 @@ class MarketScanner:
         results = []
         
         # Optimize worker count based on workload (avoid over-threading)
-        optimal_workers = min(max_workers, len(filtered_symbols), 15)
+        from config import Config
+        max_configured_workers = getattr(Config, 'MAX_PARALLEL_WORKERS', 10)
+        optimal_workers = min(max_workers, len(filtered_symbols), max_configured_workers)
         
         # Scan pairs in parallel with optimized worker count
         with ThreadPoolExecutor(max_workers=optimal_workers) as executor:

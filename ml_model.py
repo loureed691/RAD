@@ -33,7 +33,12 @@ class MLModel:
         
         # Prediction cache to avoid redundant predictions (optimization)
         self._prediction_cache = {}
-        self._cache_max_age = 300  # 5 minutes
+        # Use config value for cache duration if available
+        try:
+            from config import Config
+            self._cache_max_age = Config.ML_PREDICTION_CACHE_DURATION
+        except:
+            self._cache_max_age = 300  # 5 minutes default
         
         # Create models directory if it doesn't exist
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
@@ -62,12 +67,16 @@ class MLModel:
             self.logger.error(f"Error loading model: {e}")
     
     def save_model(self):
-        """Save trained model to disk"""
+        """Save trained model to disk with memory-efficient data retention"""
         try:
+            # Keep last 5000 training records (reduced from 10k for memory efficiency)
+            # Prioritize recent data and diverse outcomes
+            training_data_to_save = self._select_important_training_data()
+            
             joblib.dump({
                 'model': self.model,
                 'scaler': self.scaler,
-                'training_data': self.training_data[-10000:],  # Keep last 10k records
+                'training_data': training_data_to_save,
                 'feature_importance': self.feature_importance,
                 'performance_metrics': self.performance_metrics
             }, self.model_path)
@@ -212,6 +221,13 @@ class MLModel:
             'profit_loss': profit_loss
         })
         
+        # Memory optimization: prevent unbounded growth of training data
+        # Keep only last 15000 records in memory
+        if len(self.training_data) > 15000:
+            # Remove oldest 5000 records
+            self.training_data = self.training_data[-10000:]
+            self.logger.debug("Trimmed training data to prevent memory bloat")
+        
         # Update performance metrics
         self.performance_metrics['total_trades'] = self.performance_metrics.get('total_trades', 0) + 1
         total = self.performance_metrics['total_trades']
@@ -334,4 +350,39 @@ class MLModel:
         """Clear prediction cache (call after model retraining)"""
         self._prediction_cache.clear()
         self.logger.debug("Prediction cache cleared")
+    
+    def _select_important_training_data(self) -> List[Dict]:
+        """
+        Select most important training data for storage (memory optimization)
+        
+        Strategy:
+        - Keep all recent data (last 30 days)
+        - Sample older data with preference for extreme outcomes
+        - Maintain class balance
+        
+        Returns:
+            List of training data records to save
+        """
+        if len(self.training_data) <= 5000:
+            return self.training_data
+        
+        # Keep last 2000 records (most recent)
+        recent_data = self.training_data[-2000:]
+        older_data = self.training_data[:-2000]
+        
+        # From older data, prioritize extreme outcomes (big wins/losses)
+        # These are most informative for learning
+        if older_data:
+            # Sort by absolute profit/loss
+            sorted_older = sorted(older_data, 
+                                key=lambda x: abs(x.get('profit_loss', 0)), 
+                                reverse=True)
+            # Take top 3000 by outcome magnitude
+            important_older = sorted_older[:3000]
+        else:
+            important_older = []
+        
+        # Combine and return
+        combined = important_older + recent_data
+        return combined[-5000:]  # Limit to 5000 total
 
