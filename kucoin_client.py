@@ -26,7 +26,7 @@ class KuCoinClient:
             raise
     
     def get_active_futures(self) -> List[Dict]:
-        """Get all active futures trading pairs"""
+        """Get all active futures trading pairs (perpetual swaps and quarterly futures)"""
         try:
             markets = self.exchange.load_markets()
             futures = [
@@ -35,9 +35,16 @@ class KuCoinClient:
                     'info': market
                 }
                 for symbol, market in markets.items()
-                if market.get('future') and market.get('active')
+                if (market.get('swap') or market.get('future')) and market.get('active')
             ]
             self.logger.info(f"Found {len(futures)} active futures pairs")
+            
+            # Log details of found pairs for debugging
+            if futures:
+                swap_count = sum(1 for f in futures if markets[f['symbol']].get('swap'))
+                future_count = sum(1 for f in futures if markets[f['symbol']].get('future'))
+                self.logger.debug(f"Breakdown: {swap_count} perpetual swaps, {future_count} dated futures")
+            
             return futures
         except Exception as e:
             self.logger.error(f"Error fetching active futures: {e}")
@@ -53,13 +60,28 @@ class KuCoinClient:
             return None
     
     def get_ohlcv(self, symbol: str, timeframe: str = '1h', limit: int = 100) -> List:
-        """Get OHLCV data for a symbol"""
-        try:
-            ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
-            return ohlcv
-        except Exception as e:
-            self.logger.error(f"Error fetching OHLCV for {symbol}: {e}")
-            return []
+        """Get OHLCV data for a symbol with retry logic"""
+        max_retries = 3
+        retry_delay = 1
+        
+        for attempt in range(max_retries):
+            try:
+                ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+                if not ohlcv:
+                    self.logger.warning(f"Empty OHLCV data returned for {symbol}")
+                    return []
+                
+                self.logger.debug(f"Fetched {len(ohlcv)} candles for {symbol}")
+                return ohlcv
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    self.logger.warning(f"Error fetching OHLCV for {symbol} (attempt {attempt+1}/{max_retries}): {e}")
+                    time.sleep(retry_delay * (attempt + 1))
+                else:
+                    self.logger.error(f"Failed to fetch OHLCV for {symbol} after {max_retries} attempts: {e}")
+                    return []
+        
+        return []
     
     def get_balance(self) -> Dict:
         """Get account balance"""
