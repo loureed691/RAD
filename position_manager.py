@@ -24,23 +24,125 @@ class Position:
         self.lowest_price = entry_price if side == 'short' else None
         self.entry_time = datetime.now()
         self.trailing_stop_activated = False
+        
+        # Track maximum favorable excursion for adaptive adjustments
+        self.max_favorable_excursion = 0.0  # Peak profit %
+        self.initial_stop_loss = stop_loss  # Store initial stop loss
+        self.initial_take_profit = take_profit  # Store initial take profit
     
-    def update_trailing_stop(self, current_price: float, trailing_percentage: float):
-        """Update trailing stop loss based on current price"""
+    def update_trailing_stop(self, current_price: float, trailing_percentage: float, 
+                            volatility: float = 0.03, momentum: float = 0.0):
+        """
+        Update trailing stop loss with adaptive parameters
+        
+        Args:
+            current_price: Current market price
+            trailing_percentage: Base trailing stop percentage
+            volatility: Market volatility (e.g., ATR or BB width)
+            momentum: Current price momentum (-1 to 1)
+        """
+        # Calculate current P/L percentage
+        current_pnl = self.get_pnl(current_price)
+        
+        # Update max favorable excursion
+        if current_pnl > self.max_favorable_excursion:
+            self.max_favorable_excursion = current_pnl
+        
+        # Adaptive trailing percentage based on multiple factors
+        adaptive_trailing = trailing_percentage
+        
+        # 1. Volatility adjustment - wider stops in high volatility
+        if volatility > 0.05:
+            adaptive_trailing *= 1.5  # 50% wider in high volatility
+        elif volatility < 0.02:
+            adaptive_trailing *= 0.8  # 20% tighter in low volatility
+        
+        # 2. Profit-based adjustment - tighten as profit increases
+        if current_pnl > 0.10:  # >10% profit
+            adaptive_trailing *= 0.7  # Tighten to 70% to lock in more profit
+        elif current_pnl > 0.05:  # >5% profit
+            adaptive_trailing *= 0.85  # Moderate tightening
+        
+        # 3. Momentum adjustment - adapt to trend strength
+        if abs(momentum) > 0.03:  # Strong momentum
+            adaptive_trailing *= 1.2  # Wider to let trend run
+        elif abs(momentum) < 0.01:  # Weak momentum
+            adaptive_trailing *= 0.9  # Tighter when momentum fades
+        
+        # Cap adaptive trailing between reasonable bounds (0.5% to 5%)
+        adaptive_trailing = max(0.005, min(adaptive_trailing, 0.05))
+        
         if self.side == 'long':
             if current_price > self.highest_price:
                 self.highest_price = current_price
-                new_stop = current_price * (1 - trailing_percentage)
+                new_stop = current_price * (1 - adaptive_trailing)
                 if new_stop > self.stop_loss:
                     self.stop_loss = new_stop
                     self.trailing_stop_activated = True
         else:  # short
             if current_price < self.lowest_price:
                 self.lowest_price = current_price
-                new_stop = current_price * (1 + trailing_percentage)
+                new_stop = current_price * (1 + adaptive_trailing)
                 if new_stop < self.stop_loss:
                     self.stop_loss = new_stop
                     self.trailing_stop_activated = True
+    
+    def update_take_profit(self, current_price: float, momentum: float = 0.0, 
+                          trend_strength: float = 0.5, volatility: float = 0.03):
+        """
+        Dynamically adjust take profit based on market conditions
+        
+        Args:
+            current_price: Current market price
+            momentum: Current price momentum
+            trend_strength: Strength of current trend (0-1)
+            volatility: Market volatility
+        """
+        if not self.take_profit:
+            return
+        
+        # Calculate current P/L and initial target
+        current_pnl = self.get_pnl(current_price)
+        initial_distance = abs(self.initial_take_profit - self.entry_price) / self.entry_price
+        
+        # Base multiplier for extending take profit
+        tp_multiplier = 1.0
+        
+        # 1. Strong momentum - extend take profit target
+        if self.side == 'long' and momentum > 0.03:
+            tp_multiplier = 1.5  # Extend 50% further
+        elif self.side == 'short' and momentum < -0.03:
+            tp_multiplier = 1.5
+        elif abs(momentum) > 0.02:
+            tp_multiplier = 1.25  # Moderate extension
+        
+        # 2. Trend strength - extend in strong trends
+        if trend_strength > 0.7:
+            tp_multiplier *= 1.3  # Strong trend bonus
+        elif trend_strength > 0.5:
+            tp_multiplier *= 1.15  # Moderate trend bonus
+        
+        # 3. High volatility - extend target to capture bigger moves
+        if volatility > 0.05:
+            tp_multiplier *= 1.2
+        
+        # 4. Already profitable - be more conservative with extensions
+        if current_pnl > 0.05:
+            tp_multiplier = min(tp_multiplier, 1.2)  # Cap extension when already in profit
+        
+        # Calculate new take profit
+        new_distance = initial_distance * tp_multiplier
+        
+        if self.side == 'long':
+            new_take_profit = self.entry_price * (1 + new_distance)
+            # Only move take profit up (more favorable)
+            if new_take_profit > self.take_profit:
+                self.take_profit = new_take_profit
+        else:  # short
+            new_take_profit = self.entry_price * (1 - new_distance)
+            # Only move take profit down (more favorable)
+            if new_take_profit < self.take_profit:
+                self.take_profit = new_take_profit
     
     def should_close(self, current_price: float) -> tuple[bool, str]:
         """Check if position should be closed"""
@@ -257,7 +359,7 @@ class PositionManager:
             return None
     
     def update_positions(self):
-        """Update all positions and manage trailing stops"""
+        """Update all positions and manage trailing stops with adaptive parameters"""
         for symbol in list(self.positions.keys()):
             try:
                 position = self.positions[symbol]
@@ -269,8 +371,51 @@ class PositionManager:
                 
                 current_price = ticker['last']
                 
-                # Update trailing stop
-                position.update_trailing_stop(current_price, self.trailing_stop_percentage)
+                # Get market data for adaptive parameters
+                ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
+                if ohlcv and len(ohlcv) >= 50:
+                    from indicators import Indicators
+                    df = Indicators.calculate_all(ohlcv)
+                    if not df.empty:
+                        indicators = Indicators.get_latest_indicators(df)
+                        
+                        # Extract adaptive parameters
+                        volatility = indicators.get('bb_width', 0.03)
+                        momentum = indicators.get('momentum', 0.0)
+                        
+                        # Calculate trend strength from moving averages
+                        close = indicators.get('close', current_price)
+                        sma_20 = indicators.get('sma_20', close)
+                        sma_50 = indicators.get('sma_50', close)
+                        
+                        # Trend strength: 0 (no trend) to 1 (strong trend)
+                        if sma_50 > 0:
+                            trend_strength = abs(sma_20 - sma_50) / sma_50
+                            trend_strength = min(trend_strength * 10, 1.0)  # Scale to 0-1
+                        else:
+                            trend_strength = 0.5
+                        
+                        # Update trailing stop with adaptive parameters
+                        position.update_trailing_stop(
+                            current_price, 
+                            self.trailing_stop_percentage,
+                            volatility=volatility,
+                            momentum=momentum
+                        )
+                        
+                        # Update take profit dynamically
+                        position.update_take_profit(
+                            current_price,
+                            momentum=momentum,
+                            trend_strength=trend_strength,
+                            volatility=volatility
+                        )
+                    else:
+                        # Fallback to simple update if indicators fail
+                        position.update_trailing_stop(current_price, self.trailing_stop_percentage)
+                else:
+                    # Fallback to simple update if no market data
+                    position.update_trailing_stop(current_price, self.trailing_stop_percentage)
                 
                 # Check if position should be closed
                 should_close, reason = position.should_close(current_price)
@@ -281,6 +426,11 @@ class PositionManager:
                 
             except Exception as e:
                 self.logger.error(f"Error updating position {symbol}: {e}")
+                # Try simple update as fallback
+                try:
+                    position.update_trailing_stop(current_price, self.trailing_stop_percentage)
+                except Exception:
+                    pass
     
     def get_open_positions_count(self) -> int:
         """Get number of open positions"""

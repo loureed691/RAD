@@ -90,22 +90,56 @@ Confidence = (Signal points / Total points)
    - Adjusted for volatility: +0-5%
    - Range: 2-10% from entry
 
-2. **Take Profit**
+2. **Take Profit (Dynamic)**
    - Initial target: 2x stop loss distance
    - Example: 5% stop = 10% take profit target
+   - **Dynamic Adjustments**:
+     - **Momentum Extension**: Strong momentum (>3%) extends target by 50%
+     - **Trend Extension**: Strong trend (>0.7) adds 30% to target
+     - **Volatility Extension**: High volatility (>5%) adds 20% to capture bigger moves
+     - **Profit Protection**: Already profitable positions cap extensions at 20%
+   - Only adjusts upward (more favorable direction)
+   - Adapts to market conditions to maximize profit potential
 
-3. **Trailing Stop**
-   - Activates when price moves favorably
-   - Default trail: 2% from highest/lowest price
+3. **Trailing Stop (Adaptive)**
+   - Automatically adapts to market conditions
+   - Base trail: 2% from highest/lowest price
+   - **Volatility Adjustment**: 
+     - High volatility (>5%): Widens by 50% to avoid premature stops
+     - Low volatility (<2%): Tightens by 20% for better risk/reward
+   - **Profit-Based Adjustment**:
+     - >10% profit: Tightens to 70% to lock in gains
+     - >5% profit: Moderate tightening to 85%
+   - **Momentum Adjustment**:
+     - Strong momentum (>3%): Widens by 20% to let trend run
+     - Weak momentum (<1%): Tightens by 10% when momentum fades
    - Only moves in favorable direction
-   - Locks in minimum profit as position moves in favor
+   - Adapts between 0.5% and 5% range based on conditions
 
 ### Position Monitoring
 
 - Continuous monitoring every cycle (default: 60s)
-- Update trailing stops on favorable price movements
+- **Adaptive trailing stops** with real-time volatility and momentum analysis
+- **Dynamic take profit** adjustments based on trend strength
+- **Max Favorable Excursion (MFE)** tracking for performance analysis
 - Check stop loss and take profit conditions
 - Record outcomes for ML model training
+
+#### Real-Time Adaptations
+
+For each position update cycle, the bot:
+1. Fetches current market data (OHLCV for past 100 periods)
+2. Calculates technical indicators (volatility, momentum, trend strength)
+3. Adjusts trailing stop based on:
+   - Market volatility (BB width or ATR)
+   - Current price momentum
+   - Position profit level
+4. Adjusts take profit based on:
+   - Momentum strength
+   - Trend strength (SMA divergence)
+   - Market volatility
+5. Tracks maximum favorable excursion for each position
+6. Executes exits when conditions are met
 
 ## Risk Management
 
