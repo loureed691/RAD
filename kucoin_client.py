@@ -99,12 +99,13 @@ class KuCoinClient:
             # Set leverage first with cross margin mode
             self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
             
-            # Create market order
+            # Create market order with cross margin mode explicitly set
             order = self.exchange.create_order(
                 symbol=symbol,
                 type='market',
                 side=side,
-                amount=amount
+                amount=amount,
+                params={"marginMode": "cross"}
             )
             self.logger.info(f"Created {side} order for {amount} {symbol} at {leverage}x leverage")
             return order
@@ -122,13 +123,14 @@ class KuCoinClient:
             # Set leverage first with cross margin mode
             self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
             
-            # Create limit order
+            # Create limit order with cross margin mode explicitly set
             order = self.exchange.create_order(
                 symbol=symbol,
                 type='limit',
                 side=side,
                 amount=amount,
-                price=price
+                price=price,
+                params={"marginMode": "cross"}
             )
             self.logger.info(f"Created {side} limit order for {amount} {symbol} at {price}")
             return order
