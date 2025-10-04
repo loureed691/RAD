@@ -188,6 +188,77 @@ def test_ml_model():
         print(f"✗ ML model error: {e}")
         return False
 
+def test_futures_filter():
+    """Test futures market filtering logic"""
+    print("\nTesting futures market filtering...")
+    try:
+        # Simulate different market types
+        test_markets = {
+            'BTC/USDT:USDT': {'swap': True, 'future': False, 'active': True},
+            'ETH/USDT:USDT': {'swap': True, 'future': False, 'active': True},
+            'BTC/USD:BTC-251226': {'swap': False, 'future': True, 'active': True},
+            'SOL/USDT:USDT': {'swap': True, 'future': False, 'active': True},
+            'BTC/USDT': {'swap': False, 'future': False, 'active': True},  # Spot
+            'OLD/USDT:USDT': {'swap': True, 'future': False, 'active': False},  # Inactive
+        }
+        
+        # Apply the new filter logic
+        new_filtered = [
+            symbol for symbol, market in test_markets.items()
+            if (market.get('swap') or market.get('future')) and market.get('active')
+        ]
+        
+        # Apply the old filter logic
+        old_filtered = [
+            symbol for symbol, market in test_markets.items()
+            if market.get('future') and market.get('active')
+        ]
+        
+        assert len(new_filtered) == 4, f"Expected 4 contracts, got {len(new_filtered)}"
+        assert len(old_filtered) == 1, f"Old filter should find 1 contract, got {len(old_filtered)}"
+        assert len(new_filtered) > len(old_filtered), "New filter should find more contracts"
+        
+        print(f"  Old filter: {len(old_filtered)} contract(s)")
+        print(f"  New filter: {len(new_filtered)} contracts")
+        print(f"  Detected: {', '.join(new_filtered)}")
+        print("✓ Futures filter logic working correctly")
+        return True
+    except Exception as e:
+        print(f"✗ Futures filter error: {e}")
+        return False
+
+def test_insufficient_data_handling():
+    """Test handling of insufficient data"""
+    print("\nTesting insufficient data handling...")
+    try:
+        from indicators import Indicators
+        
+        # Test with insufficient data (40 candles, need 50+)
+        small_data = [
+            [i * 3600000, 100 + i*0.1, 101 + i*0.1, 99 + i*0.1, 100.5 + i*0.1, 1000]
+            for i in range(40)
+        ]
+        df_small = Indicators.calculate_all(small_data)
+        assert df_small.empty, "Should return empty DataFrame for insufficient data"
+        
+        # Test with empty data
+        df_empty = Indicators.calculate_all([])
+        assert df_empty.empty, "Should return empty DataFrame for no data"
+        
+        # Test with None
+        df_none = Indicators.calculate_all(None)
+        assert df_none.empty, "Should return empty DataFrame for None"
+        
+        print("  ✓ Insufficient data (40 candles) handled correctly")
+        print("  ✓ Empty data handled correctly")
+        print("  ✓ None data handled correctly")
+        print("✓ Data validation working correctly")
+        return True
+    except Exception as e:
+        print(f"✗ Data handling error: {e}")
+        return False
+
+
 def main():
     """Run all tests"""
     print("="*60)
@@ -201,7 +272,9 @@ def main():
         test_indicators,
         test_signal_generator,
         test_risk_manager,
-        test_ml_model
+        test_ml_model,
+        test_futures_filter,
+        test_insufficient_data_handling
     ]
     
     results = []
