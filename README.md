@@ -1,6 +1,6 @@
 # RAD - KuCoin Futures Trading Bot
 
-A production-grade, fully automated, **self-learning and optimized** KuCoin Futures trading bot with 10x leverage capability. This bot is designed to be hands-off and resilient, automatically discovering the best trading pairs and executing trades based on advanced technical indicators and machine learning signals.
+A production-grade, fully automated, **self-learning and optimized** KuCoin Futures trading bot with dynamic 3-15x leverage capability. This bot is designed to be hands-off and resilient, automatically discovering the best trading pairs and executing trades based on advanced technical indicators and machine learning signals.
 
 ## 🚀 Recent Optimizations (NEW!)
 
