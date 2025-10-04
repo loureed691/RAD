@@ -176,6 +176,12 @@ class MarketScanner:
         for symbol in symbols:
             future_info = symbol_map.get(symbol, {})
             
+            # Filter by volume if available (min $1M daily volume)
+            volume_24h = future_info.get('quoteVolume', 0)
+            if volume_24h > 0 and volume_24h < 1000000:
+                self.logger.debug(f"Skipping {symbol} due to low volume: ${volume_24h:.0f}")
+                continue
+            
             # Always include BTC, ETH, and other major pairs
             if any(major in symbol for major in ['BTC', 'ETH', 'SOL', 'BNB', 'ADA', 'XRP', 'DOGE', 'MATIC']):
                 priority_symbols.append(symbol)
