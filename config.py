@@ -26,11 +26,13 @@ class Config:
     _MAX_POSITION_SIZE_OVERRIDE = os.getenv('MAX_POSITION_SIZE')
     _RISK_PER_TRADE_OVERRIDE = os.getenv('RISK_PER_TRADE')
     _MIN_PROFIT_THRESHOLD_OVERRIDE = os.getenv('MIN_PROFIT_THRESHOLD')
+    _TRAILING_STOP_PERCENTAGE_OVERRIDE = os.getenv('TRAILING_STOP_PERCENTAGE')
+    _MAX_OPEN_POSITIONS_OVERRIDE = os.getenv('MAX_OPEN_POSITIONS')
     
-    # Bot Parameters
+    # Bot Parameters - will be auto-configured if not set in .env
     CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '60'))
-    TRAILING_STOP_PERCENTAGE = float(os.getenv('TRAILING_STOP_PERCENTAGE', '0.02'))
-    MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))
+    TRAILING_STOP_PERCENTAGE = None  # Will be set by auto_configure_from_balance()
+    MAX_OPEN_POSITIONS = None  # Will be set by auto_configure_from_balance()
     
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
@@ -46,7 +48,8 @@ class Config:
         Automatically configure trading parameters based on available balance
         
         This method intelligently sets optimal values for LEVERAGE, MAX_POSITION_SIZE,
-        RISK_PER_TRADE, and MIN_PROFIT_THRESHOLD based on the account balance.
+        RISK_PER_TRADE, MIN_PROFIT_THRESHOLD, TRAILING_STOP_PERCENTAGE, and 
+        MAX_OPEN_POSITIONS based on the account balance.
         
         Balance tiers:
         - Micro ($10-$100): Very conservative settings for learning
@@ -127,6 +130,43 @@ class Config:
             else:
                 cls.MIN_PROFIT_THRESHOLD = 0.005  # 0.5% min profit for medium+ accounts
             logger.info(f"🤖 Auto-configured MIN_PROFIT_THRESHOLD: {cls.MIN_PROFIT_THRESHOLD:.2%} (balance: ${available_balance:.2f})")
+        
+        if cls._TRAILING_STOP_PERCENTAGE_OVERRIDE:
+            cls.TRAILING_STOP_PERCENTAGE = float(cls._TRAILING_STOP_PERCENTAGE_OVERRIDE)
+            logger.info(f"📌 Using user-defined TRAILING_STOP_PERCENTAGE: {cls.TRAILING_STOP_PERCENTAGE:.2%}")
+        else:
+            # Trailing stop percentage - tighter for smaller accounts, wider for larger accounts
+            # Smaller accounts need tighter stops to preserve capital
+            # Larger accounts can afford wider stops to avoid premature exits
+            if available_balance < 100:
+                cls.TRAILING_STOP_PERCENTAGE = 0.015  # 1.5% for micro accounts (tighter)
+            elif available_balance < 1000:
+                cls.TRAILING_STOP_PERCENTAGE = 0.018  # 1.8% for small accounts
+            elif available_balance < 10000:
+                cls.TRAILING_STOP_PERCENTAGE = 0.02   # 2.0% for medium accounts (standard)
+            elif available_balance < 100000:
+                cls.TRAILING_STOP_PERCENTAGE = 0.025  # 2.5% for large accounts
+            else:
+                cls.TRAILING_STOP_PERCENTAGE = 0.03   # 3.0% for very large accounts (wider)
+            logger.info(f"🤖 Auto-configured TRAILING_STOP_PERCENTAGE: {cls.TRAILING_STOP_PERCENTAGE:.2%} (balance: ${available_balance:.2f})")
+        
+        if cls._MAX_OPEN_POSITIONS_OVERRIDE:
+            cls.MAX_OPEN_POSITIONS = int(cls._MAX_OPEN_POSITIONS_OVERRIDE)
+            logger.info(f"📌 Using user-defined MAX_OPEN_POSITIONS: {cls.MAX_OPEN_POSITIONS}")
+        else:
+            # Max open positions - fewer for smaller accounts to manage risk
+            # More for larger accounts to diversify
+            if available_balance < 100:
+                cls.MAX_OPEN_POSITIONS = 1  # Micro accounts: focus on one trade at a time
+            elif available_balance < 1000:
+                cls.MAX_OPEN_POSITIONS = 2  # Small accounts: max 2 positions
+            elif available_balance < 10000:
+                cls.MAX_OPEN_POSITIONS = 3  # Medium accounts: max 3 positions (standard)
+            elif available_balance < 100000:
+                cls.MAX_OPEN_POSITIONS = 4  # Large accounts: max 4 positions
+            else:
+                cls.MAX_OPEN_POSITIONS = 5  # Very large accounts: max 5 positions for diversification
+            logger.info(f"🤖 Auto-configured MAX_OPEN_POSITIONS: {cls.MAX_OPEN_POSITIONS} (balance: ${available_balance:.2f})")
     
     @classmethod
     def validate(cls):

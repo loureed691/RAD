@@ -2,7 +2,7 @@
 
 ## Overview
 
-The trading bot now features **intelligent auto-configuration** that automatically determines optimal trading parameters based on your account balance. This eliminates the need to manually configure `LEVERAGE`, `MAX_POSITION_SIZE`, `RISK_PER_TRADE`, and `MIN_PROFIT_THRESHOLD` in your `.env` file.
+The trading bot now features **intelligent auto-configuration** that automatically determines optimal trading parameters based on your account balance. This eliminates the need to manually configure `LEVERAGE`, `MAX_POSITION_SIZE`, `RISK_PER_TRADE`, `MIN_PROFIT_THRESHOLD`, `TRAILING_STOP_PERCENTAGE`, and `MAX_OPEN_POSITIONS` in your `.env` file.
 
 ## How It Works
 
@@ -21,8 +21,10 @@ When the bot starts, it:
 - **Max Position Size:** 30% of balance
 - **Risk Per Trade:** 1.0% (very careful)
 - **Min Profit Threshold:** 0.8% (account for fees)
+- **Trailing Stop:** 1.5% (tighter to protect capital)
+- **Max Open Positions:** 1 (focus on one trade)
 
-**Rationale:** Micro accounts need maximum protection. Lower leverage and risk percentage preserve capital while you learn.
+**Rationale:** Micro accounts need maximum protection. Lower leverage and risk percentage preserve capital while you learn. Single position limit ensures focused risk management.
 
 ### Small Account ($100-$1,000)
 **Purpose:** Growing a small account carefully
@@ -31,8 +33,10 @@ When the bot starts, it:
 - **Max Position Size:** 40% of balance
 - **Risk Per Trade:** 1.5% (cautious)
 - **Min Profit Threshold:** 0.6%
+- **Trailing Stop:** 1.8% (still conservative)
+- **Max Open Positions:** 2 (limited diversification)
 
-**Rationale:** Small accounts benefit from conservative settings to build confidence and track record.
+**Rationale:** Small accounts benefit from conservative settings to build confidence and track record. Two positions allow some diversification while maintaining control.
 
 ### Medium Account ($1,000-$10,000)
 **Purpose:** Balanced growth with moderate risk
@@ -41,8 +45,10 @@ When the bot starts, it:
 - **Max Position Size:** 50% of balance
 - **Risk Per Trade:** 2.0% (standard)
 - **Min Profit Threshold:** 0.5%
+- **Trailing Stop:** 2.0% (standard)
+- **Max Open Positions:** 3 (balanced diversification)
 
-**Rationale:** Standard risk management principles apply. This is the "sweet spot" for most traders.
+**Rationale:** Standard risk management principles apply. This is the "sweet spot" for most traders. Three positions provide good diversification without over-complexity.
 
 ### Large Account ($10,000-$100,000)
 **Purpose:** Experienced trading with moderate-aggressive settings
@@ -51,8 +57,10 @@ When the bot starts, it:
 - **Max Position Size:** 60% of balance
 - **Risk Per Trade:** 2.5% (aggressive)
 - **Min Profit Threshold:** 0.5%
+- **Trailing Stop:** 2.5% (wider to let winners run)
+- **Max Open Positions:** 4 (good diversification)
 
-**Rationale:** Larger accounts can handle slightly more aggressive settings while maintaining good risk management.
+**Rationale:** Larger accounts can handle slightly more aggressive settings while maintaining good risk management. Four positions provide excellent diversification.
 
 ### Very Large Account ($100,000+)
 **Purpose:** Professional-level trading
@@ -61,8 +69,10 @@ When the bot starts, it:
 - **Max Position Size:** 60% of balance (capped at $50,000)
 - **Risk Per Trade:** 3.0% (professional)
 - **Min Profit Threshold:** 0.5%
+- **Trailing Stop:** 3.0% (maximum flexibility)
+- **Max Open Positions:** 5 (maximum diversification)
 
-**Rationale:** Very large accounts benefit from maximum efficiency while still maintaining professional risk management.
+**Rationale:** Very large accounts benefit from maximum efficiency while still maintaining professional risk management. Five positions provide optimal diversification for large portfolios.
 
 ## Overriding Auto-Configuration
 
@@ -90,6 +100,8 @@ When the bot starts with auto-configuration, you'll see logs like:
 🤖 Auto-configured MAX_POSITION_SIZE: $2500.00 (balance: $5000.00)
 🤖 Auto-configured RISK_PER_TRADE: 2.00% (balance: $5000.00)
 🤖 Auto-configured MIN_PROFIT_THRESHOLD: 0.50% (balance: $5000.00)
+🤖 Auto-configured TRAILING_STOP_PERCENTAGE: 2.00% (balance: $5000.00)
+🤖 Auto-configured MAX_OPEN_POSITIONS: 3 (balance: $5000.00)
 ```
 
 With overrides:
@@ -98,6 +110,9 @@ With overrides:
 💰 Available balance: $5000.00 USDT
 📌 Using user-defined LEVERAGE: 8x
 🤖 Auto-configured MAX_POSITION_SIZE: $2500.00 (balance: $5000.00)
+📌 Using user-defined TRAILING_STOP_PERCENTAGE: 2.50%
+🤖 Auto-configured MAX_OPEN_POSITIONS: 3 (balance: $5000.00)
+```
 📌 Using user-defined RISK_PER_TRADE: 1.50%
 🤖 Auto-configured MIN_PROFIT_THRESHOLD: 0.50% (balance: $5000.00)
 ```

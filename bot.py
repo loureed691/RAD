@@ -53,6 +53,10 @@ class TradingBot:
                 Config.RISK_PER_TRADE = 0.02
             if Config.MIN_PROFIT_THRESHOLD is None:
                 Config.MIN_PROFIT_THRESHOLD = 0.005
+            if Config.TRAILING_STOP_PERCENTAGE is None:
+                Config.TRAILING_STOP_PERCENTAGE = 0.02
+            if Config.MAX_OPEN_POSITIONS is None:
+                Config.MAX_OPEN_POSITIONS = 3
         
         self.scanner = MarketScanner(self.client)
         
