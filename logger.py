@@ -55,7 +55,7 @@ class ColoredFormatter(logging.Formatter):
             except ImportError:
                 pass
         
-        return True  # Default to supporting colors
+        return False  # Default to not supporting colors
     
     def format(self, record):
         """Format log record with colors and icons"""
