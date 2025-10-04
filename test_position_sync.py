@@ -5,7 +5,6 @@ import sys
 from unittest.mock import Mock, MagicMock
 
 # Add parent directory to path
-sys.path.insert(0, '.')
 
 from position_manager import PositionManager, Position
 from logger import Logger
