@@ -108,16 +108,24 @@ class RiskManager:
             Stop loss percentage (e.g., 0.05 for 5%)
         """
         # Base stop loss
-        base_stop = 0.03  # 3%
+        base_stop = 0.025  # 2.5%
         
-        # Adjust based on volatility
-        # Higher volatility = wider stop loss
-        volatility_adjustment = min(volatility * 2, 0.05)  # Max 5% adjustment
+        # Adjust based on volatility (adaptive approach)
+        # Higher volatility = wider stop loss to avoid premature stops
+        if volatility < 0.02:
+            # Low volatility - tighter stops
+            volatility_adjustment = volatility * 1.5
+        elif volatility < 0.05:
+            # Medium volatility - standard adjustment
+            volatility_adjustment = volatility * 2.0
+        else:
+            # High volatility - wider stops but capped
+            volatility_adjustment = min(volatility * 2.5, 0.06)
         
         stop_loss = base_stop + volatility_adjustment
         
-        # Cap between 2% and 10%
-        stop_loss = max(0.02, min(stop_loss, 0.10))
+        # Cap between 1.5% and 8%
+        stop_loss = max(0.015, min(stop_loss, 0.08))
         
         return stop_loss
     
@@ -132,17 +140,24 @@ class RiskManager:
         Returns:
             Maximum leverage to use
         """
-        # Base leverage
-        base_leverage = 10
-        
-        # Reduce leverage for high volatility
-        if volatility > 0.05:
-            base_leverage = 5
+        # Start with base leverage based on volatility
+        if volatility > 0.08:
+            base_leverage = 3  # Very high volatility - minimal leverage
+        elif volatility > 0.05:
+            base_leverage = 5  # High volatility
         elif volatility > 0.03:
-            base_leverage = 7
+            base_leverage = 7  # Medium volatility
+        elif volatility > 0.02:
+            base_leverage = 10  # Normal volatility
+        else:
+            base_leverage = 12  # Low volatility - can use higher leverage
         
-        # Reduce leverage for low confidence
-        if confidence < 0.7:
-            base_leverage = min(base_leverage, 5)
+        # Adjust based on signal confidence
+        if confidence >= 0.75:
+            # Very high confidence - can increase leverage slightly
+            base_leverage = min(base_leverage + 2, 15)
+        elif confidence < 0.65:
+            # Lower confidence - reduce leverage
+            base_leverage = max(base_leverage - 2, 3)
         
         return base_leverage

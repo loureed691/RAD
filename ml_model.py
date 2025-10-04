@@ -7,7 +7,7 @@ import pandas as pd
 import joblib
 from datetime import datetime
 from typing import Dict, List, Tuple
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from logger import Logger
@@ -21,6 +21,12 @@ class MLModel:
         self.scaler = StandardScaler()
         self.logger = Logger.get_logger()
         self.training_data = []
+        self.feature_importance = {}
+        self.performance_metrics = {
+            'win_rate': 0.0,
+            'avg_profit': 0.0,
+            'total_trades': 0
+        }
         
         # Create models directory if it doesn't exist
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
@@ -36,7 +42,13 @@ class MLModel:
                 self.model = saved_data['model']
                 self.scaler = saved_data['scaler']
                 self.training_data = saved_data.get('training_data', [])
-                self.logger.info("Loaded existing ML model")
+                self.feature_importance = saved_data.get('feature_importance', {})
+                self.performance_metrics = saved_data.get('performance_metrics', {
+                    'win_rate': 0.0,
+                    'avg_profit': 0.0,
+                    'total_trades': 0
+                })
+                self.logger.info(f"Loaded existing ML model - Win rate: {self.performance_metrics.get('win_rate', 0):.2%}, Trades: {self.performance_metrics.get('total_trades', 0)}")
             else:
                 self.logger.info("No existing model found, will train new model")
         except Exception as e:
@@ -48,26 +60,58 @@ class MLModel:
             joblib.dump({
                 'model': self.model,
                 'scaler': self.scaler,
-                'training_data': self.training_data[-10000:]  # Keep last 10k records
+                'training_data': self.training_data[-10000:],  # Keep last 10k records
+                'feature_importance': self.feature_importance,
+                'performance_metrics': self.performance_metrics
             }, self.model_path)
-            self.logger.info("Saved ML model")
+            self.logger.info(f"Saved ML model - Win rate: {self.performance_metrics.get('win_rate', 0):.2%}")
         except Exception as e:
             self.logger.error(f"Error saving model: {e}")
     
     def prepare_features(self, indicators: Dict) -> np.array:
-        """Prepare feature vector from indicators"""
+        """Prepare enhanced feature vector from indicators with derived features"""
+        # Base technical indicators
+        rsi = indicators.get('rsi', 50)
+        macd = indicators.get('macd', 0)
+        macd_signal = indicators.get('macd_signal', 0)
+        macd_diff = indicators.get('macd_diff', 0)
+        stoch_k = indicators.get('stoch_k', 50)
+        stoch_d = indicators.get('stoch_d', 50)
+        bb_width = indicators.get('bb_width', 0)
+        volume_ratio = indicators.get('volume_ratio', 1)
+        momentum = indicators.get('momentum', 0)
+        roc = indicators.get('roc', 0)
+        atr = indicators.get('atr', 0)
+        
+        # Derived features for better signal quality
         features = [
-            indicators.get('rsi', 50),
-            indicators.get('macd', 0),
-            indicators.get('macd_signal', 0),
-            indicators.get('macd_diff', 0),
-            indicators.get('stoch_k', 50),
-            indicators.get('stoch_d', 50),
-            indicators.get('bb_width', 0),
-            indicators.get('volume_ratio', 1),
-            indicators.get('momentum', 0),
-            indicators.get('roc', 0),
-            indicators.get('atr', 0),
+            rsi,
+            macd,
+            macd_signal,
+            macd_diff,
+            stoch_k,
+            stoch_d,
+            bb_width,
+            volume_ratio,
+            momentum,
+            roc,
+            atr,
+            # Normalized RSI strength (0-1 scale)
+            abs(rsi - 50) / 50,
+            # MACD momentum strength
+            abs(macd_diff) if macd_diff else 0,
+            # Stochastic momentum
+            abs(stoch_k - stoch_d) / 100 if stoch_k and stoch_d else 0,
+            # Volume surge indicator
+            max(0, volume_ratio - 1),
+            # Volatility normalized
+            min(bb_width * 10, 1) if bb_width else 0,
+            # RSI oversold/overbought zones
+            1 if rsi < 30 else (1 if rsi > 70 else 0),
+            # MACD bullish/bearish
+            1 if macd > macd_signal else 0,
+            # Strong momentum flag
+            1 if abs(momentum) > 0.02 else 0,
         ]
         return np.array(features).reshape(1, -1)
     
@@ -109,12 +153,12 @@ class MLModel:
             signal: The signal that was generated ('BUY' or 'SELL')
             profit_loss: The profit or loss from the trade (percentage)
         """
-        # Determine label based on outcome
-        if profit_loss > 0.01:  # Profitable trade
+        # Determine label based on outcome with refined thresholds
+        if profit_loss > 0.005:  # Profitable trade (>0.5%)
             label = 1 if signal == 'BUY' else 2
-        elif profit_loss < -0.01:  # Losing trade
+        elif profit_loss < -0.005:  # Losing trade (<-0.5%)
             label = 2 if signal == 'BUY' else 1
-        else:  # Neutral
+        else:  # Neutral (close to breakeven)
             label = 0
         
         features = self.prepare_features(indicators).flatten().tolist()
@@ -122,13 +166,26 @@ class MLModel:
         self.training_data.append({
             'features': features,
             'label': label,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'profit_loss': profit_loss
         })
         
-        self.logger.debug(f"Recorded outcome: signal={signal}, P/L={profit_loss:.4f}, label={label}")
+        # Update performance metrics
+        self.performance_metrics['total_trades'] = self.performance_metrics.get('total_trades', 0) + 1
+        if profit_loss > 0:
+            wins = self.performance_metrics.get('wins', 0) + 1
+            self.performance_metrics['wins'] = wins
+            self.performance_metrics['win_rate'] = wins / self.performance_metrics['total_trades']
+        
+        # Update average profit
+        total = self.performance_metrics['total_trades']
+        avg_profit = self.performance_metrics.get('avg_profit', 0)
+        self.performance_metrics['avg_profit'] = ((avg_profit * (total - 1)) + profit_loss) / total
+        
+        self.logger.debug(f"Recorded outcome: signal={signal}, P/L={profit_loss:.4f}, label={label}, Win rate: {self.performance_metrics.get('win_rate', 0):.2%}")
     
     def train(self, min_samples: int = 100):
-        """Train or retrain the model with collected data"""
+        """Train or retrain the model with collected data using optimized hyperparameters"""
         if len(self.training_data) < min_samples:
             self.logger.info(f"Not enough training data ({len(self.training_data)}/{min_samples})")
             return False
@@ -142,25 +199,44 @@ class MLModel:
             
             # Split data
             X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=42
+                X, y, test_size=0.2, random_state=42, stratify=y if len(np.unique(y)) > 1 else None
             )
             
             # Scale features
             X_train_scaled = self.scaler.fit_transform(X_train)
             X_test_scaled = self.scaler.transform(X_test)
             
-            # Train model
-            self.model = RandomForestClassifier(
-                n_estimators=100,
-                max_depth=10,
-                random_state=42,
-                n_jobs=-1
+            # Train model with optimized hyperparameters
+            # Use GradientBoosting for better performance on imbalanced data
+            self.model = GradientBoostingClassifier(
+                n_estimators=150,
+                max_depth=6,
+                learning_rate=0.1,
+                min_samples_split=5,
+                min_samples_leaf=2,
+                subsample=0.8,
+                random_state=42
             )
             self.model.fit(X_train_scaled, y_train)
             
             # Evaluate
             train_score = self.model.score(X_train_scaled, y_train)
             test_score = self.model.score(X_test_scaled, y_test)
+            
+            # Get feature importance
+            if hasattr(self.model, 'feature_importances_'):
+                feature_names = [
+                    'rsi', 'macd', 'macd_signal', 'macd_diff', 'stoch_k', 'stoch_d',
+                    'bb_width', 'volume_ratio', 'momentum', 'roc', 'atr',
+                    'rsi_strength', 'macd_strength', 'stoch_momentum', 'volume_surge',
+                    'volatility_norm', 'rsi_zone', 'macd_bullish', 'momentum_flag'
+                ]
+                importances = self.model.feature_importances_
+                self.feature_importance = {name: float(imp) for name, imp in zip(feature_names, importances)}
+                
+                # Log top 5 features
+                top_features = sorted(self.feature_importance.items(), key=lambda x: x[1], reverse=True)[:5]
+                self.logger.info(f"Top features: {', '.join([f'{k}:{v:.3f}' for k, v in top_features])}")
             
             self.logger.info(f"Model trained - Train accuracy: {train_score:.3f}, Test accuracy: {test_score:.3f}")
             
@@ -172,3 +248,27 @@ class MLModel:
         except Exception as e:
             self.logger.error(f"Error training model: {e}")
             return False
+    
+    def get_performance_metrics(self) -> Dict:
+        """Get current performance metrics"""
+        return self.performance_metrics.copy()
+    
+    def get_adaptive_confidence_threshold(self) -> float:
+        """
+        Calculate adaptive confidence threshold based on model performance
+        
+        Returns:
+            Adjusted confidence threshold (0.5-0.75)
+        """
+        base_threshold = 0.6
+        
+        # Adjust based on win rate
+        win_rate = self.performance_metrics.get('win_rate', 0.5)
+        if win_rate > 0.6:
+            # If winning more, can be slightly more aggressive
+            return max(0.55, base_threshold - 0.05)
+        elif win_rate < 0.4:
+            # If losing more, be more conservative
+            return min(0.75, base_threshold + 0.1)
+        
+        return base_threshold

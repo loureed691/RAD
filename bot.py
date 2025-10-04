@@ -143,6 +143,11 @@ class TradingBot:
         """Run one complete trading cycle"""
         self.logger.info("Starting trading cycle...")
         
+        # Update ML model's adaptive threshold in signal generator
+        adaptive_threshold = self.ml_model.get_adaptive_confidence_threshold()
+        self.scanner.signal_generator.set_adaptive_threshold(adaptive_threshold)
+        self.logger.debug(f"Using adaptive confidence threshold: {adaptive_threshold:.2f}")
+        
         # Update existing positions
         for symbol, pnl, position in self.position_manager.update_positions():
             self.logger.info(f"Position closed: {symbol}, P/L: {pnl:.2%}")
@@ -154,6 +159,15 @@ class TradingBot:
             
             signal = 'BUY' if position.side == 'long' else 'SELL'
             self.ml_model.record_outcome(indicators, signal, pnl)
+        
+        # Log performance metrics
+        metrics = self.ml_model.get_performance_metrics()
+        if metrics.get('total_trades', 0) > 0:
+            self.logger.info(
+                f"Performance - Win Rate: {metrics.get('win_rate', 0):.2%}, "
+                f"Avg P/L: {metrics.get('avg_profit', 0):.2%}, "
+                f"Total Trades: {metrics.get('total_trades', 0)}"
+            )
         
         # Scan market for opportunities
         opportunities = self.scanner.get_best_pairs(n=5)
@@ -178,7 +192,8 @@ class TradingBot:
         time_since_retrain = (datetime.now() - self.last_retrain_time).total_seconds()
         if time_since_retrain > Config.RETRAIN_INTERVAL:
             self.logger.info("Retraining ML model...")
-            self.ml_model.train()
+            if self.ml_model.train():
+                self.logger.info("ML model retrained successfully")
             self.last_retrain_time = datetime.now()
         
         self.last_scan_time = datetime.now()

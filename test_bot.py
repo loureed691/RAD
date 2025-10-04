@@ -156,14 +156,14 @@ def test_risk_manager():
         return False
 
 def test_ml_model():
-    """Test ML model initialization"""
+    """Test ML model initialization and enhanced features"""
     print("\nTesting ML model...")
     try:
         from ml_model import MLModel
         
         model = MLModel('models/test_model.pkl')
         
-        # Test feature preparation
+        # Test feature preparation with enhanced features
         sample_indicators = {
             'rsi': 50,
             'macd': 0.5,
@@ -179,13 +179,26 @@ def test_ml_model():
         }
         
         features = model.prepare_features(sample_indicators)
-        assert features.shape[1] == 11
+        # Enhanced features should have 19 features now (11 base + 8 derived)
+        assert features.shape[1] == 19, f"Expected 19 features, got {features.shape[1]}"
+        
+        # Test performance metrics
+        metrics = model.get_performance_metrics()
+        assert 'total_trades' in metrics
+        assert 'win_rate' in metrics
+        
+        # Test adaptive threshold
+        threshold = model.get_adaptive_confidence_threshold()
+        assert 0.5 <= threshold <= 0.75
         
         print(f"  Feature vector shape: {features.shape}")
-        print("✓ ML model initialized successfully")
+        print(f"  Adaptive threshold: {threshold:.2f}")
+        print("✓ ML model initialized successfully with enhanced features")
         return True
     except Exception as e:
         print(f"✗ ML model error: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def test_futures_filter():
@@ -259,6 +272,87 @@ def test_insufficient_data_handling():
         return False
 
 
+def test_signal_generator_enhancements():
+    """Test enhanced signal generator with market regime detection"""
+    print("\nTesting enhanced signal generator...")
+    try:
+        from signals import SignalGenerator
+        from indicators import Indicators
+        
+        # Create trending market data
+        trending_data = [
+            [i * 60000, 100 + i * 0.5, 101 + i * 0.5, 99 + i * 0.5, 100.5 + i * 0.5, 1000]
+            for i in range(100)
+        ]
+        
+        df = Indicators.calculate_all(trending_data)
+        generator = SignalGenerator()
+        signal, confidence, reasons = generator.generate_signal(df)
+        
+        assert signal in ['BUY', 'SELL', 'HOLD']
+        assert 0 <= confidence <= 1
+        assert 'market_regime' in reasons
+        
+        # Test market regime detection
+        regime = generator.detect_market_regime(df)
+        assert regime in ['trending', 'ranging', 'neutral']
+        
+        # Test adaptive threshold setting
+        generator.set_adaptive_threshold(0.65)
+        assert generator.adaptive_threshold == 0.65
+        
+        print(f"  Signal: {signal}")
+        print(f"  Confidence: {confidence:.2f}")
+        print(f"  Market Regime: {regime}")
+        print(f"  Adaptive threshold: {generator.adaptive_threshold:.2f}")
+        print("✓ Enhanced signal generator working correctly")
+        return True
+    except Exception as e:
+        print(f"✗ Signal generator error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_risk_manager_enhancements():
+    """Test enhanced risk management with adaptive leverage"""
+    print("\nTesting enhanced risk manager...")
+    try:
+        from risk_manager import RiskManager
+        
+        manager = RiskManager(
+            max_position_size=1000,
+            risk_per_trade=0.02,
+            max_open_positions=3
+        )
+        
+        # Test adaptive leverage based on volatility and confidence
+        # Low volatility, high confidence
+        leverage1 = manager.get_max_leverage(volatility=0.015, confidence=0.80)
+        assert leverage1 >= 10, f"Expected high leverage for low vol/high conf, got {leverage1}"
+        
+        # High volatility, low confidence
+        leverage2 = manager.get_max_leverage(volatility=0.10, confidence=0.60)
+        assert leverage2 <= 5, f"Expected low leverage for high vol/low conf, got {leverage2}"
+        
+        # Test adaptive stop loss
+        stop1 = manager.calculate_stop_loss_percentage(volatility=0.01)
+        stop2 = manager.calculate_stop_loss_percentage(volatility=0.10)
+        assert stop2 > stop1, "Higher volatility should have wider stop"
+        
+        print(f"  Low vol/High conf leverage: {leverage1}x")
+        print(f"  High vol/Low conf leverage: {leverage2}x")
+        print(f"  Low vol stop loss: {stop1:.2%}")
+        print(f"  High vol stop loss: {stop2:.2%}")
+        print("✓ Enhanced risk manager working correctly")
+        return True
+    except Exception as e:
+        print(f"✗ Risk manager error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def main():
     """Run all tests"""
     print("="*60)
@@ -274,7 +368,9 @@ def main():
         test_risk_manager,
         test_ml_model,
         test_futures_filter,
-        test_insufficient_data_handling
+        test_insufficient_data_handling,
+        test_signal_generator_enhancements,
+        test_risk_manager_enhancements
     ]
     
     results = []
