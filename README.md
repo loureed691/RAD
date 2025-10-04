@@ -10,6 +10,8 @@ A production-grade, fully automated, **self-learning and hyper-intelligent** KuC
 - **MAX_POSITION_SIZE** - Dynamically set as 30-60% of your balance
 - **RISK_PER_TRADE** - Intelligently adjusted from 1% to 3% based on account size
 - **MIN_PROFIT_THRESHOLD** - Optimized to account for fees at different balance tiers
+- **TRAILING_STOP_PERCENTAGE** - Automatically set from 1.5% to 3% based on account size
+- **MAX_OPEN_POSITIONS** - Scales from 1 to 5 positions based on available capital
 
 Simply set up your API keys and start trading - the bot handles the rest!
 
@@ -139,14 +141,21 @@ KUCOIN_API_PASSPHRASE=your_api_passphrase_here
 
 Key configuration parameters in `.env`:
 
-- **LEVERAGE**: Maximum leverage to use (default: 10)
-- **MAX_POSITION_SIZE**: Maximum position size in USDT (default: 1000)
-- **RISK_PER_TRADE**: Risk per trade as percentage of balance (default: 0.02 = 2%)
-- **MIN_PROFIT_THRESHOLD**: Minimum profit threshold to consider (default: 0.005 = 0.5%)
+**Auto-Configured Parameters (Optional):**
+These are automatically determined based on your account balance. You can override them if needed:
+
+- **LEVERAGE**: Maximum leverage to use (auto-configured: 5-15x based on balance)
+- **MAX_POSITION_SIZE**: Maximum position size in USDT (auto-configured: 30-60% of balance)
+- **RISK_PER_TRADE**: Risk per trade as percentage of balance (auto-configured: 1-3%)
+- **MIN_PROFIT_THRESHOLD**: Minimum profit threshold to consider (auto-configured: 0.5-0.8%)
+- **TRAILING_STOP_PERCENTAGE**: Trailing stop percentage (auto-configured: 1.5-3.0%)
+- **MAX_OPEN_POSITIONS**: Maximum concurrent positions (auto-configured: 1-5 based on balance)
+
+**Other Parameters:**
 - **CHECK_INTERVAL**: Seconds between market scans (default: 60)
-- **TRAILING_STOP_PERCENTAGE**: Trailing stop percentage (default: 0.02 = 2%)
-- **MAX_OPEN_POSITIONS**: Maximum concurrent positions (default: 3)
 - **RETRAIN_INTERVAL**: Seconds between ML model retraining (default: 86400 = 24 hours)
+
+👉 **See [AUTO_CONFIG.md](AUTO_CONFIG.md) for complete auto-configuration details**
 
 ## Usage
 
