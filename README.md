@@ -2,7 +2,20 @@
 
 A production-grade, fully automated, **self-learning and hyper-intelligent** KuCoin Futures trading bot with dynamic 3-15x leverage capability. This bot is designed to be hands-off and resilient, automatically discovering the best trading pairs and executing trades based on advanced technical indicators, multi-timeframe analysis, and institutional-grade machine learning.
 
-## 🚀 Recent Intelligence Upgrade (NEW!)
+## 🎯 Auto-Configuration (NEW!) ⭐
+
+**No more manual configuration!** The bot now automatically configures optimal trading parameters based on your account balance:
+
+- **LEVERAGE** - Automatically scales from 5x (micro accounts) to 15x (large accounts)
+- **MAX_POSITION_SIZE** - Dynamically set as 30-60% of your balance
+- **RISK_PER_TRADE** - Intelligently adjusted from 1% to 3% based on account size
+- **MIN_PROFIT_THRESHOLD** - Optimized to account for fees at different balance tiers
+
+Simply set up your API keys and start trading - the bot handles the rest!
+
+👉 **See [AUTO_CONFIG.md](AUTO_CONFIG.md) for complete details on auto-configuration**
+
+## 🚀 Recent Intelligence Upgrade
 
 The bot has been **significantly enhanced with institutional-grade intelligence**:
 
