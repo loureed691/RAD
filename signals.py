@@ -213,10 +213,10 @@ class SignalGenerator:
         bb_width = indicators.get('bb_width', 0)
         if 0.03 < bb_width < 0.08:
             score += 10  # Sweet spot
-        elif bb_width > 0.05:
-            score += 5
         elif bb_width > 0.10:
             score -= 5  # Too volatile
+        elif bb_width > 0.05:
+            score += 5
         
         # Bonus for extreme RSI (mean reversion opportunity)
         rsi = indicators.get('rsi', 50)
