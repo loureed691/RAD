@@ -105,7 +105,8 @@ class Logger:
         logger.handlers.clear()
         
         # File handler (plain text, detailed)
-        file_handler = logging.FileHandler(log_file)
+        # Use UTF-8 encoding to properly handle Unicode characters in log files
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
         file_handler.setLevel(getattr(logging, log_level))
         file_formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -114,8 +115,19 @@ class Logger:
         file_handler.setFormatter(file_formatter)
         
         # Console handler (colored, concise)
-        console_handler = logging.StreamHandler()
+        # Use UTF-8 encoding for console output to handle Unicode characters (emojis)
+        # This is especially important on Windows where the default encoding is often cp1252
+        console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(getattr(logging, log_level))
+        
+        # Set UTF-8 encoding for the stream to handle Unicode emojis
+        if hasattr(console_handler.stream, 'reconfigure'):
+            # Python 3.7+ has reconfigure method
+            try:
+                console_handler.stream.reconfigure(encoding='utf-8', errors='replace')
+            except Exception:
+                pass  # If reconfigure fails, continue with default encoding
+        
         console_formatter = ColoredFormatter(
             '%(asctime)s - %(levelname)s - %(message)s',
             datefmt='%H:%M:%S',
