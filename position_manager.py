@@ -74,6 +74,101 @@ class PositionManager:
         self.positions: Dict[str, Position] = {}
         self.logger = Logger.get_logger()
     
+    def sync_existing_positions(self):
+        """Sync existing positions from the exchange and import them into management
+        
+        This allows the bot to manage positions that were opened manually or by
+        a previous bot session. Existing positions will be tracked with trailing
+        stops and managed intelligently.
+        """
+        try:
+            self.logger.info("Syncing existing positions from exchange...")
+            
+            # Fetch open positions from exchange
+            exchange_positions = self.client.fetch_positions()
+            
+            if not exchange_positions:
+                self.logger.info("No existing positions found on exchange")
+                return 0
+            
+            synced_count = 0
+            for pos in exchange_positions:
+                symbol = pos.get('symbol')
+                if not symbol:
+                    continue
+                
+                # Skip if we already have this position tracked
+                if symbol in self.positions:
+                    self.logger.debug(f"Position {symbol} already tracked, skipping sync")
+                    continue
+                
+                # Extract position details
+                contracts = float(pos.get('contracts', 0))
+                if contracts == 0:
+                    continue
+                
+                side = pos.get('side', 'long')  # 'long' or 'short'
+                entry_price = float(pos.get('entryPrice', 0))
+                leverage = int(pos.get('leverage', 10))
+                
+                # Get current price for calculating stop loss
+                ticker = self.client.get_ticker(symbol)
+                if not ticker:
+                    self.logger.warning(f"Could not get ticker for {symbol}, skipping")
+                    continue
+                
+                current_price = ticker['last']
+                
+                # Calculate intelligent stop loss based on current price
+                # Use a conservative 5% stop loss for imported positions
+                stop_loss_percentage = 0.05
+                if side == 'long':
+                    stop_loss = current_price * (1 - stop_loss_percentage)
+                    take_profit = current_price * (1 + stop_loss_percentage * 2)
+                else:
+                    stop_loss = current_price * (1 + stop_loss_percentage)
+                    take_profit = current_price * (1 - stop_loss_percentage * 2)
+                
+                # Create Position object
+                position = Position(
+                    symbol=symbol,
+                    side=side,
+                    entry_price=entry_price,
+                    amount=abs(contracts),
+                    leverage=leverage,
+                    stop_loss=stop_loss,
+                    take_profit=take_profit
+                )
+                
+                # If position is already profitable, set highest/lowest price
+                # to current price so trailing stop can activate
+                if side == 'long' and current_price > entry_price:
+                    position.highest_price = current_price
+                elif side == 'short' and current_price < entry_price:
+                    position.lowest_price = current_price
+                
+                self.positions[symbol] = position
+                synced_count += 1
+                
+                # Calculate current P/L
+                pnl = position.get_pnl(current_price)
+                
+                self.logger.info(
+                    f"Synced {side} position: {symbol} @ {entry_price:.2f}, "
+                    f"Current: {current_price:.2f}, Amount: {abs(contracts)}, "
+                    f"Leverage: {leverage}x, P/L: {pnl:.2%}, "
+                    f"Stop Loss: {stop_loss:.2f}, Take Profit: {take_profit:.2f}"
+                )
+            
+            if synced_count > 0:
+                self.logger.info(f"Successfully synced {synced_count} existing position(s)")
+            
+            return synced_count
+            
+        except Exception as e:
+            self.logger.error(f"Error syncing existing positions: {e}", exc_info=True)
+            return 0
+    
     def open_position(self, symbol: str, signal: str, amount: float, 
                      leverage: int, stop_loss_percentage: float = 0.05) -> bool:
         """Open a new position"""

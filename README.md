@@ -26,6 +26,7 @@ The bot has been significantly enhanced with smart optimizations:
 - **Dynamic Leverage Management**: Intelligently adjusts leverage (3-15x) based on market volatility and signal confidence
 - **Smart Stop Loss**: Volatility-adaptive stop loss (1.5-8%) for optimal risk management
 - **Trailing Stop Loss**: Automatically trails profits to lock in gains while letting winners run
+- **Existing Position Management**: Automatically syncs and manages positions opened manually or by previous sessions
 - **Risk Management**: Built-in position sizing, maximum position limits, and risk per trade controls
 - **Performance Tracking**: Real-time win rate, average profit, and trade statistics with auto-optimization
 - **Smart Market Scanning**: Intelligent caching system reduces API load by 40% while maintaining accuracy
@@ -39,6 +40,7 @@ The bot has been significantly enhanced with smart optimizations:
 - 🎯 **Adaptive Strategies** that learn from performance
 - 🛡️ **Dynamic Risk Management** based on volatility
 - 📈 **Performance Metrics** tracked and displayed in real-time
+- 🔄 **Existing Position Sync**: Manages positions opened manually or outside the bot
 
 ## Architecture
 
@@ -111,10 +113,13 @@ python bot.py
 
 The bot will:
 1. Initialize all components and validate configuration
-2. Start scanning the market for trading opportunities
-3. Execute trades based on the best signals
-4. Monitor and update positions with trailing stops
-5. Continuously learn and improve from trading outcomes
+2. **Sync existing positions** from your KuCoin account (if any)
+3. Start scanning the market for trading opportunities
+4. Execute trades based on the best signals
+5. Monitor and update positions with trailing stops
+6. Continuously learn and improve from trading outcomes
+
+> **Note**: The bot automatically detects and manages any existing positions on your account, whether they were opened manually or by a previous bot session. See [POSITION_SYNC.md](POSITION_SYNC.md) for details.
 
 ### Stopping the Bot
 
@@ -142,6 +147,7 @@ Each indicator contributes to an overall score and confidence level. Trades are 
 
 The bot manages positions with the following features:
 
+- **Existing Position Sync**: Automatically imports and manages positions opened outside the bot
 - **Dynamic Position Sizing**: Calculates safe position size based on account balance, risk per trade, and stop loss distance
 - **Trailing Stops**: Automatically adjusts stop loss to lock in profits as price moves favorably
 - **Take Profit**: Sets initial take profit targets based on risk-reward ratio

@@ -58,6 +58,11 @@ class TradingBot:
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
+        
+        # Sync existing positions from exchange
+        synced_positions = self.position_manager.sync_existing_positions()
+        if synced_positions > 0:
+            self.logger.info(f"Managing {synced_positions} existing position(s) from exchange")
     
     def signal_handler(self, sig, frame):
         """Handle shutdown signals gracefully"""
@@ -142,6 +147,16 @@ class TradingBot:
     def run_cycle(self):
         """Run one complete trading cycle"""
         self.logger.info("Starting trading cycle...")
+        
+        # Periodically sync existing positions from exchange (every 10 cycles)
+        # This ensures we catch any positions opened manually or by other means
+        if not hasattr(self, '_cycle_count'):
+            self._cycle_count = 0
+        self._cycle_count += 1
+        
+        if self._cycle_count % 10 == 0:
+            self.logger.debug("Periodic sync of existing positions...")
+            self.position_manager.sync_existing_positions()
         
         # Update ML model's adaptive threshold in signal generator
         adaptive_threshold = self.ml_model.get_adaptive_confidence_threshold()
