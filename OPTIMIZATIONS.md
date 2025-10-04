@@ -8,6 +8,9 @@ The bot has been significantly enhanced with:
 - **Enhanced ML Model** with 19 features (up from 11) and better algorithms
 - **Adaptive Signal Generation** with market regime detection
 - **Dynamic Risk Management** with volatility-based adjustments
+- **Adaptive Trailing Stops** ⭐ NEW - Respond to volatility, profit, and momentum
+- **Dynamic Take Profit** ⭐ NEW - Extend targets in strong trends
+- **MFE Tracking** ⭐ NEW - Track peak profit for analysis
 - **Performance Tracking** with auto-optimization
 - **Smart Caching** for improved scanning efficiency
 
@@ -216,6 +219,94 @@ confidence < 65%: -2x  # Low confidence penalty
 
 **Impact:** More granular feedback for ML model training
 
+### 3.4 Adaptive Trailing Stop Loss ⭐ NEW
+
+**Before:** Fixed 2% trailing stop for all positions
+
+**After:** Dynamic trailing stop adapting to market conditions (0.5-5% range)
+
+**Adaptation Factors:**
+
+```python
+# Base: 2% trailing stop
+
+# 1. Volatility Adjustment
+volatility > 5%: ×1.5  # Wider stop in high volatility
+volatility < 2%: ×0.8  # Tighter stop in low volatility
+
+# 2. Profit-Based Adjustment
+profit > 10%: ×0.7   # Lock in gains with tighter stop
+profit > 5%:  ×0.85  # Moderate tightening
+
+# 3. Momentum Adjustment
+strong momentum (>3%): ×1.2  # Let trend run
+weak momentum (<1%):   ×0.9  # Tighten when momentum fades
+```
+
+**Examples:**
+- **Low vol trending market:** 2% × 0.8 × 1.2 = **1.92%** (tight trailing)
+- **High vol + 10% profit:** 2% × 1.5 × 0.7 = **2.1%** (protective)
+- **Normal conditions:** ~**2%** (baseline)
+
+**Benefits:**
+- Reduces premature stops in volatile markets
+- Locks in profits more aggressively when winning
+- Adapts to momentum to ride strong trends
+- Protects against reversals when momentum fades
+
+### 3.5 Dynamic Take Profit Targets ⭐ NEW
+
+**Before:** Static take profit at 2× stop loss distance
+
+**After:** Dynamic adjustment based on market opportunity
+
+**Extension Multipliers:**
+
+```python
+# Base: 2× stop loss distance (e.g., 5% stop = 10% TP)
+
+# 1. Momentum Extension
+strong momentum (>3%): ×1.5   # Extend target 50%
+moderate momentum (>2%): ×1.25
+
+# 2. Trend Extension
+strong trend (>0.7): ×1.3   # Strong trend bonus
+moderate trend (>0.5): ×1.15
+
+# 3. Volatility Extension
+high volatility (>5%): ×1.2  # Capture bigger moves
+
+# 4. Profit Protection
+already > 5% profit: cap at ×1.2  # Conservative when winning
+```
+
+**Examples:**
+- **Strong trending + momentum:** 10% base → **19.5%** target (1.5×1.3)
+- **High vol ranging market:** 10% base → **12%** target (1.2×)
+- **Already profitable:** 10% base → **12%** max (capped)
+
+**Benefits:**
+- Captures larger moves in strong trends
+- Adapts to volatile markets for bigger targets
+- Protects profits by being conservative when ahead
+- Only moves targets in favorable direction
+
+### 3.6 Max Favorable Excursion (MFE) Tracking ⭐ NEW
+
+**New Feature:** Track peak profit for each position
+
+```python
+position.max_favorable_excursion  # Peak P/L % reached
+```
+
+**Benefits:**
+- Analyze how much profit was "left on table"
+- Optimize exit strategies based on MFE patterns
+- Identify premature exits (high MFE, low final P/L)
+- Future ML feature for predicting optimal exits
+
+**Usage:** Logged on position close for post-trade analysis
+
 ---
 
 ## 4. Performance Tracking & Auto-Optimization
@@ -300,7 +391,22 @@ Performance - Win Rate: 62.50%, Avg P/L: 1.23%, Total Trades: 48
    - Validates volatility-based stop loss
    - Confirms confidence-based adjustments
 
-**Test Coverage:** 12/12 tests passing (was 9/9)
+4. **test_adaptive_stops.py** - New Test Suite ⭐
+   - **test_position_tracking_enhancements()** - Validates MFE tracking
+   - **test_adaptive_trailing_stop()** - Tests volatility/profit/momentum adjustments
+   - **test_dynamic_take_profit()** - Tests TP extensions based on conditions
+   - **test_max_favorable_excursion_tracking()** - Validates MFE updates
+   - **test_adaptive_parameters_bounds()** - Ensures safe bounds (0.5-5%)
+
+**Test Coverage:** 17/17 tests passing (was 12/12)
+
+**Key Validations:**
+- ✓ Adaptive stops respond correctly to volatility changes
+- ✓ Profit-based tightening works as expected
+- ✓ Momentum adjustments are applied correctly
+- ✓ Dynamic TP extends only in favorable direction
+- ✓ All parameters stay within safe bounds
+- ✓ MFE tracking never decreases
 
 ---
 
