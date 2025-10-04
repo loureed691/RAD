@@ -214,9 +214,10 @@ class TradingBot:
         """Clean shutdown of the bot"""
         self.logger.info("Shutting down bot...")
         
-        # Close all positions (optional, comment out if you want to keep positions)
-        # for symbol in list(self.position_manager.positions.keys()):
-        #     self.position_manager.close_position(symbol, 'shutdown')
+        # Close all positions if configured to do so
+        if getattr(Config, "CLOSE_POSITIONS_ON_SHUTDOWN", False):
+            for symbol in list(self.position_manager.positions.keys()):
+                self.position_manager.close_position(symbol, 'shutdown')
         
         self.logger.info("Bot shutdown complete")
 
