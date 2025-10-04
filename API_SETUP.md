@@ -137,11 +137,22 @@ KUCOIN_API_KEY=your_actual_api_key_here
 KUCOIN_API_SECRET=your_actual_api_secret_here
 KUCOIN_API_PASSPHRASE=your_actual_api_passphrase_here
 
-# Bot Configuration (adjust as needed)
-LEVERAGE=10
-MAX_POSITION_SIZE=1000
-RISK_PER_TRADE=0.02
-MIN_PROFIT_THRESHOLD=0.005
+# Bot Configuration (OPTIONAL - Auto-configured based on your balance!)
+# These settings are now OPTIONAL and will be automatically determined
+# based on your account balance for optimal risk management.
+# 
+# Only uncomment and set these if you want to override the smart defaults:
+# LEVERAGE=10
+# MAX_POSITION_SIZE=1000
+# RISK_PER_TRADE=0.02
+# MIN_PROFIT_THRESHOLD=0.005
+#
+# Auto-configuration tiers:
+# - Micro ($10-$100): Leverage=5x, Risk=1%, Very conservative
+# - Small ($100-$1000): Leverage=7x, Risk=1.5%, Conservative  
+# - Medium ($1000-$10000): Leverage=10x, Risk=2%, Balanced
+# - Large ($10000-$100000): Leverage=12x, Risk=2.5%, Moderate-aggressive
+# - Very Large ($100000+): Leverage=15x, Risk=3%, Aggressive
 
 # Trading Parameters
 CHECK_INTERVAL=60

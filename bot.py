@@ -35,6 +35,25 @@ class TradingBot:
             Config.API_PASSPHRASE
         )
         
+        # Get balance and auto-configure trading parameters if not set in .env
+        balance = self.client.get_balance()
+        available_balance = float(balance.get('free', {}).get('USDT', 0))
+        
+        if available_balance > 0:
+            self.logger.info(f"💰 Available balance: ${available_balance:.2f} USDT")
+            Config.auto_configure_from_balance(available_balance)
+        else:
+            self.logger.warning("⚠️  Could not fetch balance, using default configuration")
+            # Set defaults if balance fetch fails
+            if Config.LEVERAGE is None:
+                Config.LEVERAGE = 10
+            if Config.MAX_POSITION_SIZE is None:
+                Config.MAX_POSITION_SIZE = 1000
+            if Config.RISK_PER_TRADE is None:
+                Config.RISK_PER_TRADE = 0.02
+            if Config.MIN_PROFIT_THRESHOLD is None:
+                Config.MIN_PROFIT_THRESHOLD = 0.005
+        
         self.scanner = MarketScanner(self.client)
         
         self.position_manager = PositionManager(

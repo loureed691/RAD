@@ -39,13 +39,45 @@ def test_config():
         assert hasattr(Config, 'MAX_POSITION_SIZE')
         assert hasattr(Config, 'RISK_PER_TRADE')
         
-        print(f"  Leverage: {Config.LEVERAGE}")
-        print(f"  Max Position Size: {Config.MAX_POSITION_SIZE}")
-        print(f"  Risk per Trade: {Config.RISK_PER_TRADE}")
-        print("✓ Configuration loaded successfully")
+        # Test auto-configuration with different balance tiers
+        print("  Testing auto-configuration with different balances...")
+        
+        # Test micro account ($50)
+        Config.auto_configure_from_balance(50)
+        assert Config.LEVERAGE == 5, f"Expected leverage 5 for $50 balance, got {Config.LEVERAGE}"
+        assert Config.RISK_PER_TRADE == 0.01, f"Expected 1% risk for $50 balance, got {Config.RISK_PER_TRADE}"
+        print(f"  ✓ Micro account ($50): Leverage={Config.LEVERAGE}x, Risk={Config.RISK_PER_TRADE:.2%}")
+        
+        # Test small account ($500)
+        Config.auto_configure_from_balance(500)
+        assert Config.LEVERAGE == 7, f"Expected leverage 7 for $500 balance, got {Config.LEVERAGE}"
+        assert Config.RISK_PER_TRADE == 0.015, f"Expected 1.5% risk for $500 balance, got {Config.RISK_PER_TRADE}"
+        print(f"  ✓ Small account ($500): Leverage={Config.LEVERAGE}x, Risk={Config.RISK_PER_TRADE:.2%}")
+        
+        # Test medium account ($5000)
+        Config.auto_configure_from_balance(5000)
+        assert Config.LEVERAGE == 10, f"Expected leverage 10 for $5000 balance, got {Config.LEVERAGE}"
+        assert Config.RISK_PER_TRADE == 0.02, f"Expected 2% risk for $5000 balance, got {Config.RISK_PER_TRADE}"
+        print(f"  ✓ Medium account ($5000): Leverage={Config.LEVERAGE}x, Risk={Config.RISK_PER_TRADE:.2%}")
+        
+        # Test large account ($50000)
+        Config.auto_configure_from_balance(50000)
+        assert Config.LEVERAGE == 12, f"Expected leverage 12 for $50000 balance, got {Config.LEVERAGE}"
+        assert Config.RISK_PER_TRADE == 0.025, f"Expected 2.5% risk for $50000 balance, got {Config.RISK_PER_TRADE}"
+        print(f"  ✓ Large account ($50000): Leverage={Config.LEVERAGE}x, Risk={Config.RISK_PER_TRADE:.2%}")
+        
+        # Test very large account ($200000)
+        Config.auto_configure_from_balance(200000)
+        assert Config.LEVERAGE == 15, f"Expected leverage 15 for $200000 balance, got {Config.LEVERAGE}"
+        assert Config.RISK_PER_TRADE == 0.03, f"Expected 3% risk for $200000 balance, got {Config.RISK_PER_TRADE}"
+        print(f"  ✓ Very large account ($200000): Leverage={Config.LEVERAGE}x, Risk={Config.RISK_PER_TRADE:.2%}")
+        
+        print("✓ Configuration auto-configuration working correctly")
         return True
     except Exception as e:
         print(f"✗ Config error: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 def test_logger():
