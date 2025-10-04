@@ -27,6 +27,11 @@ class RiskManager:
         self.max_open_positions = max_open_positions
         self.logger = Logger.get_logger()
         
+        # Drawdown tracking for protection
+        self.peak_balance = 0.0
+        self.current_drawdown = 0.0
+        self.drawdown_threshold = 0.15  # Reduce risk at 15% drawdown
+        
         # Correlation tracking for portfolio diversification
         self.correlation_groups = {
             'major_coins': ['BTC', 'ETH'],
@@ -102,7 +107,8 @@ class RiskManager:
             return {'imbalance': 0.0, 'signal': 'neutral', 'confidence': 0.0}
     
     def calculate_position_size(self, balance: float, entry_price: float, 
-                               stop_loss_price: float, leverage: int) -> float:
+                               stop_loss_price: float, leverage: int, 
+                               risk_per_trade: float = None) -> float:
         """
         Calculate safe position size based on risk management
         
@@ -111,12 +117,16 @@ class RiskManager:
             entry_price: Entry price for the trade
             stop_loss_price: Stop loss price
             leverage: Leverage to use
+            risk_per_trade: Optional override for risk per trade (from Kelly Criterion)
         
         Returns:
             Position size in contracts
         """
+        # Use provided risk or default
+        risk = risk_per_trade if risk_per_trade is not None else self.risk_per_trade
+        
         # Calculate risk amount
-        risk_amount = balance * self.risk_per_trade
+        risk_amount = balance * risk
         
         # Calculate price distance to stop loss
         price_distance = abs(entry_price - stop_loss_price) / entry_price
@@ -136,7 +146,7 @@ class RiskManager:
         
         self.logger.debug(
             f"Calculated position size: {position_size:.4f} contracts "
-            f"(${position_value:.2f} value) for risk ${risk_amount:.2f}"
+            f"(${position_value:.2f} value) for risk ${risk_amount:.2f} ({risk:.2%})"
         )
         
         return position_size
@@ -327,3 +337,35 @@ class RiskManager:
         optimal_risk = max(0.005, min(conservative_kelly, 0.03))
         
         return optimal_risk
+    
+    def update_drawdown(self, current_balance: float) -> float:
+        """
+        Update drawdown tracking and return risk adjustment factor
+        
+        Args:
+            current_balance: Current account balance
+            
+        Returns:
+            Risk adjustment factor (0.5-1.0) based on drawdown
+        """
+        # Track peak balance
+        if current_balance > self.peak_balance:
+            self.peak_balance = current_balance
+        
+        # Calculate current drawdown
+        if self.peak_balance > 0:
+            self.current_drawdown = (self.peak_balance - current_balance) / self.peak_balance
+        else:
+            self.current_drawdown = 0.0
+        
+        # Adjust risk based on drawdown
+        if self.current_drawdown > 0.20:  # >20% drawdown - aggressive protection
+            risk_adjustment = 0.5
+            self.logger.warning(f"⚠️  High drawdown detected: {self.current_drawdown:.1%} - Reducing risk to 50%")
+        elif self.current_drawdown > self.drawdown_threshold:  # >15% drawdown
+            risk_adjustment = 0.75
+            self.logger.info(f"📉 Moderate drawdown: {self.current_drawdown:.1%} - Reducing risk to 75%")
+        else:
+            risk_adjustment = 1.0
+        
+        return risk_adjustment

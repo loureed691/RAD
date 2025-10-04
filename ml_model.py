@@ -25,7 +25,10 @@ class MLModel:
         self.performance_metrics = {
             'win_rate': 0.0,
             'avg_profit': 0.0,
-            'total_trades': 0
+            'avg_loss': 0.0,
+            'total_trades': 0,
+            'wins': 0,
+            'losses': 0
         }
         
         # Create models directory if it doesn't exist
@@ -193,15 +196,25 @@ class MLModel:
         
         # Update performance metrics
         self.performance_metrics['total_trades'] = self.performance_metrics.get('total_trades', 0) + 1
-        if profit_loss > 0:
+        total = self.performance_metrics['total_trades']
+        
+        # Track wins and losses separately for better Kelly Criterion
+        if profit_loss > 0.005:  # Profitable trade (>0.5%)
             wins = self.performance_metrics.get('wins', 0) + 1
             self.performance_metrics['wins'] = wins
-            self.performance_metrics['win_rate'] = wins / self.performance_metrics['total_trades']
-        
-        # Update average profit
-        total = self.performance_metrics['total_trades']
-        avg_profit = self.performance_metrics.get('avg_profit', 0)
-        self.performance_metrics['avg_profit'] = ((avg_profit * (total - 1)) + profit_loss) / total
+            self.performance_metrics['win_rate'] = wins / total
+            
+            # Update average profit (only winning trades)
+            avg_profit = self.performance_metrics.get('avg_profit', 0)
+            self.performance_metrics['avg_profit'] = ((avg_profit * (wins - 1)) + profit_loss) / wins
+            
+        elif profit_loss < -0.005:  # Losing trade (<-0.5%)
+            losses = self.performance_metrics.get('losses', 0) + 1
+            self.performance_metrics['losses'] = losses
+            
+            # Update average loss (only losing trades, as positive number)
+            avg_loss = self.performance_metrics.get('avg_loss', 0)
+            self.performance_metrics['avg_loss'] = ((avg_loss * (losses - 1)) + abs(profit_loss)) / losses
         
         self.logger.debug(f"Recorded outcome: signal={signal}, P/L={profit_loss:.4f}, label={label}, Win rate: {self.performance_metrics.get('win_rate', 0):.2%}")
     

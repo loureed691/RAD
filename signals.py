@@ -322,4 +322,12 @@ class SignalGenerator:
         if self.market_regime == 'trending':
             score += 10
         
+        # Risk-adjusted scoring: penalize high volatility relative to momentum
+        if momentum > 0:
+            risk_reward_ratio = momentum / max(bb_width, 0.01)
+            if risk_reward_ratio > 1.0:
+                score += 10  # Good risk/reward
+            elif risk_reward_ratio < 0.5:
+                score -= 5  # Poor risk/reward
+        
         return score

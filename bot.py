@@ -147,24 +147,35 @@ class TradingBot:
         
         # Adaptive position sizing using Kelly Criterion if we have performance history
         metrics = self.ml_model.get_performance_metrics()
+        
+        # Check drawdown and adjust risk
+        risk_adjustment = self.risk_manager.update_drawdown(available_balance)
+        
         if metrics.get('total_trades', 0) >= 20:  # Need at least 20 trades for Kelly
             win_rate = metrics.get('win_rate', 0.5)
             avg_profit = abs(metrics.get('avg_profit', 0.02))
             
-            # Estimate average loss (typically 1.5x average profit for wins)
-            avg_loss = avg_profit * 1.5 if win_rate > 0 else 0.02
+            # Use actual tracked average loss if available, otherwise estimate
+            avg_loss = metrics.get('avg_loss', 0)
+            if avg_loss == 0 or metrics.get('losses', 0) < 5:
+                # Not enough loss data, use conservative estimate
+                avg_loss = avg_profit * 1.5
             
             optimal_risk = self.risk_manager.calculate_kelly_criterion(
                 win_rate, avg_profit, avg_loss
             )
-            self.logger.info(f"🎯 Using Kelly-optimized risk: {optimal_risk:.2%} (win rate: {win_rate:.2%})")
-            risk_per_trade = optimal_risk
+            # Apply drawdown protection
+            risk_per_trade = optimal_risk * risk_adjustment
+            self.logger.info(f"🎯 Using Kelly-optimized risk: {optimal_risk:.2%} × {risk_adjustment:.0%} = {risk_per_trade:.2%} (win rate: {win_rate:.2%}, avg profit: {avg_profit:.2%}, avg loss: {avg_loss:.2%})")
         else:
-            risk_per_trade = self.risk_manager.risk_per_trade
+            # Apply drawdown protection to default risk
+            risk_per_trade = self.risk_manager.risk_per_trade * risk_adjustment
+            if risk_adjustment < 1.0:
+                self.logger.info(f"Using default risk with drawdown protection: {self.risk_manager.risk_per_trade:.2%} × {risk_adjustment:.0%} = {risk_per_trade:.2%}")
         
         # Calculate position size with optimized risk
         position_size = self.risk_manager.calculate_position_size(
-            available_balance, entry_price, stop_loss_price, leverage
+            available_balance, entry_price, stop_loss_price, leverage, risk_per_trade
         )
         
         # Open position
