@@ -85,7 +85,7 @@ class PositionManager:
             self.logger.info("Syncing existing positions from exchange...")
             
             # Fetch open positions from exchange
-            exchange_positions = self.client.get_open_positions()
+            exchange_positions = self.client.fetch_positions()
             
             if not exchange_positions:
                 self.logger.info("No existing positions found on exchange")
