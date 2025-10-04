@@ -174,7 +174,10 @@ class KuCoinClient:
             # Validate and cap amount to exchange limits
             validated_amount = self.validate_and_cap_amount(symbol, amount)
             
-            # Set leverage first with cross margin mode
+            # Switch to cross margin mode first (fixes error 330006)
+            self.exchange.set_margin_mode('cross', symbol)
+            
+            # Set leverage with cross margin mode
             self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
             
             # Create market order with cross margin mode explicitly set
@@ -201,7 +204,10 @@ class KuCoinClient:
             # Validate and cap amount to exchange limits
             validated_amount = self.validate_and_cap_amount(symbol, amount)
             
-            # Set leverage first with cross margin mode
+            # Switch to cross margin mode first (fixes error 330006)
+            self.exchange.set_margin_mode('cross', symbol)
+            
+            # Set leverage with cross margin mode
             self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
             
             # Create limit order with cross margin mode explicitly set
