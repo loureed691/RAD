@@ -85,7 +85,7 @@ def test_logger_messages():
         print(f"✗ Logger messages error: {e}")
         return False
 
-def test_file_logging_plain_text():
+def test_file_logging_no_ansi_codes():
     """Test that file logging remains plain text without ANSI codes"""
     print("\nTesting file logging format...")
     try:
