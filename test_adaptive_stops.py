@@ -73,7 +73,7 @@ def test_adaptive_trailing_stop():
         
         # Stop should be tighter than base 2% (which would be 49980)
         expected_base_stop = 51000 * 0.98
-        assert position.stop_loss >= expected_base_stop * 0.98, "Stop should be tightened in low volatility"
+        assert position.stop_loss > expected_base_stop, "Stop should be tightened in low volatility"
         print(f"  ✓ Low volatility trailing stop: {position.stop_loss:.2f}")
         
         # Test 2: High volatility should widen stop
