@@ -41,9 +41,81 @@ class SignalGenerator:
         
         return 'neutral'
     
-    def generate_signal(self, df: pd.DataFrame) -> Tuple[str, float, Dict]:
+    def analyze_multi_timeframe(self, df_1h: pd.DataFrame, df_4h: pd.DataFrame = None, 
+                               df_1d: pd.DataFrame = None) -> Dict:
+        """
+        Analyze multiple timeframes for trend alignment
+        
+        Returns:
+            Dict with multi-timeframe analysis results
+        """
+        mtf_analysis = {
+            'trend_alignment': 'neutral',
+            'strength': 0.0,
+            'confidence_multiplier': 1.0
+        }
+        
+        if df_4h is None or len(df_4h) < 20:
+            return mtf_analysis
+        
+        # Get indicators for higher timeframe
+        indicators_4h = Indicators.get_latest_indicators(df_4h)
+        if not indicators_4h:
+            return mtf_analysis
+        
+        # Check trend alignment
+        bullish_alignment = 0
+        bearish_alignment = 0
+        
+        # Check EMA trend on 4h
+        if indicators_4h['ema_12'] > indicators_4h['ema_26']:
+            bullish_alignment += 1
+        else:
+            bearish_alignment += 1
+        
+        # Check MACD on 4h
+        if indicators_4h['macd'] > indicators_4h['macd_signal']:
+            bullish_alignment += 1
+        else:
+            bearish_alignment += 1
+        
+        # Check RSI trend on 4h
+        rsi_4h = indicators_4h['rsi']
+        if rsi_4h > 50:
+            bullish_alignment += 0.5
+        elif rsi_4h < 50:
+            bearish_alignment += 0.5
+        
+        # Daily timeframe if available
+        if df_1d is not None and len(df_1d) >= 20:
+            indicators_1d = Indicators.get_latest_indicators(df_1d)
+            if indicators_1d:
+                if indicators_1d['ema_12'] > indicators_1d['ema_26']:
+                    bullish_alignment += 1.5  # Daily trend is stronger
+                else:
+                    bearish_alignment += 1.5
+        
+        # Determine trend alignment
+        total = bullish_alignment + bearish_alignment
+        if total > 0:
+            strength = max(bullish_alignment, bearish_alignment) / total
+            
+            if bullish_alignment > bearish_alignment * 1.5:
+                mtf_analysis['trend_alignment'] = 'bullish'
+                mtf_analysis['strength'] = strength
+                mtf_analysis['confidence_multiplier'] = 1.0 + (strength * 0.2)  # Up to 20% boost
+            elif bearish_alignment > bullish_alignment * 1.5:
+                mtf_analysis['trend_alignment'] = 'bearish'
+                mtf_analysis['strength'] = strength
+                mtf_analysis['confidence_multiplier'] = 1.0 + (strength * 0.2)
+        
+        return mtf_analysis
+
+    def generate_signal(self, df: pd.DataFrame, df_4h: pd.DataFrame = None, 
+                       df_1d: pd.DataFrame = None) -> Tuple[str, float, Dict]:
         """
         Generate trading signal based on technical indicators with adaptive weighting
+        and multi-timeframe analysis
         
         Returns:
             Tuple of (signal, confidence, reasons)
@@ -58,6 +130,9 @@ class SignalGenerator:
         if not indicators:
             return 'HOLD', 0.0, {'reason': 'No indicators available'}
         
+        # Multi-timeframe analysis
+        mtf_analysis = self.analyze_multi_timeframe(df, df_4h, df_1d)
+        
         # Detect market regime for adaptive strategy
         self.market_regime = self.detect_market_regime(df)
         
@@ -65,6 +140,7 @@ class SignalGenerator:
         sell_signals = 0.0
         reasons = {}
         reasons['market_regime'] = self.market_regime
+        reasons['mtf_alignment'] = mtf_analysis['trend_alignment']
         
         # Adaptive weights based on market regime
         trend_weight = 2.5 if self.market_regime == 'trending' else 1.5
@@ -167,6 +243,23 @@ class SignalGenerator:
         if confidence < min_confidence:
             signal = 'HOLD'
             reasons['confidence'] = f'too low ({confidence:.2f} < {min_confidence:.2f})'
+        
+        # Apply multi-timeframe confidence boost
+        if signal != 'HOLD' and mtf_analysis['trend_alignment'] != 'neutral':
+            # Boost confidence if MTF aligns with signal
+            if (signal == 'BUY' and mtf_analysis['trend_alignment'] == 'bullish') or \
+               (signal == 'SELL' and mtf_analysis['trend_alignment'] == 'bearish'):
+                confidence *= mtf_analysis['confidence_multiplier']
+                confidence = min(confidence, 0.99)  # Cap at 99%
+                reasons['mtf_boost'] = f"+{(mtf_analysis['confidence_multiplier']-1)*100:.0f}%"
+            # Reduce confidence if MTF conflicts with signal
+            elif (signal == 'BUY' and mtf_analysis['trend_alignment'] == 'bearish') or \
+                 (signal == 'SELL' and mtf_analysis['trend_alignment'] == 'bullish'):
+                confidence *= 0.7  # Penalize conflicting signals
+                reasons['mtf_conflict'] = 'warning'
+                if confidence < min_confidence:
+                    signal = 'HOLD'
+                    reasons['confidence'] = f'too low after MTF adjustment ({confidence:.2f} < {min_confidence:.2f})'
         
         self.logger.debug(f"Signal: {signal}, Confidence: {confidence:.2f}, Regime: {self.market_regime}, Buy: {buy_signals:.1f}/{total_signals:.1f}, Sell: {sell_signals:.1f}/{total_signals:.1f}")
         

@@ -1,8 +1,13 @@
 """
 Risk management system for the trading bot
 """
-from typing import Dict
+from typing import Dict, List, Tuple
 from logger import Logger
+try:
+    import numpy as np
+except ImportError as e:
+    Logger.get_logger().error("Numpy is required but not installed. Please install numpy to proceed.")
+    raise
 
 class RiskManager:
     """Manage trading risk and position sizing"""
@@ -21,6 +26,80 @@ class RiskManager:
         self.risk_per_trade = risk_per_trade
         self.max_open_positions = max_open_positions
         self.logger = Logger.get_logger()
+        
+        # Correlation tracking for portfolio diversification
+        self.correlation_groups = {
+            'major_coins': ['BTC', 'ETH'],
+            'defi': ['UNI', 'AAVE', 'SUSHI', 'LINK'],
+            'layer1': ['SOL', 'AVAX', 'DOT', 'NEAR', 'ATOM'],
+            'layer2': ['MATIC', 'OP', 'ARB'],
+            'meme': ['DOGE', 'SHIB', 'PEPE'],
+            'exchange': ['BNB', 'OKB', 'FTT']
+        }
+    
+    def analyze_order_book_imbalance(self, orderbook: Dict) -> Dict:
+        """
+        Analyze order book for bid/ask imbalance to optimize entry timing
+        
+        Args:
+            orderbook: Dict with 'bids' and 'asks' arrays
+        
+        Returns:
+            Dict with imbalance metrics
+        """
+        if not orderbook or 'bids' not in orderbook or 'asks' not in orderbook:
+            return {'imbalance': 0.0, 'signal': 'neutral', 'confidence': 0.0}
+        
+        try:
+            bids = orderbook['bids'][:20]  # Top 20 bids
+            asks = orderbook['asks'][:20]  # Top 20 asks
+            
+            if not bids or not asks:
+                return {'imbalance': 0.0, 'signal': 'neutral', 'confidence': 0.0}
+            
+            # Calculate total bid and ask volume
+            bid_volume = sum(float(bid[1]) for bid in bids)
+            ask_volume = sum(float(ask[1]) for ask in asks)
+            
+            total_volume = bid_volume + ask_volume
+            if total_volume == 0:
+                return {'imbalance': 0.0, 'signal': 'neutral', 'confidence': 0.0}
+            
+            # Calculate imbalance (-1 to 1, positive = more bids)
+            imbalance = (bid_volume - ask_volume) / total_volume
+            
+            # Calculate spread
+            best_bid = float(bids[0][0])
+            best_ask = float(asks[0][0])
+            spread_pct = (best_ask - best_bid) / best_bid
+            
+            # Determine signal strength
+            signal = 'neutral'
+            confidence = abs(imbalance)
+            
+            if imbalance > 0.15:  # Strong buy pressure
+                signal = 'bullish'
+            elif imbalance < -0.15:  # Strong sell pressure
+                signal = 'bearish'
+            elif abs(imbalance) < 0.05:  # Balanced
+                signal = 'neutral'
+            
+            # Tight spread indicates good liquidity
+            liquidity_score = 1.0 if spread_pct < 0.001 else 0.5
+            
+            return {
+                'imbalance': imbalance,
+                'signal': signal,
+                'confidence': confidence,
+                'spread_pct': spread_pct,
+                'liquidity_score': liquidity_score,
+                'bid_volume': bid_volume,
+                'ask_volume': ask_volume
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error analyzing order book: {e}")
+            return {'imbalance': 0.0, 'signal': 'neutral', 'confidence': 0.0}
     
     def calculate_position_size(self, balance: float, entry_price: float, 
                                stop_loss_price: float, leverage: int) -> float:
@@ -161,3 +240,90 @@ class RiskManager:
             base_leverage = max(base_leverage - 2, 3)
         
         return base_leverage
+    
+    def get_symbol_group(self, symbol: str) -> str:
+        """
+        Identify which correlation group a symbol belongs to
+        
+        Returns:
+            Group name or 'other'
+        """
+        # Extract base currency from symbol (e.g., 'BTC/USDT:USDT' -> 'BTC')
+        base = symbol.split('/')[0] if '/' in symbol else symbol.split('-')[0]
+        
+        for group_name, coins in self.correlation_groups.items():
+            if base in coins:
+                return group_name
+        
+        return 'other'
+    
+    def check_portfolio_diversification(self, new_symbol: str, 
+                                       open_positions: List[str]) -> Tuple[bool, str]:
+        """
+        Check if adding a new position would over-concentrate portfolio
+        
+        Args:
+            new_symbol: Symbol to potentially add
+            open_positions: List of currently open position symbols
+        
+        Returns:
+            Tuple of (is_diversified, reason)
+        """
+        if not open_positions:
+            return True, "No existing positions"
+        
+        new_group = self.get_symbol_group(new_symbol)
+        
+        # Count positions in each group
+        group_counts = {}
+        for pos_symbol in open_positions:
+            group = self.get_symbol_group(pos_symbol)
+            group_counts[group] = group_counts.get(group, 0) + 1
+        
+        # Check if new position would over-concentrate
+        current_count = group_counts.get(new_group, 0)
+        total_positions = len(open_positions)
+        
+        # Maximum 40% of portfolio in same correlation group
+        max_group_concentration = max(2, int(self.max_open_positions * 0.4))
+        
+        if current_count >= max_group_concentration:
+            return False, f"Too many positions in {new_group} group ({current_count}/{max_group_concentration})"
+        
+        # Don't allow exact duplicate symbols
+        if new_symbol in open_positions:
+            return False, f"Already have position in {new_symbol}"
+        
+        return True, "Portfolio diversification OK"
+    
+    def calculate_kelly_criterion(self, win_rate: float, avg_win: float, 
+                                  avg_loss: float) -> float:
+        """
+        Calculate optimal position size using Kelly Criterion
+        
+        Args:
+            win_rate: Historical win rate (0-1)
+            avg_win: Average win percentage
+            avg_loss: Average loss percentage (positive number)
+        
+        Returns:
+            Optimal fraction of capital to risk (0-1)
+        """
+        if win_rate <= 0 or avg_win <= 0 or avg_loss <= 0:
+            return self.risk_per_trade  # Use default if no history
+        
+        # Kelly formula: f = (bp - q) / b
+        # where b = ratio of win to loss, p = win prob, q = loss prob
+        b = avg_win / avg_loss
+        p = win_rate
+        q = 1 - win_rate
+        
+        kelly_fraction = (b * p - q) / b
+        
+        # Be conservative: use half-Kelly to reduce volatility
+        conservative_kelly = kelly_fraction * 0.5
+        
+        # Cap between 0.5% and 3% of portfolio
+        optimal_risk = max(0.005, min(conservative_kelly, 0.03))
+        
+        return optimal_risk

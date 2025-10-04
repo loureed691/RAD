@@ -26,7 +26,7 @@ class MarketScanner:
     
     def scan_pair(self, symbol: str) -> Tuple[str, float, str, float, Dict]:
         """
-        Scan a single trading pair with caching
+        Scan a single trading pair with caching and multi-timeframe analysis
         
         Returns:
             Tuple of (symbol, score, signal, confidence, reasons)
@@ -40,34 +40,42 @@ class MarketScanner:
                 return cached_data
         
         try:
-            # Get OHLCV data
-            ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
-            if not ohlcv:
+            # Get OHLCV data for multiple timeframes
+            ohlcv_1h = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
+            if not ohlcv_1h:
                 self.logger.warning(f"No OHLCV data for {symbol}")
                 result = (symbol, 0.0, 'HOLD', 0.0, {'error': 'No OHLCV data'})
                 self.cache[cache_key] = (result, time.time())
                 return result
             
             # Check if we have enough data
-            if len(ohlcv) < 50:
-                self.logger.warning(f"Insufficient OHLCV data for {symbol}: only {len(ohlcv)} candles (need 50+)")
-                result = (symbol, 0.0, 'HOLD', 0.0, {'error': f'Insufficient data: {len(ohlcv)} candles'})
+            if len(ohlcv_1h) < 50:
+                self.logger.warning(f"Insufficient OHLCV data for {symbol}: only {len(ohlcv_1h)} candles (need 50+)")
+                result = (symbol, 0.0, 'HOLD', 0.0, {'error': f'Insufficient data: {len(ohlcv_1h)} candles'})
                 self.cache[cache_key] = (result, time.time())
                 return result
             
+            # Get higher timeframe data for confirmation
+            ohlcv_4h = self.client.get_ohlcv(symbol, timeframe='4h', limit=50)
+            ohlcv_1d = self.client.get_ohlcv(symbol, timeframe='1d', limit=30)
+            
             # Calculate indicators
-            df = Indicators.calculate_all(ohlcv)
-            if df.empty:
+            df_1h = Indicators.calculate_all(ohlcv_1h)
+            if df_1h.empty:
                 self.logger.warning(f"Could not calculate indicators for {symbol}")
                 result = (symbol, 0.0, 'HOLD', 0.0, {'error': 'Indicator calculation failed'})
                 self.cache[cache_key] = (result, time.time())
                 return result
             
-            # Generate signal
-            signal, confidence, reasons = self.signal_generator.generate_signal(df)
+            # Calculate indicators for higher timeframes
+            df_4h = Indicators.calculate_all(ohlcv_4h) if ohlcv_4h and len(ohlcv_4h) >= 20 else None
+            df_1d = Indicators.calculate_all(ohlcv_1d) if ohlcv_1d and len(ohlcv_1d) >= 20 else None
+            
+            # Generate signal with multi-timeframe analysis
+            signal, confidence, reasons = self.signal_generator.generate_signal(df_1h, df_4h, df_1d)
             
             # Calculate score
-            score = self.signal_generator.calculate_score(df)
+            score = self.signal_generator.calculate_score(df_1h)
             
             result = (symbol, score, signal, confidence, reasons)
             

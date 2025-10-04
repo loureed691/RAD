@@ -88,6 +88,16 @@ class TradingBot:
             self.logger.warning("No available balance")
             return False
         
+        # Check portfolio diversification
+        open_position_symbols = list(self.position_manager.positions.keys())
+        is_diversified, div_reason = self.risk_manager.check_portfolio_diversification(
+            symbol, open_position_symbols
+        )
+        
+        if not is_diversified:
+            self.logger.info(f"Diversification check failed for {symbol}: {div_reason}")
+            return False
+        
         # Check if we should open a position
         current_positions = self.position_manager.get_open_positions_count()
         should_open, reason = self.risk_manager.should_open_position(
@@ -120,6 +130,9 @@ class TradingBot:
         indicators = Indicators.get_latest_indicators(df)
         volatility = indicators.get('bb_width', 0.03)
         
+        # Calculate support/resistance levels for intelligent profit targeting
+        support_resistance = Indicators.calculate_support_resistance(df, lookback=50)
+        
         # Calculate stop loss
         stop_loss_percentage = self.risk_manager.calculate_stop_loss_percentage(volatility)
         
@@ -132,7 +145,24 @@ class TradingBot:
         leverage = self.risk_manager.get_max_leverage(volatility, confidence)
         leverage = min(leverage, Config.LEVERAGE)
         
-        # Calculate position size
+        # Adaptive position sizing using Kelly Criterion if we have performance history
+        metrics = self.ml_model.get_performance_metrics()
+        if metrics.get('total_trades', 0) >= 20:  # Need at least 20 trades for Kelly
+            win_rate = metrics.get('win_rate', 0.5)
+            avg_profit = abs(metrics.get('avg_profit', 0.02))
+            
+            # Estimate average loss (typically 1.5x average profit for wins)
+            avg_loss = avg_profit * 1.5 if win_rate > 0 else 0.02
+            
+            optimal_risk = self.risk_manager.calculate_kelly_criterion(
+                win_rate, avg_profit, avg_loss
+            )
+            self.logger.info(f"Using Kelly-optimized risk: {optimal_risk:.2%} (win rate: {win_rate:.2%})")
+            risk_per_trade = optimal_risk
+        else:
+            risk_per_trade = self.risk_manager.risk_per_trade
+        
+        # Calculate position size with optimized risk
         position_size = self.risk_manager.calculate_position_size(
             available_balance, entry_price, stop_loss_price, leverage
         )
