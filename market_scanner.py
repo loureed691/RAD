@@ -194,15 +194,6 @@ class MarketScanner:
         results = self.scan_all_pairs()
         best_pairs = results[:n]
         
-        for pair in best_pairs:
-            self.logger.info(
-                f"Best pair: {pair['symbol']} - "
-                f"Score: {pair['score']:.1f}, "
-                f"Signal: {pair['signal']}, "
-                f"Confidence: {pair['confidence']:.2f}, "
-                f"Regime: {pair['reasons'].get('market_regime', 'N/A')}"
-            )
-        
         return best_pairs
     
     def clear_cache(self):
