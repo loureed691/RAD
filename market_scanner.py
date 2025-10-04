@@ -28,12 +28,14 @@ class MarketScanner:
             # Get OHLCV data
             ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
             if not ohlcv:
-                return symbol, 0.0, 'HOLD', 0.0, {}
+                self.logger.warning(f"No OHLCV data for {symbol}")
+                return symbol, 0.0, 'HOLD', 0.0, {'error': 'No OHLCV data'}
             
             # Calculate indicators
             df = Indicators.calculate_all(ohlcv)
             if df.empty:
-                return symbol, 0.0, 'HOLD', 0.0, {}
+                self.logger.warning(f"Could not calculate indicators for {symbol}")
+                return symbol, 0.0, 'HOLD', 0.0, {'error': 'No indicators'}
             
             # Generate signal
             signal, confidence, reasons = self.signal_generator.generate_signal(df)
@@ -77,6 +79,9 @@ class MarketScanner:
             for future in as_completed(future_to_symbol):
                 symbol, score, signal, confidence, reasons = future.result()
                 
+                # Log all scanned pairs for debugging
+                self.logger.info(f"Scanned {symbol}: Signal={signal}, Confidence={confidence:.2f}, Score={score:.2f}")
+                
                 if signal != 'HOLD' and score > 0:
                     results.append({
                         'symbol': symbol,
@@ -85,6 +90,8 @@ class MarketScanner:
                         'confidence': confidence,
                         'reasons': reasons
                     })
+                else:
+                    self.logger.debug(f"Skipped {symbol}: signal={signal}, score={score:.2f}, reasons={reasons}")
         
         # Sort by score descending
         results.sort(key=lambda x: x['score'], reverse=True)
