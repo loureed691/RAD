@@ -122,7 +122,7 @@ def test_position_manager_nan_handling():
     print("\nTesting position_manager NaN handling...")
     
     # We can't fully test this without mocking, but we can verify the logic
-    import pandas as pd
+    
     
     # Test the NaN checking logic
     sma_20 = 100.0
