@@ -31,11 +31,16 @@ class MarketScanner:
                 self.logger.warning(f"No OHLCV data for {symbol}")
                 return symbol, 0.0, 'HOLD', 0.0, {'error': 'No OHLCV data'}
             
+            # Check if we have enough data
+            if len(ohlcv) < 50:
+                self.logger.warning(f"Insufficient OHLCV data for {symbol}: only {len(ohlcv)} candles (need 50+)")
+                return symbol, 0.0, 'HOLD', 0.0, {'error': f'Insufficient data: {len(ohlcv)} candles'}
+            
             # Calculate indicators
             df = Indicators.calculate_all(ohlcv)
             if df.empty:
                 self.logger.warning(f"Could not calculate indicators for {symbol}")
-                return symbol, 0.0, 'HOLD', 0.0, {'error': 'No indicators'}
+                return symbol, 0.0, 'HOLD', 0.0, {'error': 'Indicator calculation failed'}
             
             # Generate signal
             signal, confidence, reasons = self.signal_generator.generate_signal(df)
@@ -47,7 +52,7 @@ class MarketScanner:
             
         except Exception as e:
             self.logger.error(f"Error scanning {symbol}: {e}")
-            return symbol, 0.0, 'HOLD', 0.0, {}
+            return symbol, 0.0, 'HOLD', 0.0, {'error': str(e)}
     
     def scan_all_pairs(self, max_workers: int = 10) -> List[Dict]:
         """
