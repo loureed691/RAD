@@ -156,9 +156,17 @@ The bot uses cross margin mode because:
 
 ## References
 
-- KuCoin Futures API Margin Mode: https://docs.kucoin.com/futures/#margin-mode
-- KuCoin Futures API Modify Margin Mode: https://www.kucoin.com/docs/rest/futures-trading/positions/modify-margin-mode
-- KuCoin Futures API Order Creation: https://docs.kucoin.com/futures/#place-order
-- CCXT Library Documentation: https://docs.ccxt.com/
+- KuCoin Futures API Margin Mode: https://docs.kucoin.com/futures/#margin-mode  
+  _(Last verified: June 2024)_  
+  [Archived version](https://web.archive.org/web/20240601000000/https://docs.kucoin.com/futures/#margin-mode)
+- KuCoin Futures API Modify Margin Mode: https://www.kucoin.com/docs/rest/futures-trading/positions/modify-margin-mode  
+  _(Last verified: June 2024)_  
+  [Archived version](https://web.archive.org/web/20240601000000/https://www.kucoin.com/docs/rest/futures-trading/positions/modify-margin-mode)
+- KuCoin Futures API Order Creation: https://docs.kucoin.com/futures/#place-order  
+  _(Last verified: June 2024)_  
+  [Archived version](https://web.archive.org/web/20240601000000/https://docs.kucoin.com/futures/#place-order)
+- CCXT Library Documentation: https://docs.ccxt.com/  
+  _(Last verified: June 2024)_  
+  [Archived version](https://web.archive.org/web/20240601000000/https://docs.ccxt.com/)
 - Error Code 330006: "Current mode is set to isolated margin. Please switch to cross margin before making further adjustments."
 - Error Code 330005: "The order's margin mode does not match the selected one"
