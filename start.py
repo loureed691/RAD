@@ -7,7 +7,7 @@ import sys
 
 def check_dependencies():
     """Check if all required dependencies are installed"""
-    print("Checking dependencies...")
+    print("📦 Checking dependencies...")
     try:
         import ccxt
         import pandas
@@ -19,17 +19,17 @@ def check_dependencies():
         return True
     except ImportError as e:
         print(f"✗ Missing dependency: {e}")
-        print("\nPlease install dependencies:")
+        print("\n💡 Please install dependencies:")
         print("  pip install -r requirements.txt")
         return False
 
 def check_config():
     """Check if configuration is set up"""
-    print("\nChecking configuration...")
+    print("\n⚙️  Checking configuration...")
     
     if not os.path.exists('.env'):
         print("✗ .env file not found")
-        print("\nPlease create .env file:")
+        print("\n💡 Please create .env file:")
         print("  cp .env.example .env")
         print("  # Then edit .env and add your API credentials")
         return False
@@ -58,16 +58,16 @@ def check_config():
 
 def create_directories():
     """Create necessary directories"""
-    print("\nCreating directories...")
+    print("\n📁 Creating directories...")
     os.makedirs('logs', exist_ok=True)
     os.makedirs('models', exist_ok=True)
     print("✓ Directories created")
 
 def main():
     """Main setup and start function"""
-    print("="*60)
-    print("KuCoin Futures Trading Bot - Quick Start")
-    print("="*60)
+    print("=" * 60)
+    print("🤖 KuCoin Futures Trading Bot - Quick Start")
+    print("=" * 60)
     
     # Check dependencies
     if not check_dependencies():
@@ -80,10 +80,10 @@ def main():
     # Create directories
     create_directories()
     
-    print("\n" + "="*60)
-    print("Setup complete! Starting bot...")
-    print("="*60)
-    print("\nPress Ctrl+C to stop the bot")
+    print("\n" + "=" * 60)
+    print("✅ Setup complete! Starting bot...")
+    print("=" * 60)
+    print("\n💡 Press Ctrl+C to stop the bot")
     print()
     
     # Import and run bot
@@ -91,9 +91,9 @@ def main():
         from bot import main as run_bot
         run_bot()
     except KeyboardInterrupt:
-        print("\n\nBot stopped by user")
+        print("\n\n🛑 Bot stopped by user")
     except Exception as e:
-        print(f"\n\nError: {e}")
+        print(f"\n\n❌ Error: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

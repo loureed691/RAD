@@ -27,7 +27,8 @@ class Monitor:
             'duration': duration
         }
         self.trades.append(trade)
-        self.logger.info(f"Recorded trade: {symbol} {side} P/L: {pnl:.2%}")
+        profit_icon = "📈" if pnl > 0 else "📉"
+        self.logger.info(f"{profit_icon} Recorded trade: {symbol} {side} P/L: {pnl:.2%}")
     
     def get_statistics(self) -> Dict:
         """Calculate performance statistics"""
@@ -74,20 +75,20 @@ class Monitor:
         stats = self.get_statistics()
         
         if not stats:
-            self.logger.info("No trades recorded yet")
+            self.logger.info("📊 No trades recorded yet")
             return
         
-        self.logger.info("="*50)
-        self.logger.info("TRADING STATISTICS")
-        self.logger.info("="*50)
-        self.logger.info(f"Total Trades: {stats['total_trades']}")
-        self.logger.info(f"Winning Trades: {stats['winning_trades']}")
-        self.logger.info(f"Losing Trades: {stats['losing_trades']}")
-        self.logger.info(f"Win Rate: {stats['win_rate']:.1%}")
-        self.logger.info(f"Total P/L: {stats['total_pnl']:.2%}")
-        self.logger.info(f"Average Win: {stats['avg_win']:.2%}")
-        self.logger.info(f"Average Loss: {stats['avg_loss']:.2%}")
-        self.logger.info(f"Profit Factor: {stats['profit_factor']:.2f}")
-        self.logger.info(f"Avg Trade Duration: {stats['avg_duration_seconds']/3600:.1f} hours")
-        self.logger.info(f"Uptime: {stats['uptime_seconds']/3600:.1f} hours")
-        self.logger.info("="*50)
+        self.logger.info("=" * 60)
+        self.logger.info("📊 TRADING STATISTICS")
+        self.logger.info("=" * 60)
+        self.logger.info(f"📈 Total Trades: {stats['total_trades']}")
+        self.logger.info(f"✅ Winning Trades: {stats['winning_trades']}")
+        self.logger.info(f"❌ Losing Trades: {stats['losing_trades']}")
+        self.logger.info(f"🎯 Win Rate: {stats['win_rate']:.1%}")
+        self.logger.info(f"💰 Total P/L: {stats['total_pnl']:.2%}")
+        self.logger.info(f"📊 Average Win: {stats['avg_win']:.2%}")
+        self.logger.info(f"📉 Average Loss: {stats['avg_loss']:.2%}")
+        self.logger.info(f"🔢 Profit Factor: {stats['profit_factor']:.2f}")
+        self.logger.info(f"⏱️  Avg Trade Duration: {stats['avg_duration_seconds']/3600:.1f} hours")
+        self.logger.info(f"⏰ Uptime: {stats['uptime_seconds']/3600:.1f} hours")
+        self.logger.info("=" * 60)
