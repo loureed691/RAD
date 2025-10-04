@@ -32,7 +32,6 @@ class SignalGenerator:
         
         buy_signals = 0
         sell_signals = 0
-        total_signals = 0
         reasons = {}
         
         # 1. Trend Following - Moving Average Crossover
@@ -42,7 +41,6 @@ class SignalGenerator:
         elif indicators['ema_12'] < indicators['ema_26']:
             sell_signals += 2
             reasons['ma_trend'] = 'bearish'
-        total_signals += 2
         
         # 2. MACD
         if indicators['macd'] > indicators['macd_signal'] and indicators['macd_diff'] > 0:
@@ -51,7 +49,6 @@ class SignalGenerator:
         elif indicators['macd'] < indicators['macd_signal'] and indicators['macd_diff'] < 0:
             sell_signals += 2
             reasons['macd'] = 'bearish'
-        total_signals += 2
         
         # 3. RSI
         rsi = indicators['rsi']
@@ -63,7 +60,6 @@ class SignalGenerator:
             reasons['rsi'] = f'overbought ({rsi:.1f})'
         elif 40 < rsi < 60:
             reasons['rsi'] = f'neutral ({rsi:.1f})'
-        total_signals += 1.5
         
         # 4. Stochastic Oscillator
         if indicators['stoch_k'] < 20 and indicators['stoch_k'] > indicators['stoch_d']:
@@ -72,7 +68,6 @@ class SignalGenerator:
         elif indicators['stoch_k'] > 80 and indicators['stoch_k'] < indicators['stoch_d']:
             sell_signals += 1
             reasons['stochastic'] = 'bearish crossover'
-        total_signals += 1
         
         # 5. Bollinger Bands
         close = indicators['close']
@@ -82,7 +77,6 @@ class SignalGenerator:
         elif close > indicators['bb_high']:
             sell_signals += 1
             reasons['bollinger'] = 'above upper band'
-        total_signals += 1
         
         # 6. Volume
         if indicators['volume_ratio'] > 1.5:
@@ -92,7 +86,6 @@ class SignalGenerator:
                 buy_signals += 0.5
             elif sell_signals > buy_signals:
                 sell_signals += 0.5
-            total_signals += 0.5
         
         # 7. Momentum
         if indicators['momentum'] > 0.02:
@@ -101,10 +94,16 @@ class SignalGenerator:
         elif indicators['momentum'] < -0.02:
             sell_signals += 1
             reasons['momentum'] = 'strong negative'
-        total_signals += 1
+        
+        total_signals = buy_signals + sell_signals
         
         # Calculate confidence
-        if buy_signals > sell_signals:
+        if total_signals == 0:
+            # No signals fired, remain neutral
+            signal = 'HOLD'
+            confidence = 0.0
+            reasons['no_signals'] = 'no clear signal detected'
+        elif buy_signals > sell_signals:
             signal = 'BUY'
             confidence = buy_signals / total_signals
         elif sell_signals > buy_signals:
