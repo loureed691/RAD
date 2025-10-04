@@ -96,8 +96,8 @@ class KuCoinClient:
                            leverage: int = 10) -> Optional[Dict]:
         """Create a market order with leverage"""
         try:
-            # Set leverage first
-            self.exchange.set_leverage(leverage, symbol)
+            # Set leverage first with cross margin mode
+            self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
             
             # Create market order
             order = self.exchange.create_order(
@@ -116,8 +116,8 @@ class KuCoinClient:
                           price: float, leverage: int = 10) -> Optional[Dict]:
         """Create a limit order with leverage"""
         try:
-            # Set leverage first
-            self.exchange.set_leverage(leverage, symbol)
+            # Set leverage first with cross margin mode
+            self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
             
             # Create limit order
             order = self.exchange.create_order(
