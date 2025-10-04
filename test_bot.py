@@ -353,6 +353,46 @@ def test_risk_manager_enhancements():
         return False
 
 
+def test_market_scanner_caching():
+    """Test market scanner caching mechanism"""
+    print("\nTesting market scanner caching...")
+    try:
+        # Note: This is a basic test since we can't mock KuCoinClient easily
+        # In production, caching is tested through integration
+        from market_scanner import MarketScanner
+        
+        # We can't fully test without a real client, but we can verify the class has caching
+        assert hasattr(MarketScanner, 'clear_cache'), "MarketScanner should have clear_cache method"
+        
+        # Verify cache attributes exist
+        from unittest.mock import Mock
+        mock_client = Mock()
+        scanner = MarketScanner(mock_client)
+        
+        assert hasattr(scanner, 'cache'), "Scanner should have cache attribute"
+        assert hasattr(scanner, 'cache_duration'), "Scanner should have cache_duration"
+        assert hasattr(scanner, 'scan_results_cache'), "Scanner should have scan_results_cache"
+        assert scanner.cache_duration == 300, "Cache duration should be 5 minutes (300s)"
+        
+        # Test clear_cache
+        scanner.cache['test'] = ('data', 12345)
+        scanner.scan_results_cache = [{'test': 'data'}]
+        scanner.clear_cache()
+        assert len(scanner.cache) == 0, "Cache should be empty after clear"
+        assert len(scanner.scan_results_cache) == 0, "Scan results cache should be empty"
+        
+        print("  ✓ Cache attributes initialized correctly")
+        print("  ✓ Cache duration set to 5 minutes")
+        print("  ✓ clear_cache() method working")
+        print("✓ Market scanner caching mechanism validated")
+        return True
+    except Exception as e:
+        print(f"✗ Market scanner caching error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def main():
     """Run all tests"""
     print("="*60)
@@ -370,7 +410,8 @@ def main():
         test_futures_filter,
         test_insufficient_data_handling,
         test_signal_generator_enhancements,
-        test_risk_manager_enhancements
+        test_risk_manager_enhancements,
+        test_market_scanner_caching
     ]
     
     results = []
