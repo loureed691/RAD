@@ -118,7 +118,7 @@ class SignalGenerator:
             signal = 'HOLD'
             reasons['confidence'] = f'too low ({confidence:.2f})'
         
-        self.logger.info(f"Signal: {signal}, Confidence: {confidence:.2f}, Buy: {buy_signals}/{total_signals}, Sell: {sell_signals}/{total_signals}, Reasons: {reasons}")
+        self.logger.debug(f"Signal: {signal}, Confidence: {confidence:.2f}, Buy: {buy_signals}/{total_signals}, Sell: {sell_signals}/{total_signals}, Reasons: {reasons}")
         
         return signal, confidence, reasons
     
