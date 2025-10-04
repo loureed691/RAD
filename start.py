@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""
+Quick start script for the KuCoin Futures Trading Bot
+"""
+import os
+import sys
+
+def check_dependencies():
+    """Check if all required dependencies are installed"""
+    print("Checking dependencies...")
+    try:
+        import ccxt
+        import pandas
+        import numpy
+        import sklearn
+        import ta
+        from dotenv import load_dotenv
+        print("✓ All dependencies installed")
+        return True
+    except ImportError as e:
+        print(f"✗ Missing dependency: {e}")
+        print("\nPlease install dependencies:")
+        print("  pip install -r requirements.txt")
+        return False
+
+def check_config():
+    """Check if configuration is set up"""
+    print("\nChecking configuration...")
+    
+    if not os.path.exists('.env'):
+        print("✗ .env file not found")
+        print("\nPlease create .env file:")
+        print("  cp .env.example .env")
+        print("  # Then edit .env and add your API credentials")
+        return False
+    
+    from dotenv import load_dotenv
+    load_dotenv()
+    
+    api_key = os.getenv('KUCOIN_API_KEY', '')
+    api_secret = os.getenv('KUCOIN_API_SECRET', '')
+    api_passphrase = os.getenv('KUCOIN_API_PASSPHRASE', '')
+    
+    if not api_key or api_key == 'your_api_key_here':
+        print("✗ KUCOIN_API_KEY not set in .env")
+        return False
+    
+    if not api_secret or api_secret == 'your_api_secret_here':
+        print("✗ KUCOIN_API_SECRET not set in .env")
+        return False
+    
+    if not api_passphrase or api_passphrase == 'your_api_passphrase_here':
+        print("✗ KUCOIN_API_PASSPHRASE not set in .env")
+        return False
+    
+    print("✓ Configuration file exists and credentials are set")
+    return True
+
+def create_directories():
+    """Create necessary directories"""
+    print("\nCreating directories...")
+    os.makedirs('logs', exist_ok=True)
+    os.makedirs('models', exist_ok=True)
+    print("✓ Directories created")
+
+def main():
+    """Main setup and start function"""
+    print("="*60)
+    print("KuCoin Futures Trading Bot - Quick Start")
+    print("="*60)
+    
+    # Check dependencies
+    if not check_dependencies():
+        sys.exit(1)
+    
+    # Check configuration
+    if not check_config():
+        sys.exit(1)
+    
+    # Create directories
+    create_directories()
+    
+    print("\n" + "="*60)
+    print("Setup complete! Starting bot...")
+    print("="*60)
+    print("\nPress Ctrl+C to stop the bot")
+    print()
+    
+    # Import and run bot
+    try:
+        from bot import main as run_bot
+        run_bot()
+    except KeyboardInterrupt:
+        print("\n\nBot stopped by user")
+    except Exception as e:
+        print(f"\n\nError: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
