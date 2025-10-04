@@ -6,7 +6,16 @@ This script demonstrates that the order creation methods now
 correctly include the marginMode parameter to prevent error 330005.
 """
 import inspect
-from kucoin_client import KuCoinClient
+try:
+    from kucoin_client import KuCoinClient
+except ImportError as e:
+    print("="*60)
+    print("ERROR: Could not import 'KuCoinClient' from 'kucoin_client'.")
+    print("Reason:", str(e))
+    print("\nPlease ensure that the 'kucoin_client' module is installed and accessible.")
+    print("="*60)
+    import sys
+    sys.exit(1)
 
 def verify_margin_mode_fix():
     """Verify that margin mode is properly set in order creation methods"""
