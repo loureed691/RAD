@@ -83,6 +83,14 @@ class MLModel:
         roc = indicators.get('roc', 0)
         atr = indicators.get('atr', 0)
         
+        # Additional advanced indicators
+        close = indicators.get('close', 0)
+        bb_high = indicators.get('bb_high', close)
+        bb_low = indicators.get('bb_low', close)
+        bb_mid = indicators.get('bb_mid', close)
+        ema_12 = indicators.get('ema_12', close)
+        ema_26 = indicators.get('ema_26', close)
+        
         # Derived features for better signal quality
         features = [
             rsi,
@@ -112,6 +120,19 @@ class MLModel:
             1 if macd > macd_signal else 0,
             # Strong momentum flag
             1 if abs(momentum) > 0.02 else 0,
+            # NEW: Price position in BB (0-1, 0.5 = middle)
+            (close - bb_low) / (bb_high - bb_low) if (bb_high - bb_low) > 0 else 0.5,
+            # NEW: Distance from EMA (trend strength)
+            (close - ema_12) / ema_12 if ema_12 > 0 else 0,
+            (close - ema_26) / ema_26 if ema_26 > 0 else 0,
+            # NEW: EMA separation (trend divergence)
+            (ema_12 - ema_26) / ema_26 if ema_26 > 0 else 0,
+            # NEW: RSI momentum (rate of change)
+            indicators.get('rsi_prev', rsi) - rsi if 'rsi_prev' in indicators else 0,
+            # NEW: Volume trend
+            1 if volume_ratio > 1.2 else (-1 if volume_ratio < 0.8 else 0),
+            # NEW: Volatility regime
+            1 if bb_width > 0.05 else (-1 if bb_width < 0.02 else 0),
         ]
         return np.array(features).reshape(1, -1)
     
@@ -229,7 +250,9 @@ class MLModel:
                     'rsi', 'macd', 'macd_signal', 'macd_diff', 'stoch_k', 'stoch_d',
                     'bb_width', 'volume_ratio', 'momentum', 'roc', 'atr',
                     'rsi_strength', 'macd_strength', 'stoch_momentum', 'volume_surge',
-                    'volatility_norm', 'rsi_zone', 'macd_bullish', 'momentum_flag'
+                    'volatility_norm', 'rsi_zone', 'macd_bullish', 'momentum_flag',
+                    'bb_position', 'price_to_ema12', 'price_to_ema26', 'ema_separation',
+                    'rsi_momentum', 'volume_trend', 'volatility_regime'
                 ]
                 importances = self.model.feature_importances_
                 self.feature_importance = {name: float(imp) for name, imp in zip(feature_names, importances)}
