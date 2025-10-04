@@ -24,9 +24,9 @@ class TradingBot:
         
         # Setup logger
         self.logger = Logger.setup(Config.LOG_LEVEL, Config.LOG_FILE)
-        self.logger.info("="*50)
-        self.logger.info("Initializing KuCoin Futures Trading Bot")
-        self.logger.info("="*50)
+        self.logger.info("=" * 60)
+        self.logger.info("🤖 INITIALIZING KUCOIN FUTURES TRADING BOT")
+        self.logger.info("=" * 60)
         
         # Initialize components
         self.client = KuCoinClient(
@@ -62,11 +62,11 @@ class TradingBot:
         # Sync existing positions from exchange
         synced_positions = self.position_manager.sync_existing_positions()
         if synced_positions > 0:
-            self.logger.info(f"Managing {synced_positions} existing position(s) from exchange")
+            self.logger.info(f"📊 Managing {synced_positions} existing position(s) from exchange")
     
     def signal_handler(self, sig, frame):
         """Handle shutdown signals gracefully"""
-        self.logger.info("Shutdown signal received, closing positions...")
+        self.logger.info("🛑 Shutdown signal received, closing positions...")
         self.running = False
     
     def execute_trade(self, opportunity: dict) -> bool:
@@ -85,7 +85,7 @@ class TradingBot:
         available_balance = float(balance.get('free', {}).get('USDT', 0))
         
         if available_balance <= 0:
-            self.logger.warning("No available balance")
+            self.logger.warning("💰 No available balance")
             return False
         
         # Check portfolio diversification
@@ -157,7 +157,7 @@ class TradingBot:
             optimal_risk = self.risk_manager.calculate_kelly_criterion(
                 win_rate, avg_profit, avg_loss
             )
-            self.logger.info(f"Using Kelly-optimized risk: {optimal_risk:.2%} (win rate: {win_rate:.2%})")
+            self.logger.info(f"🎯 Using Kelly-optimized risk: {optimal_risk:.2%} (win rate: {win_rate:.2%})")
             risk_per_trade = optimal_risk
         else:
             risk_per_trade = self.risk_manager.risk_per_trade
@@ -176,7 +176,7 @@ class TradingBot:
     
     def run_cycle(self):
         """Run one complete trading cycle"""
-        self.logger.info("Starting trading cycle...")
+        self.logger.info("🔄 Starting trading cycle...")
         
         # Periodically sync existing positions from exchange (every 10 cycles)
         # This ensures we catch any positions opened manually or by other means
@@ -195,7 +195,8 @@ class TradingBot:
         
         # Update existing positions
         for symbol, pnl, position in self.position_manager.update_positions():
-            self.logger.info(f"Position closed: {symbol}, P/L: {pnl:.2%}")
+            profit_icon = "📈" if pnl > 0 else "📉"
+            self.logger.info(f"{profit_icon} Position closed: {symbol}, P/L: {pnl:.2%}")
             
             # Record outcome for ML model
             ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
@@ -224,19 +225,19 @@ class TradingBot:
                 break
             
             self.logger.info(
-                f"Evaluating opportunity: {opportunity['symbol']} - "
+                f"🔎 Evaluating opportunity: {opportunity['symbol']} - "
                 f"Score: {opportunity['score']:.1f}, Signal: {opportunity['signal']}, "
                 f"Confidence: {opportunity['confidence']:.2f}"
             )
             
             success = self.execute_trade(opportunity)
             if success:
-                self.logger.info(f"Trade executed for {opportunity['symbol']}")
+                self.logger.info(f"✅ Trade executed for {opportunity['symbol']}")
         
         # Check if we should retrain the ML model
         time_since_retrain = (datetime.now() - self.last_retrain_time).total_seconds()
         if time_since_retrain > Config.RETRAIN_INTERVAL:
-            self.logger.info("Retraining ML model...")
+            self.logger.info("🤖 Retraining ML model...")
             if self.ml_model.train():
                 self.logger.info("ML model retrained successfully")
             self.last_retrain_time = datetime.now()
@@ -246,10 +247,13 @@ class TradingBot:
     def run(self):
         """Main bot loop"""
         self.running = True
-        self.logger.info("Bot started successfully!")
-        self.logger.info(f"Check interval: {Config.CHECK_INTERVAL}s")
-        self.logger.info(f"Max positions: {Config.MAX_OPEN_POSITIONS}")
-        self.logger.info(f"Leverage: {Config.LEVERAGE}x")
+        self.logger.info("=" * 60)
+        self.logger.info("🚀 BOT STARTED SUCCESSFULLY!")
+        self.logger.info("=" * 60)
+        self.logger.info(f"⏱️  Check interval: {Config.CHECK_INTERVAL}s")
+        self.logger.info(f"📊 Max positions: {Config.MAX_OPEN_POSITIONS}")
+        self.logger.info(f"💪 Leverage: {Config.LEVERAGE}x")
+        self.logger.info("=" * 60)
         
         try:
             while self.running:
@@ -257,29 +261,33 @@ class TradingBot:
                     self.run_cycle()
                     
                     # Wait before next cycle
-                    self.logger.info(f"Waiting {Config.CHECK_INTERVAL}s before next cycle...")
+                    self.logger.info(f"⏸️  Waiting {Config.CHECK_INTERVAL}s before next cycle...")
                     time.sleep(Config.CHECK_INTERVAL)
                     
                 except Exception as e:
-                    self.logger.error(f"Error in trading cycle: {e}", exc_info=True)
+                    self.logger.error(f"❌ Error in trading cycle: {e}", exc_info=True)
                     time.sleep(60)  # Wait a bit longer on error
         
         except KeyboardInterrupt:
-            self.logger.info("Received keyboard interrupt")
+            self.logger.info("⌨️  Received keyboard interrupt")
         
         finally:
             self.shutdown()
     
     def shutdown(self):
         """Clean shutdown of the bot"""
-        self.logger.info("Shutting down bot...")
+        self.logger.info("=" * 60)
+        self.logger.info("🛑 SHUTTING DOWN BOT...")
+        self.logger.info("=" * 60)
         
         # Close all positions if configured to do so
         if getattr(Config, "CLOSE_POSITIONS_ON_SHUTDOWN", False):
             for symbol in list(self.position_manager.positions.keys()):
                 self.position_manager.close_position(symbol, 'shutdown')
         
-        self.logger.info("Bot shutdown complete")
+        self.logger.info("=" * 60)
+        self.logger.info("✅ BOT SHUTDOWN COMPLETE")
+        self.logger.info("=" * 60)
 
 def main():
     """Main entry point"""
