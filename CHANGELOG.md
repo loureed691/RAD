@@ -6,12 +6,19 @@ All notable changes to the RAD KuCoin Futures Trading Bot will be documented in 
 
 ### Fixed
 
+#### Isolated Margin Mode Error (Code 330006)
+- **Problem**: Bot was failing to create orders with error "Current mode is set to isolated margin. Please switch to cross margin before making further adjustments." (code: 330006)
+- **Root Cause**: When a position or account is already in isolated margin mode, attempting to set leverage or create orders fails even with the correct margin mode parameter
+- **Solution**: Added `set_margin_mode('cross', symbol)` call before `set_leverage()` in both `create_market_order()` and `create_limit_order()` methods to explicitly switch from isolated to cross margin mode
+- **Impact**: Bot can now switch from isolated to cross margin mode and create orders successfully regardless of the initial margin mode state
+- **Files**: `kucoin_client.py` lines 178, 208
+
 #### Margin Mode Mismatch Error (Code 330005)
 - **Problem**: Bot was failing to create orders with error "The order's margin mode does not match the selected one. Please switch and try again." (code: 330005)
 - **Root Cause**: While leverage was being set with cross margin mode, the order creation itself didn't explicitly specify the margin mode parameter
 - **Solution**: Added `params={"marginMode": "cross"}` to both `create_market_order()` and `create_limit_order()` methods in `kucoin_client.py`
 - **Impact**: Orders can now be created successfully with the correct margin mode matching the leverage setting
-- **Files**: `kucoin_client.py` lines 108, 133
+- **Files**: `kucoin_client.py` lines 189, 220
 
 #### Futures Pair Detection Issue
 - **Problem**: Bot was only detecting 1 futures contract (quarterly BTC futures) instead of all available contracts
