@@ -139,7 +139,7 @@ def test_position_mode_initialization():
             if call_args.args:
                 assert call_args.args[0] == False, "hedged should be False (ONE_WAY mode)"
             else:
-                assert call_args.kwargs.get('hedged') == False or call_args[0] == (False,), "hedged should be False"
+                assert call_args.kwargs.get('hedged') == False, "hedged should be False"
             print(f"    ✓ set_position_mode(hedged=False) was called")
             
             print("  Test 2: Graceful handling of set_position_mode failure...")
