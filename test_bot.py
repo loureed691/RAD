@@ -215,26 +215,27 @@ def test_futures_filter():
             'OLD/USDT:USDT': {'swap': True, 'future': False, 'active': False},  # Inactive
         }
         
-        # Apply the new filter logic
-        new_filtered = [
+        # Apply the new filter logic (USDT-only)
+        usdt_filtered = [
+            symbol for symbol, market in test_markets.items()
+            if (market.get('swap') or market.get('future')) and market.get('active') and ':USDT' in symbol
+        ]
+        
+        # Apply the old filter logic (all futures)
+        all_filtered = [
             symbol for symbol, market in test_markets.items()
             if (market.get('swap') or market.get('future')) and market.get('active')
         ]
         
-        # Apply the old filter logic
-        old_filtered = [
-            symbol for symbol, market in test_markets.items()
-            if market.get('future') and market.get('active')
-        ]
+        assert len(usdt_filtered) == 3, f"Expected 3 USDT contracts, got {len(usdt_filtered)}"
+        assert len(all_filtered) == 4, f"All filter should find 4 contracts, got {len(all_filtered)}"
+        assert 'BTC/USD:BTC-251226' not in usdt_filtered, "Non-USDT pairs should be filtered out"
+        assert all(':USDT' in s for s in usdt_filtered), "All filtered pairs should be USDT pairs"
         
-        assert len(new_filtered) == 4, f"Expected 4 contracts, got {len(new_filtered)}"
-        assert len(old_filtered) == 1, f"Old filter should find 1 contract, got {len(old_filtered)}"
-        assert len(new_filtered) > len(old_filtered), "New filter should find more contracts"
-        
-        print(f"  Old filter: {len(old_filtered)} contract(s)")
-        print(f"  New filter: {len(new_filtered)} contracts")
-        print(f"  Detected: {', '.join(new_filtered)}")
-        print("✓ Futures filter logic working correctly")
+        print(f"  All futures filter: {len(all_filtered)} contract(s)")
+        print(f"  USDT-only filter: {len(usdt_filtered)} contracts")
+        print(f"  USDT pairs detected: {', '.join(usdt_filtered)}")
+        print("✓ Futures filter logic working correctly (USDT-only)")
         return True
     except Exception as e:
         print(f"✗ Futures filter error: {e}")

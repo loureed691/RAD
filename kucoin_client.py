@@ -36,7 +36,7 @@ class KuCoinClient:
             raise
     
     def get_active_futures(self) -> List[Dict]:
-        """Get all active futures trading pairs (perpetual swaps and quarterly futures)"""
+        """Get all active futures trading pairs (perpetual swaps and quarterly futures) - USDT pairs only"""
         try:
             markets = self.exchange.load_markets()
             futures = [
@@ -45,9 +45,9 @@ class KuCoinClient:
                     'info': market
                 }
                 for symbol, market in markets.items()
-                if (market.get('swap') or market.get('future')) and market.get('active')
+                if (market.get('swap') or market.get('future')) and market.get('active') and ':USDT' in symbol
             ]
-            self.logger.info(f"Found {len(futures)} active futures pairs")
+            self.logger.info(f"Found {len(futures)} active USDT futures pairs")
             
             # Log details of found pairs for debugging
             if futures:
