@@ -18,13 +18,13 @@ class Config:
     # Trading Configuration
     LEVERAGE = int(os.getenv('LEVERAGE', '10'))
     MAX_POSITION_SIZE = float(os.getenv('MAX_POSITION_SIZE', '1000'))
-    RISK_PER_TRADE = float(os.getenv('RISK_PER_TRADE', '0.02'))
+    RISK_PER_TRADE = float(os.getenv('RISK_PER_TRADE', '0.3'))
     MIN_PROFIT_THRESHOLD = float(os.getenv('MIN_PROFIT_THRESHOLD', '0.005'))
     
     # Bot Parameters
     CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '60'))
     TRAILING_STOP_PERCENTAGE = float(os.getenv('TRAILING_STOP_PERCENTAGE', '0.02'))
-    MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))
+    MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '10'))
     
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
