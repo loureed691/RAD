@@ -2,6 +2,7 @@
 Position management with trailing stop loss
 """
 import time
+import pandas as pd
 from typing import Dict, Optional, Tuple
 from datetime import datetime
 from kucoin_client import KuCoinClient
@@ -462,7 +463,8 @@ class PositionManager:
                         sma_50 = indicators.get('sma_50', close)
                         
                         # Trend strength: 0 (no trend) to 1 (strong trend)
-                        if sma_50 > 0:
+                        # Check for valid sma_50 (not NaN, not zero)
+                        if sma_50 > 0 and not pd.isna(sma_50) and not pd.isna(sma_20):
                             trend_strength = abs(sma_20 - sma_50) / sma_50
                             trend_strength = min(trend_strength * 10, 1.0)  # Scale to 0-1
                         else:
