@@ -429,7 +429,7 @@ class PositionManager:
                 # Try simple update as fallback
                 try:
                     position.update_trailing_stop(current_price, self.trailing_stop_percentage)
-                except:
+                except Exception:
                     pass
     
     def get_open_positions_count(self) -> int:
