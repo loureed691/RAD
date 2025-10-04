@@ -125,29 +125,37 @@ class MarketScanner:
         
         results = []
         
-        # Scan pairs in parallel
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Optimize worker count based on workload (avoid over-threading)
+        optimal_workers = min(max_workers, len(filtered_symbols), 15)
+        
+        # Scan pairs in parallel with optimized worker count
+        with ThreadPoolExecutor(max_workers=optimal_workers) as executor:
             future_to_symbol = {
                 executor.submit(self.scan_pair, symbol): symbol 
                 for symbol in filtered_symbols
             }
             
+            # Process results as they complete (faster than waiting for all)
             for future in as_completed(future_to_symbol):
-                symbol, score, signal, confidence, reasons = future.result()
-                
-                # Log all scanned pairs for debugging
-                self.logger.debug(f"Scanned {symbol}: Signal={signal}, Confidence={confidence:.2f}, Score={score:.2f}")
-                
-                if signal != 'HOLD' and score > 0:
-                    results.append({
-                        'symbol': symbol,
-                        'score': score,
-                        'signal': signal,
-                        'confidence': confidence,
-                        'reasons': reasons
-                    })
-                else:
-                    self.logger.debug(f"Skipped {symbol}: signal={signal}, score={score:.2f}")
+                try:
+                    symbol, score, signal, confidence, reasons = future.result(timeout=30)
+                    
+                    # Log all scanned pairs for debugging
+                    self.logger.debug(f"Scanned {symbol}: Signal={signal}, Confidence={confidence:.2f}, Score={score:.2f}")
+                    
+                    if signal != 'HOLD' and score > 0:
+                        results.append({
+                            'symbol': symbol,
+                            'score': score,
+                            'signal': signal,
+                            'confidence': confidence,
+                            'reasons': reasons
+                        })
+                    else:
+                        self.logger.debug(f"Skipped {symbol}: signal={signal}, score={score:.2f}")
+                except Exception as e:
+                    symbol = future_to_symbol.get(future, 'unknown')
+                    self.logger.warning(f"Error scanning {symbol}: {e}")
         
         # Sort by score descending
         results.sort(key=lambda x: x['score'], reverse=True)

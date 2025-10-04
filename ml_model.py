@@ -31,6 +31,10 @@ class MLModel:
             'losses': 0
         }
         
+        # Prediction cache to avoid redundant predictions (optimization)
+        self._prediction_cache = {}
+        self._cache_max_age = 300  # 5 minutes
+        
         # Create models directory if it doesn't exist
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
         
@@ -72,8 +76,8 @@ class MLModel:
             self.logger.error(f"Error saving model: {e}")
     
     def prepare_features(self, indicators: Dict) -> np.array:
-        """Prepare enhanced feature vector from indicators with derived features"""
-        # Base technical indicators
+        """Prepare enhanced feature vector from indicators with derived features (optimized)"""
+        # Extract base indicators with defaults (vectorized access)
         rsi = indicators.get('rsi', 50)
         macd = indicators.get('macd', 0)
         macd_signal = indicators.get('macd_signal', 0)
@@ -85,63 +89,49 @@ class MLModel:
         momentum = indicators.get('momentum', 0)
         roc = indicators.get('roc', 0)
         atr = indicators.get('atr', 0)
-        
-        # Additional advanced indicators
         close = indicators.get('close', 0)
         bb_high = indicators.get('bb_high', close)
         bb_low = indicators.get('bb_low', close)
-        bb_mid = indicators.get('bb_mid', close)
         ema_12 = indicators.get('ema_12', close)
         ema_26 = indicators.get('ema_26', close)
         
-        # Derived features for better signal quality
-        features = [
-            rsi,
-            macd,
-            macd_signal,
-            macd_diff,
-            stoch_k,
-            stoch_d,
-            bb_width,
-            volume_ratio,
-            momentum,
-            roc,
-            atr,
-            # Normalized RSI strength (0-1 scale)
-            abs(rsi - 50) / 50,
-            # MACD momentum strength
-            abs(macd_diff) if macd_diff else 0,
-            # Stochastic momentum
-            abs(stoch_k - stoch_d) / 100 if stoch_k and stoch_d else 0,
-            # Volume surge indicator
-            max(0, volume_ratio - 1),
-            # Volatility normalized
-            min(bb_width * 10, 1) if bb_width else 0,
-            # RSI oversold/overbought zones
-            1 if rsi < 30 else (1 if rsi > 70 else 0),
-            # MACD bullish/bearish
-            1 if macd > macd_signal else 0,
-            # Strong momentum flag
-            1 if abs(momentum) > 0.02 else 0,
-            # NEW: Price position in BB (0-1, 0.5 = middle)
-            (close - bb_low) / (bb_high - bb_low) if (bb_high - bb_low) > 0 else 0.5,
-            # NEW: Distance from EMA (trend strength)
-            (close - ema_12) / ema_12 if ema_12 > 0 else 0,
-            (close - ema_26) / ema_26 if ema_26 > 0 else 0,
-            # NEW: EMA separation (trend divergence)
-            (ema_12 - ema_26) / ema_26 if ema_26 > 0 else 0,
-            # NEW: RSI momentum (rate of change)
-            indicators.get('rsi_prev', rsi) - rsi if 'rsi_prev' in indicators else 0,
-            # NEW: Volume trend
-            1 if volume_ratio > 1.2 else (-1 if volume_ratio < 0.8 else 0),
-            # NEW: Volatility regime
-            1 if bb_width > 0.05 else (-1 if bb_width < 0.02 else 0),
-        ]
-        return np.array(features).reshape(1, -1)
+        # Pre-compute commonly used values to avoid redundant calculations
+        rsi_centered = rsi - 50
+        abs_rsi_centered = abs(rsi_centered)
+        abs_macd_diff = abs(macd_diff)
+        abs_momentum = abs(momentum)
+        stoch_diff = stoch_k - stoch_d
+        bb_range = bb_high - bb_low
+        
+        # Vectorized feature computation for performance
+        # Use numpy operations where possible to leverage CPU vectorization
+        features = np.array([
+            # Base indicators (11 features)
+            rsi, macd, macd_signal, macd_diff, stoch_k, stoch_d,
+            bb_width, volume_ratio, momentum, roc, atr,
+            # Derived features (15 features) - optimized calculations
+            abs_rsi_centered / 50,  # Normalized RSI strength
+            abs_macd_diff,  # MACD momentum strength
+            abs(stoch_diff) / 100 if stoch_diff else 0,  # Stochastic momentum
+            max(0, volume_ratio - 1),  # Volume surge
+            min(bb_width * 10, 1),  # Normalized volatility
+            float(rsi < 30 or rsi > 70),  # RSI extreme zones (binary)
+            float(macd > macd_signal),  # MACD bullish (binary)
+            float(abs_momentum > 0.02),  # Strong momentum (binary)
+            (close - bb_low) / bb_range if bb_range > 0 else 0.5,  # BB position
+            (close - ema_12) / ema_12 if ema_12 > 0 else 0,  # Distance to EMA12
+            (close - ema_26) / ema_26 if ema_26 > 0 else 0,  # Distance to EMA26
+            (ema_12 - ema_26) / ema_26 if ema_26 > 0 else 0,  # EMA separation
+            indicators.get('rsi_prev', rsi) - rsi,  # RSI momentum
+            np.sign(volume_ratio - 1) if abs(volume_ratio - 1) > 0.2 else 0,  # Volume trend
+            np.sign(bb_width - 0.035) if abs(bb_width - 0.035) > 0.015 else 0,  # Volatility regime
+        ], dtype=np.float32)  # Use float32 for memory efficiency
+        
+        return features.reshape(1, -1)
     
     def predict(self, indicators: Dict) -> Tuple[str, float]:
         """
-        Predict trading signal using ML model
+        Predict trading signal using ML model with caching for performance
         
         Returns:
             Tuple of (signal, confidence)
@@ -152,6 +142,21 @@ class MLModel:
             return 'HOLD', 0.0
         
         try:
+            # Create cache key from critical indicators
+            cache_key = (
+                round(indicators.get('rsi', 50), 1),
+                round(indicators.get('macd', 0), 4),
+                round(indicators.get('momentum', 0), 4),
+                round(indicators.get('volume_ratio', 1), 2)
+            )
+            
+            # Check cache first for performance boost
+            if cache_key in self._prediction_cache:
+                cached_result, timestamp = self._prediction_cache[cache_key]
+                age = (datetime.now() - timestamp).total_seconds()
+                if age < self._cache_max_age:
+                    return cached_result
+            
             features = self.prepare_features(indicators)
             features_scaled = self.scaler.transform(features)
             
@@ -162,7 +167,20 @@ class MLModel:
             signal_map = {0: 'HOLD', 1: 'BUY', 2: 'SELL'}
             signal = signal_map.get(prediction, 'HOLD')
             
-            return signal, confidence
+            result = (signal, confidence)
+            
+            # Cache the result
+            self._prediction_cache[cache_key] = (result, datetime.now())
+            
+            # Limit cache size to prevent memory bloat
+            if len(self._prediction_cache) > 1000:
+                # Remove oldest 20% of entries
+                sorted_items = sorted(self._prediction_cache.items(), 
+                                    key=lambda x: x[1][1])
+                for key, _ in sorted_items[:200]:
+                    del self._prediction_cache[key]
+            
+            return result
             
         except Exception as e:
             self.logger.error(f"Error making prediction: {e}")
@@ -276,6 +294,9 @@ class MLModel:
             
             self.logger.info(f"Model trained - Train accuracy: {train_score:.3f}, Test accuracy: {test_score:.3f}")
             
+            # Clear prediction cache after retraining
+            self.clear_cache()
+            
             # Save model
             self.save_model()
             
@@ -308,3 +329,9 @@ class MLModel:
             return min(0.75, base_threshold + 0.1)
         
         return base_threshold
+    
+    def clear_cache(self):
+        """Clear prediction cache (call after model retraining)"""
+        self._prediction_cache.clear()
+        self.logger.debug("Prediction cache cleared")
+

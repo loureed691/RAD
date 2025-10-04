@@ -41,6 +41,9 @@ class RiskManager:
             'meme': ['DOGE', 'SHIB', 'PEPE'],
             'exchange': ['BNB', 'OKB', 'FTT']
         }
+        
+        # Cache for symbol group lookups (optimization)
+        self._symbol_group_cache = {}
     
     def analyze_order_book_imbalance(self, orderbook: Dict) -> Dict:
         """
@@ -253,19 +256,28 @@ class RiskManager:
     
     def get_symbol_group(self, symbol: str) -> str:
         """
-        Identify which correlation group a symbol belongs to
+        Identify which correlation group a symbol belongs to (with caching)
         
         Returns:
             Group name or 'other'
         """
+        # Check cache first
+        if symbol in self._symbol_group_cache:
+            return self._symbol_group_cache[symbol]
+        
         # Extract base currency from symbol (e.g., 'BTC/USDT:USDT' -> 'BTC')
         base = symbol.split('/')[0] if '/' in symbol else symbol.split('-')[0]
         
+        # Find group
+        group = 'other'
         for group_name, coins in self.correlation_groups.items():
             if base in coins:
-                return group_name
+                group = group_name
+                break
         
-        return 'other'
+        # Cache result
+        self._symbol_group_cache[symbol] = group
+        return group
     
     def check_portfolio_diversification(self, new_symbol: str, 
                                        open_positions: List[str]) -> Tuple[bool, str]:

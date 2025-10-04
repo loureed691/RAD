@@ -13,6 +13,7 @@ from position_manager import PositionManager
 from risk_manager import RiskManager
 from ml_model import MLModel
 from indicators import Indicators
+from performance_monitor import get_monitor, TimingContext
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -68,6 +69,9 @@ class TradingBot:
         )
         
         self.ml_model = MLModel(Config.ML_MODEL_PATH)
+        
+        # Performance monitoring
+        self.perf_monitor = get_monitor()
         
         # State
         self.running = False
@@ -206,73 +210,82 @@ class TradingBot:
     
     def run_cycle(self):
         """Run one complete trading cycle"""
-        self.logger.info("🔄 Starting trading cycle...")
-        
-        # Periodically sync existing positions from exchange (every 10 cycles)
-        # This ensures we catch any positions opened manually or by other means
-        if not hasattr(self, '_cycle_count'):
-            self._cycle_count = 0
-        self._cycle_count += 1
-        
-        if self._cycle_count % 10 == 0:
-            self.logger.debug("Periodic sync of existing positions...")
-            self.position_manager.sync_existing_positions()
-        
-        # Update ML model's adaptive threshold in signal generator
-        adaptive_threshold = self.ml_model.get_adaptive_confidence_threshold()
-        self.scanner.signal_generator.set_adaptive_threshold(adaptive_threshold)
-        self.logger.debug(f"Using adaptive confidence threshold: {adaptive_threshold:.2f}")
-        
-        # Update existing positions
-        for symbol, pnl, position in self.position_manager.update_positions():
-            profit_icon = "📈" if pnl > 0 else "📉"
-            self.logger.info(f"{profit_icon} Position closed: {symbol}, P/L: {pnl:.2%}")
+        with TimingContext("Trading Cycle", self.logger):
+            self.logger.info("🔄 Starting trading cycle...")
             
-            # Record outcome for ML model
-            ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
-            df = Indicators.calculate_all(ohlcv)
-            indicators = Indicators.get_latest_indicators(df)
+            # Periodically sync existing positions from exchange (every 10 cycles)
+            # This ensures we catch any positions opened manually or by other means
+            if not hasattr(self, '_cycle_count'):
+                self._cycle_count = 0
+            self._cycle_count += 1
             
-            signal = 'BUY' if position.side == 'long' else 'SELL'
-            self.ml_model.record_outcome(indicators, signal, pnl)
-        
-        # Log performance metrics
-        metrics = self.ml_model.get_performance_metrics()
-        if metrics.get('total_trades', 0) > 0:
-            self.logger.info(
-                f"Performance - Win Rate: {metrics.get('win_rate', 0):.2%}, "
-                f"Avg P/L: {metrics.get('avg_profit', 0):.2%}, "
-                f"Total Trades: {metrics.get('total_trades', 0)}"
-            )
-        
-        # Scan market for opportunities
-        opportunities = self.scanner.get_best_pairs(n=5)
-        
-        # Try to execute trades for top opportunities
-        for opportunity in opportunities:
-            if self.position_manager.get_open_positions_count() >= Config.MAX_OPEN_POSITIONS:
-                self.logger.info("Maximum positions reached")
-                break
+            if self._cycle_count % 10 == 0:
+                self.logger.debug("Periodic sync of existing positions...")
+                self.position_manager.sync_existing_positions()
             
-            self.logger.info(
-                f"🔎 Evaluating opportunity: {opportunity['symbol']} - "
-                f"Score: {opportunity['score']:.1f}, Signal: {opportunity['signal']}, "
-                f"Confidence: {opportunity['confidence']:.2f}"
-            )
+            # Update ML model's adaptive threshold in signal generator
+            adaptive_threshold = self.ml_model.get_adaptive_confidence_threshold()
+            self.scanner.signal_generator.set_adaptive_threshold(adaptive_threshold)
+            self.logger.debug(f"Using adaptive confidence threshold: {adaptive_threshold:.2f}")
             
-            success = self.execute_trade(opportunity)
-            if success:
-                self.logger.info(f"✅ Trade executed for {opportunity['symbol']}")
-        
-        # Check if we should retrain the ML model
-        time_since_retrain = (datetime.now() - self.last_retrain_time).total_seconds()
-        if time_since_retrain > Config.RETRAIN_INTERVAL:
-            self.logger.info("🤖 Retraining ML model...")
-            if self.ml_model.train():
-                self.logger.info("ML model retrained successfully")
-            self.last_retrain_time = datetime.now()
-        
-        self.last_scan_time = datetime.now()
+            # Update existing positions
+            with TimingContext("Update Positions", self.logger):
+                for symbol, pnl, position in self.position_manager.update_positions():
+                    profit_icon = "📈" if pnl > 0 else "📉"
+                    self.logger.info(f"{profit_icon} Position closed: {symbol}, P/L: {pnl:.2%}")
+                    
+                    # Record outcome for ML model
+                    ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
+                    df = Indicators.calculate_all(ohlcv)
+                    indicators = Indicators.get_latest_indicators(df)
+                    
+                    signal = 'BUY' if position.side == 'long' else 'SELL'
+                    self.ml_model.record_outcome(indicators, signal, pnl)
+            
+            # Log performance metrics
+            metrics = self.ml_model.get_performance_metrics()
+            if metrics.get('total_trades', 0) > 0:
+                self.logger.info(
+                    f"Performance - Win Rate: {metrics.get('win_rate', 0):.2%}, "
+                    f"Avg P/L: {metrics.get('avg_profit', 0):.2%}, "
+                    f"Total Trades: {metrics.get('total_trades', 0)}"
+                )
+            
+            # Scan market for opportunities
+            with TimingContext("Market Scan", self.logger):
+                opportunities = self.scanner.get_best_pairs(n=5)
+            
+            # Try to execute trades for top opportunities
+            for opportunity in opportunities:
+                if self.position_manager.get_open_positions_count() >= Config.MAX_OPEN_POSITIONS:
+                    self.logger.info("Maximum positions reached")
+                    break
+                
+                self.logger.info(
+                    f"🔎 Evaluating opportunity: {opportunity['symbol']} - "
+                    f"Score: {opportunity['score']:.1f}, Signal: {opportunity['signal']}, "
+                    f"Confidence: {opportunity['confidence']:.2f}"
+                )
+                
+                with TimingContext(f"Execute Trade {opportunity['symbol']}", self.logger):
+                    success = self.execute_trade(opportunity)
+                    if success:
+                        self.logger.info(f"✅ Trade executed for {opportunity['symbol']}")
+            
+            # Check if we should retrain the ML model
+            time_since_retrain = (datetime.now() - self.last_retrain_time).total_seconds()
+            if time_since_retrain > Config.RETRAIN_INTERVAL:
+                self.logger.info("🤖 Retraining ML model...")
+                with TimingContext("ML Model Training", self.logger):
+                    if self.ml_model.train():
+                        self.logger.info("ML model retrained successfully")
+                self.last_retrain_time = datetime.now()
+            
+            # Log performance report every 10 cycles
+            if self._cycle_count % 10 == 0:
+                self.perf_monitor.log_report()
+            
+            self.last_scan_time = datetime.now()
     
     def run(self):
         """Main bot loop"""
