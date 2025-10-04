@@ -63,7 +63,7 @@ class RiskManager:
         return position_size
     
     def should_open_position(self, current_positions: int, balance: float, 
-                            min_balance: float = 100) -> tuple[bool, str]:
+                            min_balance: float = 1) -> tuple[bool, str]:
         """
         Check if a new position should be opened
         
