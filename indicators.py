@@ -66,14 +66,18 @@ class Indicators:
             
             # Volume indicators
             df['volume_sma'] = df['volume'].rolling(window=20).mean()
-            df['volume_ratio'] = df['volume'] / df['volume_sma']
+            # Handle potential division by zero or NaN in volume_sma
+            df['volume_ratio'] = df['volume'] / df['volume_sma'].replace(0, np.nan)
+            df['volume_ratio'] = df['volume_ratio'].fillna(1.0)  # Default to 1.0 if NaN
             
             # Price momentum
             df['momentum'] = df['close'].pct_change(periods=10)
             df['roc'] = ((df['close'] - df['close'].shift(10)) / df['close'].shift(10)) * 100
             
-            # Volume-weighted indicators
-            df['vwap'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+            # Volume-weighted indicators (VWAP with rolling window to avoid indefinite growth)
+            # Use a 50-period rolling window for VWAP calculation
+            typical_price = (df['high'] + df['low'] + df['close']) / 3
+            df['vwap'] = (typical_price * df['volume']).rolling(window=50, min_periods=1).sum() / df['volume'].rolling(window=50, min_periods=1).sum()
             
             return df
         except Exception as e:
