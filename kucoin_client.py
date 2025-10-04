@@ -21,6 +21,16 @@ class KuCoinClient:
                 'enableRateLimit': True,
             })
             self.logger.info("KuCoin Futures client initialized successfully")
+            
+            # Set position mode to one-way (single position per symbol)
+            # This prevents error 330011: "position mode does not match"
+            try:
+                self.exchange.set_position_mode(hedged=False)
+                self.logger.info("Set position mode to ONE_WAY (hedged=False)")
+            except Exception as e:
+                # Some exchanges may not support this or it might already be set
+                self.logger.warning(f"Could not set position mode: {e}")
+                
         except Exception as e:
             self.logger.error(f"Failed to initialize KuCoin client: {e}")
             raise
@@ -92,10 +102,78 @@ class KuCoinClient:
             self.logger.error(f"Error fetching balance: {e}")
             return {}
     
+    def get_market_limits(self, symbol: str) -> Optional[Dict]:
+        """Get market limits for a symbol (min/max order size)"""
+        try:
+            markets = self.exchange.load_markets()
+            if symbol in markets:
+                market = markets[symbol]
+                limits = {
+                    'amount': {
+                        'min': market.get('limits', {}).get('amount', {}).get('min'),
+                        'max': market.get('limits', {}).get('amount', {}).get('max')
+                    },
+                    'cost': {
+                        'min': market.get('limits', {}).get('cost', {}).get('min'),
+                        'max': market.get('limits', {}).get('cost', {}).get('max')
+                    }
+                }
+                return limits
+            return None
+        except Exception as e:
+            self.logger.error(f"Error fetching market limits for {symbol}: {e}")
+            return None
+    
+    def validate_and_cap_amount(self, symbol: str, amount: float) -> float:
+        """Validate and cap order amount to exchange limits
+        
+        Args:
+            symbol: Trading pair symbol
+            amount: Desired order amount in contracts
+            
+        Returns:
+            Validated amount capped at exchange limits
+        """
+        limits = self.get_market_limits(symbol)
+        if not limits:
+            # If we can't get limits, apply a conservative default cap
+            # KuCoin typically has a 10,000 contract limit
+            default_max = 10000
+            if amount > default_max:
+                self.logger.warning(
+                    f"Amount {amount:.4f} exceeds default limit {default_max}, "
+                    f"capping to {default_max}"
+                )
+                return default_max
+            return amount
+        
+        # Check minimum
+        min_amount = limits['amount']['min']
+        if min_amount and amount < min_amount:
+            self.logger.warning(
+                f"Amount {amount:.4f} below minimum {min_amount}, "
+                f"adjusting to minimum"
+            )
+            return min_amount
+        
+        # Check maximum
+        max_amount = limits['amount']['max']
+        if max_amount and amount > max_amount:
+            self.logger.warning(
+                f"Amount {amount:.4f} exceeds maximum {max_amount}, "
+                f"capping to {max_amount}"
+            )
+            return max_amount
+        
+        return amount
+    
     def create_market_order(self, symbol: str, side: str, amount: float, 
                            leverage: int = 10) -> Optional[Dict]:
         """Create a market order with leverage"""
         try:
+            # Validate and cap amount to exchange limits
+            validated_amount = self.validate_and_cap_amount(symbol, amount)
+            
             # Set leverage first with cross margin mode
             self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
             
@@ -104,10 +182,10 @@ class KuCoinClient:
                 symbol=symbol,
                 type='market',
                 side=side,
-                amount=amount,
+                amount=validated_amount,
                 params={"marginMode": "cross"}
             )
-            self.logger.info(f"Created {side} order for {amount} {symbol} at {leverage}x leverage")
+            self.logger.info(f"Created {side} order for {validated_amount} {symbol} at {leverage}x leverage")
             return order
         except Exception as e:
             self.logger.error(f"Error creating market order: {e}")
@@ -120,6 +198,9 @@ class KuCoinClient:
         Cross margin mode is enforced when setting leverage.
         """
         try:
+            # Validate and cap amount to exchange limits
+            validated_amount = self.validate_and_cap_amount(symbol, amount)
+            
             # Set leverage first with cross margin mode
             self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
             
@@ -128,11 +209,11 @@ class KuCoinClient:
                 symbol=symbol,
                 type='limit',
                 side=side,
-                amount=amount,
+                amount=validated_amount,
                 price=price,
                 params={"marginMode": "cross"}
             )
-            self.logger.info(f"Created {side} limit order for {amount} {symbol} at {price}")
+            self.logger.info(f"Created {side} limit order for {validated_amount} {symbol} at {price}")
             return order
         except Exception as e:
             self.logger.error(f"Error creating limit order: {e}")
