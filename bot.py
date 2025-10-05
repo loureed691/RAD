@@ -15,6 +15,7 @@ from risk_manager import RiskManager
 from ml_model import MLModel
 from indicators import Indicators
 from advanced_analytics import AdvancedAnalytics
+from dashboard import BotDashboard
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -74,11 +75,15 @@ class TradingBot:
         # Advanced analytics module
         self.analytics = AdvancedAnalytics()
         
+        # Initialize web dashboard
+        self.dashboard = BotDashboard(port=5000)
+        
         # State
         self.running = False
         self.last_scan_time = None
-        self.last_retrain_time = datetime.now()
+        self.retrain_time = datetime.now()
         self.last_analytics_report = datetime.now()
+        self.start_time = datetime.now()
         
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self.signal_handler)
@@ -88,6 +93,14 @@ class TradingBot:
         synced_positions = self.position_manager.sync_existing_positions()
         if synced_positions > 0:
             self.logger.info(f"📊 Managing {synced_positions} existing position(s) from exchange")
+        
+        # Update dashboard with initial config
+        self.dashboard.update_config({
+            'leverage': Config.LEVERAGE,
+            'max_positions': Config.MAX_OPEN_POSITIONS,
+            'risk_per_trade': Config.RISK_PER_TRADE,
+            'check_interval': Config.CHECK_INTERVAL
+        })
     
     def signal_handler(self, sig, frame):
         """Handle shutdown signals gracefully"""
@@ -255,7 +268,7 @@ class TradingBot:
             
             # Record trade for analytics
             trade_duration = (datetime.now() - position.entry_time).total_seconds() / 60
-            self.analytics.record_trade({
+            trade_data = {
                 'symbol': symbol,
                 'side': position.side,
                 'entry_price': position.entry_price,
@@ -264,7 +277,11 @@ class TradingBot:
                 'pnl_pct': pnl,
                 'duration': trade_duration,
                 'leverage': position.leverage
-            })
+            }
+            self.analytics.record_trade(trade_data)
+            
+            # Add trade to dashboard
+            self.dashboard.add_trade(trade_data)
             
             # Record outcome for ML model
             ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
@@ -300,6 +317,15 @@ class TradingBot:
         # Scan market for opportunities
         opportunities = self.scanner.get_best_pairs(n=5)
         
+        # Update dashboard with current opportunities
+        self.dashboard.update_opportunities([{
+            'symbol': opp['symbol'],
+            'signal': opp['signal'],
+            'score': opp['score'],
+            'confidence': opp['confidence'],
+            'price': opp.get('price', 0)
+        } for opp in opportunities])
+        
         # Try to execute trades for top opportunities
         for opportunity in opportunities:
             if self.position_manager.get_open_positions_count() >= Config.MAX_OPEN_POSITIONS:
@@ -317,24 +343,30 @@ class TradingBot:
                 self.logger.info(f"✅ Trade executed for {opportunity['symbol']}")
         
         # Check if we should retrain the ML model
-        time_since_retrain = (datetime.now() - self.last_retrain_time).total_seconds()
+        time_since_retrain = (datetime.now() - self.retrain_time).total_seconds()
         if time_since_retrain > Config.RETRAIN_INTERVAL:
             self.logger.info("🤖 Retraining ML model...")
             if self.ml_model.train():
                 self.logger.info("ML model retrained successfully")
-            self.last_retrain_time = datetime.now()
+            self.retrain_time = datetime.now()
         
         self.last_scan_time = datetime.now()
     
     def run(self):
         """Main bot loop"""
         self.running = True
+        
+        # Start web dashboard
+        self.dashboard.start()
+        self.dashboard.update_status('running')
+        
         self.logger.info("=" * 60)
         self.logger.info("🚀 BOT STARTED SUCCESSFULLY!")
         self.logger.info("=" * 60)
         self.logger.info(f"⏱️  Check interval: {Config.CHECK_INTERVAL}s")
         self.logger.info(f"📊 Max positions: {Config.MAX_OPEN_POSITIONS}")
         self.logger.info(f"💪 Leverage: {Config.LEVERAGE}x")
+        self.logger.info(f"🌐 Dashboard: http://localhost:5000")
         self.logger.info("=" * 60)
         
         try:
@@ -342,12 +374,16 @@ class TradingBot:
                 try:
                     self.run_cycle()
                     
+                    # Update dashboard with current state
+                    self._update_dashboard()
+                    
                     # Wait before next cycle
                     self.logger.info(f"⏸️  Waiting {Config.CHECK_INTERVAL}s before next cycle...")
                     time.sleep(Config.CHECK_INTERVAL)
                     
                 except Exception as e:
                     self.logger.error(f"❌ Error in trading cycle: {e}", exc_info=True)
+                    self.dashboard.update_status('error')
                     time.sleep(60)  # Wait a bit longer on error
         
         except KeyboardInterrupt:
@@ -356,11 +392,61 @@ class TradingBot:
         finally:
             self.shutdown()
     
+    def _update_dashboard(self):
+        """Update dashboard with current bot state"""
+        try:
+            # Update balance
+            balance = self.client.get_balance()
+            available_balance = float(balance.get('free', {}).get('USDT', 0))
+            self.dashboard.update_balance(available_balance)
+            
+            # Update uptime
+            uptime = (datetime.now() - self.start_time).total_seconds()
+            self.dashboard.update_uptime(uptime)
+            
+            # Update open positions
+            positions_data = []
+            for symbol, position in self.position_manager.positions.items():
+                try:
+                    current_price = self.client.get_ticker_price(symbol)
+                    pnl = self.position_manager.calculate_pnl(symbol, current_price)
+                    positions_data.append({
+                        'symbol': symbol,
+                        'side': position.side,
+                        'entry_price': position.entry_price,
+                        'current_price': current_price,
+                        'amount': position.amount,
+                        'leverage': position.leverage,
+                        'pnl': pnl
+                    })
+                except Exception as e:
+                    self.logger.debug(f"Error updating position {symbol} for dashboard: {e}")
+            
+            self.dashboard.update_positions(positions_data)
+            
+            # Update performance metrics
+            metrics = self.ml_model.get_performance_metrics()
+            self.dashboard.update_performance({
+                'total_trades': metrics.get('total_trades', 0),
+                'winning_trades': metrics.get('wins', 0),
+                'losing_trades': metrics.get('losses', 0),
+                'win_rate': metrics.get('win_rate', 0.0),
+                'total_pnl': metrics.get('total_profit', 0.0),
+                'avg_win': metrics.get('avg_profit', 0.0) if metrics.get('wins', 0) > 0 else 0.0,
+                'avg_loss': metrics.get('avg_loss', 0.0) if metrics.get('losses', 0) > 0 else 0.0,
+                'profit_factor': metrics.get('profit_factor', 0.0)
+            })
+            
+        except Exception as e:
+            self.logger.debug(f"Error updating dashboard: {e}")
+    
     def shutdown(self):
         """Clean shutdown of the bot"""
         self.logger.info("=" * 60)
         self.logger.info("🛑 SHUTTING DOWN BOT...")
         self.logger.info("=" * 60)
+        
+        self.dashboard.update_status('stopped')
         
         # Close all positions if configured to do so
         if getattr(Config, "CLOSE_POSITIONS_ON_SHUTDOWN", False):

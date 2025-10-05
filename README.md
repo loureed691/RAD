@@ -1,6 +1,26 @@
 # RAD - KuCoin Futures Trading Bot
 
-A production-grade, fully automated, **self-learning and hyper-intelligent** KuCoin Futures trading bot with dynamic 3-15x leverage capability. This bot is designed to be hands-off and resilient, automatically discovering the best trading pairs and executing trades based on advanced technical indicators, multi-timeframe analysis, and institutional-grade machine learning.
+A production-grade, fully automated, **self-learning and hyper-intelligent** KuCoin Futures trading bot with dynamic 3-15x leverage capability and **live web dashboard**. This bot is designed to be hands-off and resilient, automatically discovering the best trading pairs and executing trades based on advanced technical indicators, multi-timeframe analysis, and institutional-grade machine learning.
+
+## 🌐 Live Web Dashboard (NEW!) ⭐⭐⭐⭐⭐
+
+**Monitor your bot in real-time with a beautiful web interface!**
+
+- **Real-Time Monitoring**: See bot status, balance, and uptime updated every 3 seconds
+- **Live Positions**: Track all open positions with current P/L
+- **Trade History**: View recent trades with entry/exit prices and performance
+- **Performance Metrics**: Win rate, profit factor, total P/L at a glance
+- **Trading Opportunities**: See what pairs the bot is evaluating
+- **Auto-Refresh Dashboard**: No need to dig through log files!
+
+**Quick Start:**
+```bash
+python start_with_dashboard.py
+```
+
+Dashboard automatically opens at: **http://localhost:5000**
+
+👉 **See [WEB_DASHBOARD.md](WEB_DASHBOARD.md) for complete dashboard documentation**
 
 ## 🎯 Auto-Configuration (NEW!) ⭐
 

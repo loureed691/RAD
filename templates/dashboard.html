@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAD Trading Bot - Live Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .status-bar {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .status-running {
+            background: #10b981;
+            color: white;
+        }
+        
+        .status-stopped {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .status-initializing {
+            background: #f59e0b;
+            color: white;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .card h2 {
+            font-size: 18px;
+            color: #667eea;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .metric:last-child {
+            border-bottom: none;
+        }
+        
+        .metric-label {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        
+        .metric-value {
+            font-weight: 600;
+            font-size: 16px;
+        }
+        
+        .metric-positive {
+            color: #10b981;
+        }
+        
+        .metric-negative {
+            color: #ef4444;
+        }
+        
+        .positions-table, .trades-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        
+        .positions-table th, .trades-table th {
+            background: #f3f4f6;
+            padding: 10px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        .positions-table td, .trades-table td {
+            padding: 10px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .long {
+            color: #10b981;
+            font-weight: 600;
+        }
+        
+        .short {
+            color: #ef4444;
+            font-weight: 600;
+        }
+        
+        .opportunities-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .opportunity-item {
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+        }
+        
+        .opportunity-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);
+        }
+        
+        .opportunity-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .opportunity-symbol {
+            font-weight: 600;
+            font-size: 16px;
+        }
+        
+        .opportunity-signal {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .signal-buy {
+            background: #dcfce7;
+            color: #166534;
+        }
+        
+        .signal-sell {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #6b7280;
+        }
+        
+        .refresh-info {
+            color: #6b7280;
+            font-size: 12px;
+            margin-left: auto;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #9ca3af;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        
+        .large-card {
+            grid-column: 1 / -1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 RAD Trading Bot - Live Dashboard</h1>
+            <div class="status-bar">
+                <span id="status-badge" class="status-badge status-initializing">Initializing...</span>
+                <span class="metric-label">Balance: <strong id="balance">$0.00</strong></span>
+                <span class="metric-label">Uptime: <strong id="uptime">0h 0m</strong></span>
+                <span class="refresh-info">⟳ Auto-refresh every 3s</span>
+            </div>
+        </div>
+        
+        <div class="grid">
+            <!-- Performance Metrics -->
+            <div class="card">
+                <h2>📊 Performance</h2>
+                <div class="metric">
+                    <span class="metric-label">Total Trades</span>
+                    <span class="metric-value" id="total-trades">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Win Rate</span>
+                    <span class="metric-value" id="win-rate">0.0%</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Total P/L</span>
+                    <span class="metric-value" id="total-pnl">0.0%</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Profit Factor</span>
+                    <span class="metric-value" id="profit-factor">0.00</span>
+                </div>
+            </div>
+            
+            <!-- Bot Configuration -->
+            <div class="card">
+                <h2>⚙️ Configuration</h2>
+                <div class="metric">
+                    <span class="metric-label">Leverage</span>
+                    <span class="metric-value" id="config-leverage">-</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Max Positions</span>
+                    <span class="metric-value" id="config-max-pos">-</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Risk Per Trade</span>
+                    <span class="metric-value" id="config-risk">-</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Check Interval</span>
+                    <span class="metric-value" id="config-interval">-</span>
+                </div>
+            </div>
+            
+            <!-- Win/Loss Stats -->
+            <div class="card">
+                <h2>📈 Win/Loss Stats</h2>
+                <div class="metric">
+                    <span class="metric-label">Winning Trades</span>
+                    <span class="metric-value metric-positive" id="winning-trades">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Losing Trades</span>
+                    <span class="metric-value metric-negative" id="losing-trades">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Average Win</span>
+                    <span class="metric-value metric-positive" id="avg-win">0.0%</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Average Loss</span>
+                    <span class="metric-value metric-negative" id="avg-loss">0.0%</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Open Positions -->
+        <div class="card large-card">
+            <h2>💼 Open Positions</h2>
+            <div id="positions-container">
+                <div class="loading">Loading positions...</div>
+            </div>
+        </div>
+        
+        <!-- Trading Opportunities -->
+        <div class="card large-card">
+            <h2>🔍 Current Opportunities</h2>
+            <div id="opportunities-container">
+                <div class="loading">Scanning markets...</div>
+            </div>
+        </div>
+        
+        <!-- Recent Trades -->
+        <div class="card large-card">
+            <h2>📜 Recent Trades (Last 20)</h2>
+            <div id="trades-container">
+                <div class="loading">Loading trade history...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Update functions
+        async function updateStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                const statusBadge = document.getElementById('status-badge');
+                statusBadge.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+                statusBadge.className = `status-badge status-${data.status}`;
+                
+                document.getElementById('balance').textContent = `$${data.balance.toFixed(2)}`;
+                
+                const hours = Math.floor(data.uptime / 3600);
+                const minutes = Math.floor((data.uptime % 3600) / 60);
+                document.getElementById('uptime').textContent = `${hours}h ${minutes}m`;
+            } catch (error) {
+                console.error('Error updating status:', error);
+            }
+        }
+        
+        async function updatePerformance() {
+            try {
+                const response = await fetch('/api/performance');
+                const data = await response.json();
+                
+                document.getElementById('total-trades').textContent = data.total_trades || 0;
+                document.getElementById('win-rate').textContent = `${(data.win_rate * 100).toFixed(1)}%`;
+                
+                const totalPnl = document.getElementById('total-pnl');
+                totalPnl.textContent = `${(data.total_pnl * 100).toFixed(1)}%`;
+                totalPnl.className = `metric-value ${data.total_pnl >= 0 ? 'metric-positive' : 'metric-negative'}`;
+                
+                document.getElementById('profit-factor').textContent = data.profit_factor.toFixed(2);
+                document.getElementById('winning-trades').textContent = data.winning_trades || 0;
+                document.getElementById('losing-trades').textContent = data.losing_trades || 0;
+                document.getElementById('avg-win').textContent = `${(data.avg_win * 100).toFixed(2)}%`;
+                document.getElementById('avg-loss').textContent = `${(data.avg_loss * 100).toFixed(2)}%`;
+            } catch (error) {
+                console.error('Error updating performance:', error);
+            }
+        }
+        
+        async function updateConfig() {
+            try {
+                const response = await fetch('/api/config');
+                const data = await response.json();
+                
+                document.getElementById('config-leverage').textContent = `${data.leverage || '-'}x`;
+                document.getElementById('config-max-pos').textContent = data.max_positions || '-';
+                document.getElementById('config-risk').textContent = `${((data.risk_per_trade || 0) * 100).toFixed(1)}%`;
+                document.getElementById('config-interval').textContent = `${data.check_interval || '-'}s`;
+            } catch (error) {
+                console.error('Error updating config:', error);
+            }
+        }
+        
+        async function updatePositions() {
+            try {
+                const response = await fetch('/api/positions');
+                const data = await response.json();
+                const container = document.getElementById('positions-container');
+                
+                if (data.positions.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No open positions</div>';
+                    return;
+                }
+                
+                let html = '<table class="positions-table"><thead><tr><th>Symbol</th><th>Side</th><th>Entry</th><th>Current</th><th>Size</th><th>Leverage</th><th>P/L</th></tr></thead><tbody>';
+                
+                data.positions.forEach(pos => {
+                    const pnlClass = pos.pnl >= 0 ? 'metric-positive' : 'metric-negative';
+                    const sideClass = pos.side === 'long' ? 'long' : 'short';
+                    html += `
+                        <tr>
+                            <td><strong>${pos.symbol}</strong></td>
+                            <td class="${sideClass}">${pos.side.toUpperCase()}</td>
+                            <td>$${pos.entry_price.toFixed(4)}</td>
+                            <td>$${pos.current_price.toFixed(4)}</td>
+                            <td>${pos.amount.toFixed(2)}</td>
+                            <td>${pos.leverage}x</td>
+                            <td class="${pnlClass}">${(pos.pnl * 100).toFixed(2)}%</td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (error) {
+                console.error('Error updating positions:', error);
+            }
+        }
+        
+        async function updateOpportunities() {
+            try {
+                const response = await fetch('/api/opportunities');
+                const data = await response.json();
+                const container = document.getElementById('opportunities-container');
+                
+                if (data.opportunities.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No opportunities found</div>';
+                    return;
+                }
+                
+                let html = '<div class="opportunities-list">';
+                
+                data.opportunities.forEach(opp => {
+                    const signalClass = opp.signal === 'BUY' ? 'signal-buy' : 'signal-sell';
+                    html += `
+                        <div class="opportunity-item">
+                            <div class="opportunity-header">
+                                <span class="opportunity-symbol">${opp.symbol}</span>
+                                <span class="opportunity-signal ${signalClass}">${opp.signal}</span>
+                            </div>
+                            <div style="display: flex; gap: 20px; font-size: 14px;">
+                                <span>Score: <strong>${opp.score.toFixed(2)}</strong></span>
+                                <span>Confidence: <strong>${(opp.confidence * 100).toFixed(1)}%</strong></span>
+                                <span>Price: <strong>$${opp.price.toFixed(4)}</strong></span>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div>';
+                container.innerHTML = html;
+            } catch (error) {
+                console.error('Error updating opportunities:', error);
+            }
+        }
+        
+        async function updateTrades() {
+            try {
+                const response = await fetch('/api/trades?limit=20');
+                const data = await response.json();
+                const container = document.getElementById('trades-container');
+                
+                if (data.trades.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No trades yet</div>';
+                    return;
+                }
+                
+                let html = '<table class="trades-table"><thead><tr><th>Time</th><th>Symbol</th><th>Side</th><th>Entry</th><th>Exit</th><th>P/L</th><th>Duration</th></tr></thead><tbody>';
+                
+                // Show most recent first
+                data.trades.slice().reverse().forEach(trade => {
+                    const pnlClass = trade.pnl >= 0 ? 'metric-positive' : 'metric-negative';
+                    const sideClass = trade.side === 'long' ? 'long' : 'short';
+                    const time = new Date(trade.timestamp).toLocaleTimeString();
+                    const duration = Math.floor(trade.duration / 60);
+                    
+                    html += `
+                        <tr>
+                            <td>${time}</td>
+                            <td><strong>${trade.symbol}</strong></td>
+                            <td class="${sideClass}">${trade.side.toUpperCase()}</td>
+                            <td>$${trade.entry_price.toFixed(4)}</td>
+                            <td>$${trade.exit_price.toFixed(4)}</td>
+                            <td class="${pnlClass}">${(trade.pnl * 100).toFixed(2)}%</td>
+                            <td>${duration}m</td>
+                        </tr>
+                    `;
+                });
+                
+                html += '</tbody></table>';
+                container.innerHTML = html;
+            } catch (error) {
+                console.error('Error updating trades:', error);
+            }
+        }
+        
+        // Initial load
+        updateStatus();
+        updatePerformance();
+        updateConfig();
+        updatePositions();
+        updateOpportunities();
+        updateTrades();
+        
+        // Auto-refresh every 3 seconds
+        setInterval(() => {
+            updateStatus();
+            updatePerformance();
+            updatePositions();
+            updateOpportunities();
+        }, 3000);
+        
+        // Update trades less frequently (every 10 seconds)
+        setInterval(updateTrades, 10000);
+        
+        // Update config once per minute (it rarely changes)
+        setInterval(updateConfig, 60000);
+    </script>
+</body>
+</html>
