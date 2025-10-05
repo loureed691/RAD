@@ -54,6 +54,11 @@ class Indicators:
             df['stoch_k'] = stoch.stoch()
             df['stoch_d'] = stoch.stoch_signal()
             
+            # Handle NaN values (occurs when high == low for all periods in window)
+            # Default to neutral 50 when stochastic can't be calculated
+            df['stoch_k'] = df['stoch_k'].fillna(50.0)
+            df['stoch_d'] = df['stoch_d'].fillna(50.0)
+            
             # Bollinger Bands
             bb = BollingerBands(df['close'])
             df['bb_high'] = bb.bollinger_hband()
