@@ -2,7 +2,21 @@
 
 A production-grade, fully automated, **self-learning and hyper-intelligent** KuCoin Futures trading bot with dynamic 3-15x leverage capability. This bot is designed to be hands-off and resilient, automatically discovering the best trading pairs and executing trades based on advanced technical indicators, multi-timeframe analysis, and institutional-grade machine learning.
 
-## 🎯 Auto-Configuration (NEW!) ⭐
+## 🚀 Deploy to Production in 1 Command (NEW!) ⭐⭐
+
+```bash
+./deploy.sh
+```
+
+Automated setup script that installs everything on Ubuntu/Debian servers. Includes:
+- ✅ Systemd service for 24/7 operation
+- ✅ Automatic restarts on failure
+- ✅ Health monitoring tools
+- ✅ Production startup checks
+
+👉 **See [QUICK_DEPLOY.md](QUICK_DEPLOY.md) for quick deployment guide**
+
+## 🎯 Auto-Configuration ⭐
 
 **No more manual configuration!** The bot now automatically configures optimal trading parameters based on your account balance:
 

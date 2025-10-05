@@ -1,5 +1,26 @@
 # Deployment Guide
 
+## 🚀 Quick Start (Automated)
+
+For the fastest deployment on Ubuntu/Debian servers:
+
+```bash
+./deploy.sh
+```
+
+This automated script handles everything:
+- System updates
+- Python 3.11 installation
+- Dependency installation
+- Directory creation
+- Configuration setup
+- Systemd service installation
+- Test execution
+
+See [QUICK_DEPLOY.md](QUICK_DEPLOY.md) for details.
+
+---
+
 ## Overview
 
 This guide covers deploying the KuCoin Futures Trading Bot to production environments.
@@ -254,6 +275,30 @@ iftop
 ```
 
 ### Application Monitoring
+
+#### Health Check Script
+
+Use the built-in health check tool:
+
+```bash
+python3 health_check.py
+```
+
+This checks:
+- Service status (systemd)
+- Configuration validity
+- Log file health
+- Dependencies
+- System resources
+
+Run automatically with cron:
+
+```bash
+# Add to crontab (runs every hour)
+(crontab -l 2>/dev/null; echo "0 * * * * cd /path/to/RAD && python3 health_check.py >> logs/health.log 2>&1") | crontab -
+```
+
+#### Custom Monitoring Script
 
 Create monitoring script `monitor.sh`:
 
