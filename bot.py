@@ -306,6 +306,14 @@ class TradingBot:
                 self.logger.info("Maximum positions reached")
                 break
             
+            # Check if we still have available balance before evaluating this opportunity
+            balance = self.client.get_balance()
+            available_balance = float(balance.get('free', {}).get('USDT', 0))
+            
+            if available_balance <= 10:  # Minimum margin threshold
+                self.logger.info(f"Insufficient margin remaining (${available_balance:.2f}), skipping remaining opportunities")
+                break
+            
             self.logger.info(
                 f"🔎 Evaluating opportunity: {opportunity['symbol']} - "
                 f"Score: {opportunity['score']:.1f}, Signal: {opportunity['signal']}, "

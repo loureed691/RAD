@@ -382,6 +382,17 @@ class KuCoinClient:
                 self.logger.info(
                     f"Adjusted position to fit margin: {adjusted_amount:.4f} contracts at {adjusted_leverage}x leverage"
                 )
+                
+                # Re-validate margin after adjustment to ensure it will work
+                has_margin_after_adjust, _, margin_reason_after = self.check_available_margin(
+                    symbol, validated_amount, reference_price, leverage
+                )
+                
+                if not has_margin_after_adjust:
+                    self.logger.error(
+                        f"Cannot open position: insufficient margin even after adjustment. {margin_reason_after}"
+                    )
+                    return None
             
             # For large orders, check order book depth
             if validate_depth and validated_amount > 100:  # Threshold for "large" order
@@ -429,7 +440,7 @@ class KuCoinClient:
             
             return order
         except Exception as e:
-            self.logger.error(f"Error creating market order: {e}")
+            self.logger.error(f"Error creating market order for {symbol}: {e}", exc_info=True)
             return None
     
     def create_limit_order(self, symbol: str, side: str, amount: float, 
@@ -480,6 +491,17 @@ class KuCoinClient:
                     self.logger.info(
                         f"Adjusted limit order to fit margin: {adjusted_amount:.4f} contracts at {adjusted_leverage}x leverage"
                     )
+                    
+                    # Re-validate margin after adjustment to ensure it will work
+                    has_margin_after_adjust, _, margin_reason_after = self.check_available_margin(
+                        symbol, validated_amount, price, leverage
+                    )
+                    
+                    if not has_margin_after_adjust:
+                        self.logger.error(
+                            f"Cannot open position: insufficient margin even after adjustment. {margin_reason_after}"
+                        )
+                        return None
             
             # Switch to cross margin mode first (fixes error 330006)
             self.exchange.set_margin_mode('cross', symbol)
@@ -509,7 +531,7 @@ class KuCoinClient:
             )
             return order
         except Exception as e:
-            self.logger.error(f"Error creating limit order: {e}")
+            self.logger.error(f"Error creating limit order for {symbol}: {e}", exc_info=True)
             return None
     
     def cancel_order(self, order_id: str, symbol: str) -> bool:
