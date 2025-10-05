@@ -342,7 +342,9 @@ class TradingBot:
         # Close all positions if configured to do so
         if getattr(Config, "CLOSE_POSITIONS_ON_SHUTDOWN", False):
             for symbol in list(self.position_manager.positions.keys()):
-                self.position_manager.close_position(symbol, 'shutdown')
+                pnl = self.position_manager.close_position(symbol, 'shutdown')
+                if pnl is None:
+                    self.logger.warning(f"⚠️  Failed to close position {symbol} during shutdown - may still be open on exchange")
         
         self.logger.info("=" * 60)
         self.logger.info("✅ BOT SHUTDOWN COMPLETE")

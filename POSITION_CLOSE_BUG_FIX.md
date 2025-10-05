@@ -82,14 +82,35 @@ def close_position(self, symbol: str) -> bool:
         return False
 ```
 
+### Additional Improvement
+
+In `bot.py`, added warning logging when positions fail to close during shutdown:
+
+```python
+# bot.py shutdown() method
+for symbol in list(self.position_manager.positions.keys()):
+    pnl = self.position_manager.close_position(symbol, 'shutdown')
+    if pnl is None:  # ✅ Check if close failed
+        self.logger.warning(f"⚠️  Failed to close position {symbol} during shutdown - may still be open on exchange")
+```
+
+This ensures operators are alerted if positions can't be closed during bot shutdown.
+
 ### What Changed
 
-**Lines changed**: 3 lines modified, 4 lines added (net +1 lines)
+**File 1: kucoin_client.py**
+- **Lines changed**: 3 lines modified, 4 lines added (net +1 lines)
 
 1. **Line 285**: Capture the return value of `create_market_order()` in `order` variable
 2. **Line 286**: Check if `order` is truthy (not None)
 3. **Line 287-288**: Move success logging and return inside the `if` block
 4. **Line 289-291**: Add `else` block with error logging and `return False`
+
+**File 2: bot.py**
+- **Lines changed**: 2 lines added
+
+1. Capture return value from `close_position()` during shutdown
+2. Log warning if position fails to close
 
 ### Why This Works
 
@@ -188,8 +209,8 @@ with patch('kucoin_client.ccxt.kucoinfutures') as mock_exchange_class:
 - Unexpected losses from "ghost" positions
 
 ### Scope
-- **Files affected**: 1 (`kucoin_client.py`)
-- **Lines changed**: 7 lines total (3 modified, 4 added)
+- **Files affected**: 2 (`kucoin_client.py`, `bot.py`)
+- **Lines changed**: 9 lines total (3 modified, 6 added)
 - **Breaking changes**: None
 - **API changes**: None
 
@@ -232,6 +253,7 @@ with patch('kucoin_client.ccxt.kucoinfutures') as mock_exchange_class:
 
 ### Production Code
 - `kucoin_client.py` - Fixed `close_position()` method (7 lines)
+- `bot.py` - Added warning for failed closes during shutdown (2 lines)
 
 ### Test Code (New)
 - `test_position_close_bug.py` - Comprehensive regression test suite
@@ -246,10 +268,11 @@ with patch('kucoin_client.ccxt.kucoinfutures') as mock_exchange_class:
 
 This fix addresses a **critical bug** where position closing failures were not properly detected, leading to state desynchronization. The fix is:
 
-- ✅ **Minimal**: Only 7 lines changed
+- ✅ **Minimal**: Only 9 lines changed across 2 files
 - ✅ **Safe**: No breaking changes
 - ✅ **Tested**: Comprehensive regression test suite
 - ✅ **Documented**: Full technical report and patch file
+- ✅ **Complete**: Includes shutdown warning for failed closes
 
 The bug is now **fixed and verified** with all tests passing.
 
