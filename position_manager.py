@@ -380,21 +380,7 @@ class Position:
         # Calculate current P/L percentage (with leverage)
         current_pnl = self.get_pnl(current_price)
         
-        # Immediate profit taking for high ROI - overrides take profit extension logic
-        # This ensures we capture significant profits even if TP was extended too far
-        if current_pnl >= 0.05:  # 5% ROI with leverage
-            # For high profits, check if we should take profit immediately
-            if current_pnl >= 0.12:  # 12% ROI - always take profit
-                return True, 'take_profit_12pct'
-            elif current_pnl >= 0.08:  # 8% ROI - take profit if TP is far
-                if self.take_profit:
-                    distance_to_tp = abs(self.take_profit - current_price) / current_price
-                    if current_pnl >= 0.08 and distance_to_tp > 0.03:  # TP is more than 3% away
-                        return True, 'take_profit_8pct'
-                    elif current_pnl >= 0.05 and distance_to_tp > 0.05:  # TP is more than 5% away
-                        return True, 'take_profit_5pct'
-        
-        # Standard stop loss and take profit checks
+        # Standard stop loss and take profit checks (primary logic)
         if self.side == 'long':
             if current_price <= self.stop_loss:
                 return True, 'stop_loss'
@@ -405,6 +391,27 @@ class Position:
                 return True, 'stop_loss'
             if self.take_profit and current_price <= self.take_profit:
                 return True, 'take_profit'
+        
+        # Emergency profit protection - only trigger if TP is unreachable or position has extreme profit
+        # This is a safety mechanism for when TP extension logic fails, not normal operation
+        if self.take_profit and current_pnl >= 0.05:  # Only check if we have 5%+ ROI
+            # Calculate how far we are from the take profit target
+            if self.side == 'long':
+                distance_to_tp = (self.take_profit - current_price) / current_price
+                passed_tp = current_price >= self.take_profit
+            else:  # short
+                distance_to_tp = (current_price - self.take_profit) / current_price
+                passed_tp = current_price <= self.take_profit
+            
+            # Only use emergency profit protection if:
+            # 1. We've already passed TP (should have closed above, but just in case), OR
+            # 2. We have extreme profits (>50% ROI) AND TP is far away (>10%)
+            if passed_tp:
+                # Already at/past TP - close immediately
+                return True, 'take_profit'
+            elif current_pnl >= 0.50 and distance_to_tp > 0.10:
+                # Extreme profit (50%+ ROI) but TP is 10%+ away - protect profits
+                return True, 'emergency_profit_protection'
         
         return False, ''
     
