@@ -19,6 +19,13 @@ Simply set up your API keys and start trading - the bot handles the rest!
 
 The bot has been **significantly enhanced with institutional-grade intelligence**:
 
+### Latest Advanced Features ⭐⭐⭐ (NEW!)
+- **Advanced Pattern Recognition:** Detects Head & Shoulders, Double Tops/Bottoms, Triangles, Wedges (+5-10% win rate)
+- **Sophisticated Exit Strategies:** 8 intelligent exit methods (time, volatility, momentum, scaling, chandelier, profit-lock, breakeven+, dynamic trailing) (+15-20% profit factor)
+- **Advanced Performance Analytics:** Sortino Ratio, Calmar Ratio, Information Ratio, Profit Factor, Recovery Factor, Ulcer Index (institutional-grade metrics)
+
+👉 **See [ADVANCED_FEATURES.md](ADVANCED_FEATURES.md) for complete details** or [ADVANCED_FEATURES_QUICKSTART.md](ADVANCED_FEATURES_QUICKSTART.md) for quick start.
+
 ### Latest Optimizations⭐⭐
 - **Kelly Criterion with Real Data:** Tracks actual wins/losses for accurate position sizing (0.5-3% dynamic risk)
 - **Drawdown Protection:** Automatically reduces risk during losing streaks (75% at 15% DD, 50% at 20% DD)

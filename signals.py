@@ -6,6 +6,7 @@ import numpy as np
 from typing import Dict, Tuple
 from indicators import Indicators
 from logger import Logger
+from pattern_recognition import PatternRecognition
 
 class SignalGenerator:
     """Generate trading signals based on multiple indicators"""
@@ -14,6 +15,7 @@ class SignalGenerator:
         self.logger = Logger.get_logger()
         self.market_regime = 'neutral'  # 'trending', 'ranging', 'neutral'
         self.adaptive_threshold = 0.55
+        self.pattern_recognizer = PatternRecognition()
     
     def detect_market_regime(self, df: pd.DataFrame) -> str:
         """
@@ -213,6 +215,19 @@ class SignalGenerator:
         elif indicators['momentum'] < -momentum_threshold:
             sell_signals += trend_weight
             reasons['momentum'] = 'strong negative'
+        
+        # 8. Advanced Pattern Recognition (NEW)
+        pattern_signal, pattern_confidence, pattern_name = self.pattern_recognizer.get_pattern_signal(df)
+        if pattern_signal != 'HOLD':
+            pattern_weight = pattern_confidence * 3.0  # Patterns are strong signals
+            if pattern_signal == 'BUY':
+                buy_signals += pattern_weight
+                reasons['pattern'] = f'{pattern_name} (bullish)'
+                self.logger.info(f"🔍 Bullish pattern detected: {pattern_name} (confidence: {pattern_confidence:.2f})")
+            elif pattern_signal == 'SELL':
+                sell_signals += pattern_weight
+                reasons['pattern'] = f'{pattern_name} (bearish)'
+                self.logger.info(f"🔍 Bearish pattern detected: {pattern_name} (confidence: {pattern_confidence:.2f})")
         
         total_signals = buy_signals + sell_signals
         
