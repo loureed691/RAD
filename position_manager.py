@@ -482,8 +482,22 @@ class PositionManager:
             return 0
     
     def open_position(self, symbol: str, signal: str, amount: float, 
-                     leverage: int, stop_loss_percentage: float = 0.05) -> bool:
-        """Open a new position"""
+                     leverage: int, stop_loss_percentage: float = 0.05,
+                     use_limit: bool = False, limit_offset: float = 0.001) -> bool:
+        """Open a new position with optional limit order
+        
+        Args:
+            symbol: Trading pair symbol
+            signal: 'BUY' or 'SELL'
+            amount: Position size in contracts
+            leverage: Leverage to use
+            stop_loss_percentage: Stop loss distance as percentage
+            use_limit: If True, uses limit order instead of market order
+            limit_offset: Price offset for limit orders (default 0.1%)
+        
+        Returns:
+            True if position opened successfully, False otherwise
+        """
         try:
             # Get current price
             ticker = self.client.get_ticker(symbol)
@@ -493,24 +507,54 @@ class PositionManager:
             current_price = ticker['last']
             side = 'buy' if signal == 'BUY' else 'sell'
             
-            # Create order
-            order = self.client.create_market_order(symbol, side, amount, leverage)
+            # Create order (market or limit)
+            if use_limit:
+                # Place limit order slightly better than market price
+                if side == 'buy':
+                    limit_price = current_price * (1 - limit_offset)
+                else:
+                    limit_price = current_price * (1 + limit_offset)
+                
+                order = self.client.create_limit_order(
+                    symbol, side, amount, limit_price, leverage, post_only=True
+                )
+                
+                if not order:
+                    self.logger.warning(f"Limit order failed, falling back to market order")
+                    order = self.client.create_market_order(symbol, side, amount, leverage)
+                else:
+                    # Wait briefly for fill, cancel if not filled
+                    order_status = self.client.wait_for_order_fill(
+                        order['id'], symbol, timeout=10, check_interval=2
+                    )
+                    
+                    if not order_status or order_status['status'] != 'closed':
+                        # Not filled, cancel and use market order
+                        self.client.cancel_order(order['id'], symbol)
+                        self.logger.info(f"Limit order not filled, using market order instead")
+                        order = self.client.create_market_order(symbol, side, amount, leverage)
+            else:
+                order = self.client.create_market_order(symbol, side, amount, leverage)
+            
             if not order:
                 return False
             
-            # Calculate stop loss
+            # Get actual fill price
+            fill_price = order.get('average') or current_price
+            
+            # Calculate stop loss and take profit
             if signal == 'BUY':
-                stop_loss = current_price * (1 - stop_loss_percentage)
-                take_profit = current_price * (1 + stop_loss_percentage * 2)
+                stop_loss = fill_price * (1 - stop_loss_percentage)
+                take_profit = fill_price * (1 + stop_loss_percentage * 2)
             else:
-                stop_loss = current_price * (1 + stop_loss_percentage)
-                take_profit = current_price * (1 - stop_loss_percentage * 2)
+                stop_loss = fill_price * (1 + stop_loss_percentage)
+                take_profit = fill_price * (1 - stop_loss_percentage * 2)
             
             # Create position object
             position = Position(
                 symbol=symbol,
                 side='long' if signal == 'BUY' else 'short',
-                entry_price=current_price,
+                entry_price=fill_price,
                 amount=amount,
                 leverage=leverage,
                 stop_loss=stop_loss,
@@ -520,7 +564,7 @@ class PositionManager:
             self.positions[symbol] = position
             
             self.logger.info(
-                f"Opened {position.side} position: {symbol} @ {current_price:.2f}, "
+                f"Opened {position.side} position: {symbol} @ {fill_price:.2f}, "
                 f"Amount: {amount}, Leverage: {leverage}x, "
                 f"Stop Loss: {stop_loss:.2f}, Take Profit: {take_profit:.2f}"
             )
@@ -656,3 +700,143 @@ class PositionManager:
     def has_position(self, symbol: str) -> bool:
         """Check if a position is open for a symbol"""
         return symbol in self.positions
+    
+    def scale_in_position(self, symbol: str, additional_amount: float, 
+                         current_price: float) -> bool:
+        """Add to an existing position (scale in)
+        
+        Args:
+            symbol: Trading pair symbol
+            additional_amount: Additional contracts to add
+            current_price: Current market price for updating average entry
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if symbol not in self.positions:
+            self.logger.error(f"No position found for {symbol} to scale into")
+            return False
+        
+        try:
+            position = self.positions[symbol]
+            
+            # Execute the additional order
+            side = 'buy' if position.side == 'long' else 'sell'
+            order = self.client.create_market_order(
+                symbol, side, additional_amount, position.leverage
+            )
+            
+            if not order:
+                return False
+            
+            # Update position with new average entry price
+            total_old = position.amount * position.entry_price
+            total_new = additional_amount * current_price
+            total_amount = position.amount + additional_amount
+            
+            position.entry_price = (total_old + total_new) / total_amount
+            position.amount = total_amount
+            
+            self.logger.info(
+                f"Scaled into {symbol}: added {additional_amount} contracts, "
+                f"new avg entry: {position.entry_price:.2f}, total: {total_amount}"
+            )
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error scaling into position {symbol}: {e}")
+            return False
+    
+    def scale_out_position(self, symbol: str, amount_to_close: float, 
+                          reason: str = 'scale_out') -> Optional[float]:
+        """Reduce position size (scale out / partial close)
+        
+        Args:
+            symbol: Trading pair symbol
+            amount_to_close: Contracts to close (partial)
+            reason: Reason for scaling out
+        
+        Returns:
+            P/L percentage for the closed portion, or None if failed
+        """
+        if symbol not in self.positions:
+            self.logger.error(f"No position found for {symbol} to scale out of")
+            return None
+        
+        try:
+            position = self.positions[symbol]
+            
+            if amount_to_close >= position.amount:
+                # Closing entire position
+                return self.close_position(symbol, reason)
+            
+            # Get current price
+            ticker = self.client.get_ticker(symbol)
+            if not ticker:
+                return None
+            
+            current_price = ticker['last']
+            
+            # Close partial position
+            side = 'sell' if position.side == 'long' else 'buy'
+            order = self.client.create_market_order(symbol, side, amount_to_close)
+            
+            if not order:
+                return None
+            
+            # Calculate P/L for closed portion
+            pnl = position.get_pnl(current_price)
+            
+            # Update position amount
+            position.amount -= amount_to_close
+            
+            self.logger.info(
+                f"Scaled out of {symbol}: closed {amount_to_close} contracts "
+                f"(P/L: {pnl:.2%}), remaining: {position.amount}, Reason: {reason}"
+            )
+            
+            return pnl
+            
+        except Exception as e:
+            self.logger.error(f"Error scaling out of position {symbol}: {e}")
+            return None
+    
+    def modify_position_targets(self, symbol: str, new_stop_loss: Optional[float] = None,
+                               new_take_profit: Optional[float] = None) -> bool:
+        """Modify stop loss and/or take profit without closing position
+        
+        Args:
+            symbol: Trading pair symbol
+            new_stop_loss: New stop loss price (optional)
+            new_take_profit: New take profit price (optional)
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if symbol not in self.positions:
+            self.logger.error(f"No position found for {symbol} to modify")
+            return False
+        
+        try:
+            position = self.positions[symbol]
+            
+            if new_stop_loss is not None:
+                old_sl = position.stop_loss
+                position.stop_loss = new_stop_loss
+                self.logger.info(
+                    f"Modified stop loss for {symbol}: {old_sl:.2f} -> {new_stop_loss:.2f}"
+                )
+            
+            if new_take_profit is not None:
+                old_tp = position.take_profit
+                position.take_profit = new_take_profit
+                self.logger.info(
+                    f"Modified take profit for {symbol}: {old_tp:.2f} -> {new_take_profit:.2f}"
+                )
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error modifying position targets for {symbol}: {e}")
+            return False
