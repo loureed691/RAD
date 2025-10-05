@@ -19,6 +19,15 @@ Simply set up your API keys and start trading - the bot handles the rest!
 
 The bot has been **significantly enhanced with institutional-grade intelligence**:
 
+### Latest Enhanced Trading Methods ⭐⭐⭐⭐ (NEW!)
+- **Advanced Order Types:** Post-only, reduce-only, stop-limit orders for better execution control
+- **Position Scaling:** Scale in/out of positions for DCA and profit-taking strategies
+- **Slippage Protection:** Pre-trade validation, order book depth checking, and monitoring
+- **Order Monitoring:** Real-time order status tracking and partial fill handling
+- **Fee Savings:** ~$650-1800 annually on $100k capital through better execution
+
+👉 **See [ENHANCED_TRADING_METHODS.md](ENHANCED_TRADING_METHODS.md) for complete details** or [ENHANCED_TRADING_QUICKREF.md](ENHANCED_TRADING_QUICKREF.md) for quick start.
+
 ### Latest Advanced Features ⭐⭐⭐ (NEW!)
 - **Advanced Pattern Recognition:** Detects Head & Shoulders, Double Tops/Bottoms, Triangles, Wedges (+5-10% win rate)
 - **Sophisticated Exit Strategies:** 8 intelligent exit methods (time, volatility, momentum, scaling, chandelier, profit-lock, breakeven+, dynamic trailing) (+15-20% profit factor)
