@@ -166,10 +166,10 @@ class Position:
         
         # 6. Time-based adjustment - be more conservative on aging positions
         position_age_hours = (now - self.entry_time).total_seconds() / 3600
-        if position_age_hours > 24:  # > 1 day old
-            tp_multiplier *= 0.9  # Tighten 10% on old positions
-        elif position_age_hours > 48:  # > 2 days old
+        if position_age_hours > 48:  # > 2 days old
             tp_multiplier *= 0.85  # Tighten 15% on very old positions
+        elif position_age_hours > 24:  # > 1 day old
+            tp_multiplier *= 0.9  # Tighten 10% on old positions
         
         # 7. Already profitable - be more conservative with extensions
         if current_pnl > 0.05:
