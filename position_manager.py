@@ -698,10 +698,10 @@ class PositionManager:
                 }
                 
                 market_data = {
-                    'volatility': volatility if 'volatility' in locals() else 0.03,
-                    'momentum': momentum if 'momentum' in locals() else 0.0,
-                    'rsi': rsi if 'rsi' in locals() else 50.0,
-                    'trend_strength': trend_strength if 'trend_strength' in locals() else 0.5
+                    'volatility': locals().get('volatility', 0.03),
+                    'momentum': locals().get('momentum', 0.0),
+                    'rsi': locals().get('rsi', 50.0),
+                    'trend_strength': locals().get('trend_strength', 0.5)
                 }
                 
                 # Check comprehensive exit signal (includes breakeven+, momentum reversal, profit lock, etc.)
