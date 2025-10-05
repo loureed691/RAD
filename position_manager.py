@@ -226,7 +226,8 @@ class Position:
                     
                     # Use the more conservative target
                     if calculated_tp > max_tp:
-                        tp_multiplier = (max_tp / self.entry_price - 1) / initial_distance
+                        if initial_distance > 0:
+                            tp_multiplier = (max_tp / self.entry_price - 1) / initial_distance
             
             elif self.side == 'short' and support_levels:
                 # Check if TP is near a support level
