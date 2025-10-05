@@ -196,6 +196,137 @@ class KuCoinClient:
         
         return amount
     
+    def calculate_required_margin(self, symbol: str, amount: float, 
+                                  price: float, leverage: int) -> float:
+        """Calculate margin required to open a position
+        
+        Args:
+            symbol: Trading pair symbol
+            amount: Position size in contracts
+            price: Entry price
+            leverage: Leverage to use
+            
+        Returns:
+            Required margin in USDT
+        """
+        try:
+            # For futures: required_margin = (contracts * price * contract_size) / leverage
+            # Most futures have contract_size = 1
+            markets = self.exchange.load_markets()
+            contract_size = 1
+            if symbol in markets:
+                contract_size = markets[symbol].get('contractSize', 1)
+            
+            position_value = amount * price * contract_size
+            required_margin = position_value / leverage
+            
+            return required_margin
+        except Exception as e:
+            self.logger.error(f"Error calculating required margin: {e}")
+            # Return conservative estimate
+            return (amount * price) / leverage
+    
+    def check_available_margin(self, symbol: str, amount: float, 
+                               price: float, leverage: int) -> tuple[bool, float, str]:
+        """Check if there's enough margin available to open a position
+        
+        Args:
+            symbol: Trading pair symbol
+            amount: Position size in contracts
+            price: Entry price
+            leverage: Leverage to use
+            
+        Returns:
+            Tuple of (is_sufficient, available_margin, reason)
+        """
+        try:
+            balance = self.get_balance()
+            
+            # Handle case where balance fetch fails or is empty
+            if not balance or 'free' not in balance or 'USDT' not in balance.get('free', {}):
+                # If we can't get balance, assume sufficient margin to avoid blocking trades
+                # The exchange will reject if there's actually insufficient margin
+                self.logger.debug("Could not determine available margin, proceeding with order")
+                return True, 0, "Unable to verify margin, proceeding"
+            
+            available_margin = float(balance.get('free', {}).get('USDT', 0))
+            
+            required_margin = self.calculate_required_margin(symbol, amount, price, leverage)
+            
+            # Add 5% buffer for safety and fees
+            required_with_buffer = required_margin * 1.05
+            
+            if available_margin < required_with_buffer:
+                reason = (
+                    f"Insufficient margin: available=${available_margin:.2f}, "
+                    f"required=${required_with_buffer:.2f} (position value=${amount * price:.2f}, "
+                    f"leverage={leverage}x)"
+                )
+                return False, available_margin, reason
+            
+            return True, available_margin, "Sufficient margin available"
+            
+        except Exception as e:
+            self.logger.error(f"Error checking available margin: {e}")
+            # If error checking, proceed with order and let exchange handle it
+            return True, 0, f"Error checking margin: {e}"
+    
+    def adjust_position_for_margin(self, symbol: str, amount: float, price: float, 
+                                   leverage: int, available_margin: float) -> tuple[float, int]:
+        """Adjust position size and/or leverage to fit available margin
+        
+        Args:
+            symbol: Trading pair symbol
+            amount: Desired position size in contracts
+            price: Entry price
+            leverage: Desired leverage
+            available_margin: Available margin in USDT
+            
+        Returns:
+            Tuple of (adjusted_amount, adjusted_leverage)
+        """
+        try:
+            # Reserve 10% of available margin for safety and fees
+            usable_margin = available_margin * 0.90
+            
+            # Calculate maximum position value we can take
+            max_position_value = usable_margin * leverage
+            
+            # Calculate adjusted amount based on available margin
+            adjusted_amount = max_position_value / price
+            
+            # If adjusted amount is still too large, also reduce leverage
+            if adjusted_amount > amount:
+                adjusted_amount = amount
+            
+            # Validate adjusted amount
+            adjusted_amount = self.validate_and_cap_amount(symbol, adjusted_amount)
+            
+            # If we still can't fit, reduce leverage
+            required_margin = self.calculate_required_margin(symbol, adjusted_amount, price, leverage)
+            if required_margin > usable_margin:
+                # Calculate what leverage we can actually use
+                position_value = adjusted_amount * price
+                adjusted_leverage = int(position_value / usable_margin)
+                adjusted_leverage = max(1, min(adjusted_leverage, leverage))
+                
+                self.logger.warning(
+                    f"Reducing leverage from {leverage}x to {adjusted_leverage}x to fit available margin"
+                )
+                return adjusted_amount, adjusted_leverage
+            
+            self.logger.warning(
+                f"Reducing position size from {amount:.4f} to {adjusted_amount:.4f} contracts "
+                f"to fit available margin (${usable_margin:.2f})"
+            )
+            
+            return adjusted_amount, leverage
+            
+        except Exception as e:
+            self.logger.error(f"Error adjusting position for margin: {e}")
+            # Return conservative values
+            return amount * 0.5, max(1, leverage // 2)
+    
     def create_market_order(self, symbol: str, side: str, amount: float, 
                            leverage: int = 10, max_slippage: float = 0.01,
                            validate_depth: bool = True) -> Optional[Dict]:
@@ -213,8 +344,44 @@ class KuCoinClient:
             Order dict if successful, None otherwise
         """
         try:
+            # Get current price first for margin checks
+            ticker = self.get_ticker(symbol)
+            if not ticker:
+                self.logger.error(f"Could not get ticker for {symbol}")
+                return None
+                
+            reference_price = ticker['last']
+            self.logger.debug(f"Reference price for {symbol}: {reference_price}")
+            
             # Validate and cap amount to exchange limits
             validated_amount = self.validate_and_cap_amount(symbol, amount)
+            
+            # Check if we have enough margin for this position (error 330008 prevention)
+            has_margin, available_margin, margin_reason = self.check_available_margin(
+                symbol, validated_amount, reference_price, leverage
+            )
+            
+            if not has_margin:
+                self.logger.warning(f"Margin check failed: {margin_reason}")
+                # Try to adjust position to fit available margin
+                adjusted_amount, adjusted_leverage = self.adjust_position_for_margin(
+                    symbol, validated_amount, reference_price, leverage, available_margin
+                )
+                
+                # Check if adjusted position is viable
+                if adjusted_amount < validated_amount * 0.1:  # Less than 10% of desired
+                    self.logger.error(
+                        f"Cannot open position: even with adjustments, position would be too small "
+                        f"(adjusted: {adjusted_amount:.4f}, desired: {validated_amount:.4f})"
+                    )
+                    return None
+                
+                # Use adjusted values
+                validated_amount = adjusted_amount
+                leverage = adjusted_leverage
+                self.logger.info(
+                    f"Adjusted position to fit margin: {adjusted_amount:.4f} contracts at {adjusted_leverage}x leverage"
+                )
             
             # For large orders, check order book depth
             if validate_depth and validated_amount > 100:  # Threshold for "large" order
@@ -228,12 +395,6 @@ class KuCoinClient:
                             f"Low liquidity for {symbol}: order size {validated_amount} vs "
                             f"book depth {total_liquidity:.2f}. Potential high slippage."
                         )
-            
-            # Get current price for slippage validation
-            ticker = self.get_ticker(symbol)
-            if ticker:
-                reference_price = ticker['last']
-                self.logger.debug(f"Reference price for {symbol}: {reference_price}")
             
             # Switch to cross margin mode first (fixes error 330006)
             self.exchange.set_margin_mode('cross', symbol)
@@ -258,7 +419,7 @@ class KuCoinClient:
             )
             
             # Check actual slippage if we have both prices
-            if ticker and order.get('average'):
+            if order.get('average'):
                 actual_slippage = abs(order['average'] - reference_price) / reference_price
                 if actual_slippage > max_slippage:
                     self.logger.warning(
@@ -291,6 +452,35 @@ class KuCoinClient:
             # Validate and cap amount to exchange limits
             validated_amount = self.validate_and_cap_amount(symbol, amount)
             
+            # Check if we have enough margin for this position (error 330008 prevention)
+            # Skip margin check for reduce_only orders as they close positions
+            if not reduce_only:
+                has_margin, available_margin, margin_reason = self.check_available_margin(
+                    symbol, validated_amount, price, leverage
+                )
+                
+                if not has_margin:
+                    self.logger.warning(f"Margin check failed: {margin_reason}")
+                    # Try to adjust position to fit available margin
+                    adjusted_amount, adjusted_leverage = self.adjust_position_for_margin(
+                        symbol, validated_amount, price, leverage, available_margin
+                    )
+                    
+                    # Check if adjusted position is viable
+                    if adjusted_amount < validated_amount * 0.1:  # Less than 10% of desired
+                        self.logger.error(
+                            f"Cannot open position: even with adjustments, position would be too small "
+                            f"(adjusted: {adjusted_amount:.4f}, desired: {validated_amount:.4f})"
+                        )
+                        return None
+                    
+                    # Use adjusted values
+                    validated_amount = adjusted_amount
+                    leverage = adjusted_leverage
+                    self.logger.info(
+                        f"Adjusted limit order to fit margin: {adjusted_amount:.4f} contracts at {adjusted_leverage}x leverage"
+                    )
+            
             # Switch to cross margin mode first (fixes error 330006)
             self.exchange.set_margin_mode('cross', symbol)
             
@@ -315,7 +505,7 @@ class KuCoinClient:
             )
             self.logger.info(
                 f"Created {side} limit order for {validated_amount} {symbol} at {price} "
-                f"(post_only={post_only}, reduce_only={reduce_only})"
+                f"(leverage={leverage}x, post_only={post_only}, reduce_only={reduce_only})"
             )
             return order
         except Exception as e:
