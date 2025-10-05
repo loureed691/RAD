@@ -100,9 +100,19 @@ class TradingBot:
         signal = opportunity['signal']
         confidence = opportunity['confidence']
         
-        # Check if we already have a position for this symbol
+        # Check if we already have a position for this symbol (bot's internal tracking)
         if self.position_manager.has_position(symbol):
             self.logger.debug(f"Already have position for {symbol}, skipping")
+            return False
+        
+        # Check if position exists on exchange (additional safety check)
+        # This catches cases where bot tracking is out of sync with exchange
+        if self.client.has_open_position(symbol):
+            self.logger.warning(
+                f"Position exists on exchange for {symbol} but not in bot tracking - syncing"
+            )
+            # Trigger a sync to update bot's internal tracking
+            self.position_manager.sync_existing_positions()
             return False
         
         # Get current balance

@@ -344,6 +344,15 @@ class KuCoinClient:
             Order dict if successful, None otherwise
         """
         try:
+            # Check if position already exists on exchange (error 330008 prevention)
+            # In one-way position mode, only one position per symbol is allowed
+            if self.has_open_position(symbol):
+                self.logger.warning(
+                    f"Cannot open position for {symbol}: position already exists on exchange "
+                    f"(one-way position mode allows only one position per symbol)"
+                )
+                return None
+            
             # Get current price first for margin checks
             ticker = self.get_ticker(symbol)
             if not ticker:
@@ -449,6 +458,16 @@ class KuCoinClient:
             reduce_only: If True, order only reduces position (safer exits)
         """
         try:
+            # Check if position already exists on exchange (error 330008 prevention)
+            # Skip this check for reduce_only orders as they are closing positions
+            # In one-way position mode, only one position per symbol is allowed
+            if not reduce_only and self.has_open_position(symbol):
+                self.logger.warning(
+                    f"Cannot open position for {symbol}: position already exists on exchange "
+                    f"(one-way position mode allows only one position per symbol)"
+                )
+                return None
+            
             # Validate and cap amount to exchange limits
             validated_amount = self.validate_and_cap_amount(symbol, amount)
             
@@ -531,6 +550,26 @@ class KuCoinClient:
         except Exception as e:
             self.logger.error(f"Error fetching positions: {e}")
             return []
+    
+    def has_open_position(self, symbol: str) -> bool:
+        """Check if there's an open position for a symbol on the exchange
+        
+        Args:
+            symbol: Trading pair symbol
+            
+        Returns:
+            True if position exists on exchange, False otherwise
+        """
+        try:
+            positions = self.get_open_positions()
+            for pos in positions:
+                if pos.get('symbol') == symbol and float(pos.get('contracts', 0)) > 0:
+                    return True
+            return False
+        except Exception as e:
+            self.logger.error(f"Error checking for open position: {e}")
+            # Return False on error to allow trade attempt (exchange will reject if needed)
+            return False
     
     def close_position(self, symbol: str, use_limit: bool = False, 
                       slippage_tolerance: float = 0.002) -> bool:
