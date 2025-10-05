@@ -108,9 +108,11 @@ class RiskManager:
     
     def calculate_position_size(self, balance: float, entry_price: float, 
                                stop_loss_price: float, leverage: int, 
-                               risk_per_trade: float = None) -> float:
+                               risk_per_trade: float = None,
+                               volatility_regime: str = 'normal',
+                               volatility_ratio: float = 1.0) -> float:
         """
-        Calculate safe position size based on risk management
+        Calculate safe position size with volatility-based adjustments
         
         Args:
             balance: Account balance in USDT
@@ -118,6 +120,8 @@ class RiskManager:
             stop_loss_price: Stop loss price
             leverage: Leverage to use
             risk_per_trade: Optional override for risk per trade (from Kelly Criterion)
+            volatility_regime: 'low', 'normal', or 'high'
+            volatility_ratio: Current volatility / Average volatility
         
         Returns:
             Position size in contracts
@@ -125,8 +129,23 @@ class RiskManager:
         # Use provided risk or default
         risk = risk_per_trade if risk_per_trade is not None else self.risk_per_trade
         
+        # Adjust risk based on volatility regime (volatility clustering insight)
+        volatility_adjustment = 1.0
+        
+        if volatility_regime == 'high':
+            # In high volatility, reduce position size by 20-40%
+            volatility_adjustment = max(0.6, 1.0 - (volatility_ratio - 1.0) * 0.5)
+            self.logger.debug(f"High volatility regime: reducing position size by {(1-volatility_adjustment)*100:.0f}%")
+        elif volatility_regime == 'low':
+            # In low volatility, can slightly increase position size (10-20%)
+            volatility_adjustment = min(1.2, 1.0 + (1.0 - volatility_ratio) * 0.3)
+            self.logger.debug(f"Low volatility regime: increasing position size by {(volatility_adjustment-1)*100:.0f}%")
+        
+        # Apply volatility adjustment to risk
+        adjusted_risk = risk * volatility_adjustment
+        
         # Calculate risk amount
-        risk_amount = balance * risk
+        risk_amount = balance * adjusted_risk
         
         # Calculate price distance to stop loss
         price_distance = abs(entry_price - stop_loss_price) / entry_price
@@ -146,7 +165,8 @@ class RiskManager:
         
         self.logger.debug(
             f"Calculated position size: {position_size:.4f} contracts "
-            f"(${position_value:.2f} value) for risk ${risk_amount:.2f} ({risk:.2%})"
+            f"(${position_value:.2f} value) for risk ${risk_amount:.2f} ({adjusted_risk:.2%}) "
+            f"[base risk: {risk:.2%}, volatility adj: {volatility_adjustment:.2f}]"
         )
         
         return position_size

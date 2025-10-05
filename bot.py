@@ -143,11 +143,14 @@ class TradingBot:
         
         entry_price = ticker['last']
         
-        # Get volatility for stop loss calculation
+        # Get volatility for stop loss calculation and position sizing
         ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
         df = Indicators.calculate_all(ohlcv)
         indicators = Indicators.get_latest_indicators(df)
         volatility = indicators.get('bb_width', 0.03)
+        
+        # Advanced: Analyze volatility clustering for better position sizing
+        vol_analysis = Indicators.analyze_volatility_clustering(df)
         
         # Calculate support/resistance levels for intelligent profit targeting
         support_resistance = Indicators.calculate_support_resistance(df, lookback=50)
@@ -192,9 +195,11 @@ class TradingBot:
             if risk_adjustment < 1.0:
                 self.logger.info(f"Using default risk with drawdown protection: {self.risk_manager.risk_per_trade:.2%} × {risk_adjustment:.0%} = {risk_per_trade:.2%}")
         
-        # Calculate position size with optimized risk
+        # Calculate position size with optimized risk and volatility-based adjustment
         position_size = self.risk_manager.calculate_position_size(
-            available_balance, entry_price, stop_loss_price, leverage, risk_per_trade
+            available_balance, entry_price, stop_loss_price, leverage, risk_per_trade,
+            volatility_regime=vol_analysis.get('volatility_regime', 'normal'),
+            volatility_ratio=vol_analysis.get('volatility_ratio', 1.0)
         )
         
         # Open position
