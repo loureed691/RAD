@@ -253,13 +253,21 @@ class KuCoinClient:
             
             required_margin = self.calculate_required_margin(symbol, amount, price, leverage)
             
+            # Get contract size for accurate position value display
+            markets = self.exchange.load_markets()
+            contract_size = 1
+            if symbol in markets:
+                contract_size = markets[symbol].get('contractSize', 1)
+            
             # Add 5% buffer for safety and fees
             required_with_buffer = required_margin * 1.05
             
             if available_margin < required_with_buffer:
+                # Calculate actual position value including contract size
+                position_value = amount * price * contract_size
                 reason = (
                     f"Insufficient margin: available=${available_margin:.2f}, "
-                    f"required=${required_with_buffer:.2f} (position value=${amount * price:.2f}, "
+                    f"required=${required_with_buffer:.2f} (position value=${position_value:.2f}, "
                     f"leverage={leverage}x)"
                 )
                 return False, available_margin, reason
@@ -286,6 +294,12 @@ class KuCoinClient:
             Tuple of (adjusted_amount, adjusted_leverage)
         """
         try:
+            # Get contract size for accurate calculations
+            markets = self.exchange.load_markets()
+            contract_size = 1
+            if symbol in markets:
+                contract_size = markets[symbol].get('contractSize', 1)
+            
             # Reserve 10% of available margin for safety and fees
             usable_margin = available_margin * 0.90
             
@@ -293,7 +307,7 @@ class KuCoinClient:
             max_position_value = usable_margin * leverage
             
             # Calculate adjusted amount based on available margin
-            adjusted_amount = max_position_value / price
+            adjusted_amount = max_position_value / (price * contract_size)
             
             # If adjusted amount is still too large, also reduce leverage
             if adjusted_amount > amount:
@@ -305,8 +319,8 @@ class KuCoinClient:
             # If we still can't fit, reduce leverage
             required_margin = self.calculate_required_margin(symbol, adjusted_amount, price, leverage)
             if required_margin > usable_margin:
-                # Calculate what leverage we can actually use
-                position_value = adjusted_amount * price
+                # Calculate what leverage we can actually use (must include contract_size)
+                position_value = adjusted_amount * price * contract_size
                 adjusted_leverage = int(position_value / usable_margin)
                 adjusted_leverage = max(1, min(adjusted_leverage, leverage))
                 
