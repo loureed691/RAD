@@ -194,9 +194,23 @@ class MarketScanner:
             elif future_info.get('swap', False):
                 priority_symbols.append(symbol)
         
-        # If we filtered too aggressively, include all
-        if len(priority_symbols) < 10:
-            return symbols
+        # If we filtered too aggressively, include all swaps (but still respect volume filter)
+        # Only fall back if we got very few results (< 5) and there are many pairs available
+        if len(priority_symbols) < 5 and len(symbols) > 10:
+            self.logger.warning(f"Only found {len(priority_symbols)} priority pairs from {len(symbols)} total, using all perpetual swaps")
+            # Include all perpetual swaps regardless of major coin status, but still respect volume filter
+            priority_symbols = []
+            for symbol in symbols:
+                future_info = symbol_map.get(symbol, {})
+                volume_24h = future_info.get('quoteVolume', 0)
+                
+                # Still apply volume filter
+                if volume_24h > 0 and volume_24h < 1000000:
+                    continue
+                    
+                # Include all perpetual swaps
+                if future_info.get('swap', False):
+                    priority_symbols.append(symbol)
         
         return priority_symbols
     
