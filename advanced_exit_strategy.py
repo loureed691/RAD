@@ -227,9 +227,29 @@ class AdvancedExitStrategy:
             market_data: Dict with current market data (price, volatility, momentum, etc.)
             
         Returns:
-            Tuple of (should_exit, reason, scale_out_percentage)
+            Tuple of (should_exit, reason, new_stop_loss_or_scale_percentage)
+            - If should_exit is True: third value is scale percentage (1.0 for full exit)
+            - If should_exit is False: third value is new stop loss price (or None)
         """
         exit_signals = []
+        suggested_stop = None
+        
+        # Breakeven+ protection (doesn't exit, just updates stop loss)
+        # Note: breakeven_plus_exit expects un-leveraged P&L
+        if all(k in position_data for k in ['current_pnl_pct', 'entry_price', 'current_price', 'side']):
+            # Convert leveraged P&L to spot P&L for breakeven+ check
+            leverage = position_data.get('leverage', 10)
+            spot_pnl = position_data['current_pnl_pct'] / leverage
+            
+            new_stop, reason = self.breakeven_plus_exit(
+                spot_pnl,
+                position_data['entry_price'],
+                position_data['current_price'],
+                position_data['side']
+            )
+            if new_stop is not None:
+                suggested_stop = new_stop
+                self.logger.debug(f"Breakeven+ protection: {reason} -> new stop: {new_stop:.2f}")
         
         # Time-based exit
         if 'entry_time' in position_data:
@@ -261,10 +281,18 @@ class AdvancedExitStrategy:
                 exit_signals.append(('momentum_reversal', reason, 1.0))
         
         # Profit lock
+        # Note: profit_lock_exit works with both spot and leveraged P&L
         if 'current_pnl_pct' in position_data and 'peak_pnl_pct' in position_data:
+            # Use spot P&L for profit lock (more conservative)
+            leverage = position_data.get('leverage', 10)
+            spot_current_pnl = position_data['current_pnl_pct'] / leverage
+            spot_peak_pnl = position_data['peak_pnl_pct'] / leverage
+            
             should_exit, reason = self.profit_lock_exit(
-                position_data['current_pnl_pct'],
-                position_data['peak_pnl_pct']
+                spot_current_pnl,
+                spot_peak_pnl,
+                lock_threshold=0.03,  # Lock after 3% spot profit
+                retracement_pct=0.3   # Exit if retraces 30%
             )
             if should_exit:
                 exit_signals.append(('profit_lock', reason, 1.0))
@@ -298,7 +326,12 @@ class AdvancedExitStrategy:
             )
             signal_type, reason, scale = full_exits_sorted[0]
             self.logger.info(f"Exit signal: {signal_type} - {reason}")
-            return True, reason, 1.0
+            return True, reason, scale
+        
+        # No exit signal - return suggested stop loss if breakeven+ activated
+        # (breakeven+ takes priority over partial exits since it's risk management)
+        if suggested_stop is not None:
+            return False, "Breakeven+ stop update", suggested_stop
         
         # If any partial exit signal, take the largest
         if exit_signals:

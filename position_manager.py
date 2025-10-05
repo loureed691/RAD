@@ -7,6 +7,7 @@ from typing import Dict, Optional, Tuple
 from datetime import datetime
 from kucoin_client import KuCoinClient
 from logger import Logger
+from advanced_exit_strategy import AdvancedExitStrategy
 
 class Position:
     """Represents an open trading position"""
@@ -378,13 +379,14 @@ class Position:
         return pnl
 
 class PositionManager:
-    """Manage open positions with trailing stops"""
+    """Manage open positions with trailing stops and advanced exit strategies"""
     
     def __init__(self, client: KuCoinClient, trailing_stop_percentage: float = 0.02):
         self.client = client
         self.trailing_stop_percentage = trailing_stop_percentage
         self.positions: Dict[str, Position] = {}
         self.logger = Logger.get_logger()
+        self.advanced_exit_strategy = AdvancedExitStrategy()
     
     def sync_existing_positions(self):
         """Sync existing positions from the exchange and import them into management
@@ -679,6 +681,47 @@ class PositionManager:
                     position.update_trailing_stop(current_price, self.trailing_stop_percentage)
                 
                 # Check if position should be closed
+                # First check advanced exit strategies
+                current_pnl = position.get_pnl(current_price)
+                
+                # Prepare data for advanced exit strategy
+                position_data = {
+                    'side': position.side,
+                    'entry_price': position.entry_price,
+                    'current_price': current_price,
+                    'pnl_pct': current_pnl,
+                    'peak_pnl_pct': position.max_favorable_excursion,
+                    'entry_time': position.entry_time,
+                    'stop_loss': position.stop_loss,
+                    'take_profit': position.take_profit
+                }
+                
+                market_data = {
+                    'volatility': volatility if 'volatility' in locals() else 0.03,
+                    'momentum': momentum if 'momentum' in locals() else 0.0,
+                    'rsi': rsi if 'rsi' in locals() else 50.0,
+                    'trend_strength': trend_strength if 'trend_strength' in locals() else 0.5
+                }
+                
+                # Check comprehensive exit signal (includes breakeven+, momentum reversal, profit lock, etc.)
+                should_exit_advanced, exit_reason, suggested_stop = self.advanced_exit_strategy.get_comprehensive_exit_signal(
+                    position_data, market_data
+                )
+                
+                # Update stop loss if breakeven+ suggests a new level
+                if suggested_stop is not None and suggested_stop != position.stop_loss:
+                    old_stop = position.stop_loss
+                    position.stop_loss = suggested_stop
+                    self.logger.info(f"🔒 Updated {symbol} stop loss: {old_stop:.2f} -> {suggested_stop:.2f} ({exit_reason})")
+                
+                # If advanced strategy says exit, do it
+                if should_exit_advanced:
+                    pnl = self.close_position(symbol, exit_reason)
+                    if pnl is not None:
+                        yield symbol, pnl, position
+                    continue
+                
+                # Check standard stop loss and take profit conditions
                 should_close, reason = position.should_close(current_price)
                 if should_close:
                     pnl = self.close_position(symbol, reason)
