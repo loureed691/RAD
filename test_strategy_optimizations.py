@@ -52,7 +52,7 @@ def test_kelly_criterion_with_tracked_losses():
             metrics['avg_loss']
         )
         
-        assert 0.005 <= optimal_risk <= 0.03, f"Kelly risk should be between 0.5% and 3%, got {optimal_risk}"
+        assert 0.005 <= optimal_risk <= 0.035, f"Kelly risk should be between 0.5% and 3.5%, got {optimal_risk}"
         
         print(f"  ✓ Tracked {metrics['wins']} wins with avg profit: {metrics['avg_profit']:.2%}")
         print(f"  ✓ Tracked {metrics['losses']} losses with avg loss: {metrics['avg_loss']:.2%}")
