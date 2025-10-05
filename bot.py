@@ -13,6 +13,7 @@ from position_manager import PositionManager
 from risk_manager import RiskManager
 from ml_model import MLModel
 from indicators import Indicators
+from advanced_analytics import AdvancedAnalytics
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -25,7 +26,7 @@ class TradingBot:
         # Setup logger
         self.logger = Logger.setup(Config.LOG_LEVEL, Config.LOG_FILE)
         self.logger.info("=" * 60)
-        self.logger.info("🤖 INITIALIZING KUCOIN FUTURES TRADING BOT")
+        self.logger.info("🤖 INITIALIZING ADVANCED KUCOIN FUTURES TRADING BOT")
         self.logger.info("=" * 60)
         
         # Initialize components
@@ -69,10 +70,14 @@ class TradingBot:
         
         self.ml_model = MLModel(Config.ML_MODEL_PATH)
         
+        # Advanced analytics module
+        self.analytics = AdvancedAnalytics()
+        
         # State
         self.running = False
         self.last_scan_time = None
         self.last_retrain_time = datetime.now()
+        self.last_analytics_report = datetime.now()
         
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self.signal_handler)
@@ -228,6 +233,19 @@ class TradingBot:
             profit_icon = "📈" if pnl > 0 else "📉"
             self.logger.info(f"{profit_icon} Position closed: {symbol}, P/L: {pnl:.2%}")
             
+            # Record trade for analytics
+            trade_duration = (datetime.now() - position.entry_time).total_seconds() / 60
+            self.analytics.record_trade({
+                'symbol': symbol,
+                'side': position.side,
+                'entry_price': position.entry_price,
+                'exit_price': position.entry_price * (1 + pnl / position.leverage) if position.side == 'long' else position.entry_price * (1 - pnl / position.leverage),
+                'pnl': pnl,
+                'pnl_pct': pnl,
+                'duration': trade_duration,
+                'leverage': position.leverage
+            })
+            
             # Record outcome for ML model
             ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
             df = Indicators.calculate_all(ohlcv)
@@ -235,6 +253,17 @@ class TradingBot:
             
             signal = 'BUY' if position.side == 'long' else 'SELL'
             self.ml_model.record_outcome(indicators, signal, pnl)
+        
+        # Record current equity for analytics
+        balance = self.client.get_balance()
+        available_balance = float(balance.get('free', {}).get('USDT', 0))
+        self.analytics.record_equity(available_balance)
+        
+        # Periodic analytics report (every hour)
+        time_since_report = (datetime.now() - self.last_analytics_report).total_seconds()
+        if time_since_report > 3600:  # 1 hour
+            self.logger.info(self.analytics.get_performance_summary())
+            self.last_analytics_report = datetime.now()
         
         # Log performance metrics
         metrics = self.ml_model.get_performance_metrics()

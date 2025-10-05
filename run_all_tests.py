@@ -20,6 +20,7 @@ TEST_SUITES = [
     ("Adaptive Stops", "test_adaptive_stops.py", 9),
     ("Logger Enhancements", "test_logger_enhancements.py", 7),
     ("Unicode Fix", "test_unicode_fix.py", 1),
+    ("Advanced Features", "test_advanced_features.py", 6),
 ]
 
 def print_header():
