@@ -581,6 +581,11 @@ class PositionManager:
                 
                 current_price = ticker['last']
                 
+                # Calculate current P/L before updates
+                current_pnl = position.get_pnl(current_price)
+                old_stop_loss = position.stop_loss
+                old_take_profit = position.take_profit
+                
                 # Get market data for adaptive parameters
                 ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
                 if ohlcv and len(ohlcv) >= 50:
@@ -627,12 +632,60 @@ class PositionManager:
                             rsi=rsi,
                             support_resistance=support_resistance
                         )
+                        
+                        # Log position status with adaptive strategy details
+                        pnl_icon = "📈" if current_pnl > 0 else "📉"
+                        trailing_status = "🔄 ACTIVE" if position.trailing_stop_activated else "⏸️  INACTIVE"
+                        
+                        # Determine if stops/TP were adjusted
+                        stop_adjusted = abs(position.stop_loss - old_stop_loss) > 0.01
+                        tp_adjusted = old_take_profit and position.take_profit and abs(position.take_profit - old_take_profit) > 0.01
+                        
+                        adjustment_notes = []
+                        if stop_adjusted:
+                            adjustment_notes.append(f"SL: {old_stop_loss:.2f}→{position.stop_loss:.2f}")
+                        if tp_adjusted:
+                            adjustment_notes.append(f"TP: {old_take_profit:.2f}→{position.take_profit:.2f}")
+                        
+                        adjustments = f" | Adjusted: {', '.join(adjustment_notes)}" if adjustment_notes else ""
+                        
+                        # Format take profit for display
+                        tp_display = f"{position.take_profit:.2f}" if position.take_profit else "None"
+                        
+                        self.logger.info(
+                            f"{pnl_icon} {symbol} {position.side.upper()} | "
+                            f"Entry: {position.entry_price:.2f} | Current: {current_price:.2f} | "
+                            f"P/L: {current_pnl:+.2%} | SL: {position.stop_loss:.2f} | "
+                            f"TP: {tp_display} | "
+                            f"Trail: {trailing_status} | "
+                            f"Vol: {volatility:.1%} | Momentum: {momentum:+.2%} | "
+                            f"RSI: {rsi:.0f} | Trend: {trend_strength:.2f}"
+                            f"{adjustments}"
+                        )
                     else:
                         # Fallback to simple update if indicators fail
                         position.update_trailing_stop(current_price, self.trailing_stop_percentage)
+                        # Log basic status
+                        pnl_icon = "📈" if current_pnl > 0 else "📉"
+                        tp_display = f"{position.take_profit:.2f}" if position.take_profit else "None"
+                        self.logger.info(
+                            f"{pnl_icon} {symbol} {position.side.upper()} | "
+                            f"Entry: {position.entry_price:.2f} | Current: {current_price:.2f} | "
+                            f"P/L: {current_pnl:+.2%} | SL: {position.stop_loss:.2f} | "
+                            f"TP: {tp_display}"
+                        )
                 else:
                     # Fallback to simple update if no market data
                     position.update_trailing_stop(current_price, self.trailing_stop_percentage)
+                    # Log basic status
+                    pnl_icon = "📈" if current_pnl > 0 else "📉"
+                    tp_display = f"{position.take_profit:.2f}" if position.take_profit else "None"
+                    self.logger.info(
+                        f"{pnl_icon} {symbol} {position.side.upper()} | "
+                        f"Entry: {position.entry_price:.2f} | Current: {current_price:.2f} | "
+                        f"P/L: {current_pnl:+.2%} | SL: {position.stop_loss:.2f} | "
+                        f"TP: {tp_display}"
+                    )
                 
                 # Check if position should be closed
                 should_close, reason = position.should_close(current_price)

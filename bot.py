@@ -229,6 +229,10 @@ class TradingBot:
         self.logger.debug(f"Using adaptive confidence threshold: {adaptive_threshold:.2f}")
         
         # Update existing positions
+        open_positions = self.position_manager.get_open_positions_count()
+        if open_positions > 0:
+            self.logger.info(f"📊 Monitoring {open_positions} open position(s) with adaptive strategies...")
+        
         for symbol, pnl, position in self.position_manager.update_positions():
             profit_icon = "📈" if pnl > 0 else "📉"
             self.logger.info(f"{profit_icon} Position closed: {symbol}, P/L: {pnl:.2%}")
