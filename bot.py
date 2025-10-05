@@ -96,9 +96,14 @@ class TradingBot:
     
     def execute_trade(self, opportunity: dict) -> bool:
         """Execute a trade based on opportunity"""
-        symbol = opportunity['symbol']
-        signal = opportunity['signal']
-        confidence = opportunity['confidence']
+        # Bug fix: Safely access opportunity dictionary with validation
+        symbol = opportunity.get('symbol')
+        signal = opportunity.get('signal')
+        confidence = opportunity.get('confidence')
+        
+        if not symbol or not signal or confidence is None:
+            self.logger.error(f"Invalid opportunity data: {opportunity}")
+            return False
         
         # Check if we already have a position for this symbol
         if self.position_manager.has_position(symbol):
@@ -147,7 +152,11 @@ class TradingBot:
         if not ticker:
             return False
         
-        entry_price = ticker['last']
+        # Bug fix: Safely access 'last' price with validation
+        entry_price = ticker.get('last')
+        if not entry_price or entry_price <= 0:
+            self.logger.warning(f"Invalid entry price for {symbol}: {entry_price}")
+            return False
         
         # Get volatility for stop loss calculation
         ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
@@ -201,7 +210,8 @@ class TradingBot:
             
             # Use actual tracked average loss if available, otherwise estimate
             avg_loss = metrics.get('avg_loss', 0)
-            if avg_loss == 0 or metrics.get('losses', 0) < 5:
+            # Bug fix: Use threshold comparison for float values instead of == 0
+            if avg_loss <= 0.0001 or metrics.get('losses', 0) < 5:
                 # FIX BUG 4: Not enough loss data - use conservative estimate based on volatility
                 # rather than avg_profit * 1.5 which may not reflect actual risk
                 # Use max of: current stop loss %, or 2x avg_profit (conservative)

@@ -469,7 +469,11 @@ class PositionManager:
                     self.logger.warning(f"Could not get ticker for {symbol}, skipping")
                     continue
                 
-                current_price = ticker['last']
+                # Bug fix: Safely access 'last' price
+                current_price = ticker.get('last')
+                if not current_price or current_price <= 0:
+                    self.logger.warning(f"Invalid price for {symbol}: {current_price}, skipping")
+                    continue
                 
                 # Calculate intelligent stop loss based on current price
                 # Use a conservative 5% stop loss for imported positions
@@ -544,7 +548,11 @@ class PositionManager:
             if not ticker:
                 return False
             
-            current_price = ticker['last']
+            # Bug fix: Safely access 'last' price
+            current_price = ticker.get('last')
+            if not current_price or current_price <= 0:
+                self.logger.warning(f"Invalid price for {symbol}: {current_price}")
+                return False
             side = 'buy' if signal == 'BUY' else 'sell'
             
             # Create order (market or limit)
@@ -562,17 +570,22 @@ class PositionManager:
                 if not order:
                     self.logger.warning(f"Limit order failed, falling back to market order")
                     order = self.client.create_market_order(symbol, side, amount, leverage)
-                else:
+                elif 'id' in order:
+                    # Bug fix: Check order has 'id' key before accessing
                     # Wait briefly for fill, cancel if not filled
                     order_status = self.client.wait_for_order_fill(
                         order['id'], symbol, timeout=10, check_interval=2
                     )
                     
-                    if not order_status or order_status['status'] != 'closed':
+                    if not order_status or order_status.get('status') != 'closed':
+                        # Bug fix: Use .get() for status access
                         # Not filled, cancel and use market order
                         self.client.cancel_order(order['id'], symbol)
                         self.logger.info(f"Limit order not filled, using market order instead")
                         order = self.client.create_market_order(symbol, side, amount, leverage)
+                else:
+                    self.logger.warning(f"Limit order missing 'id', falling back to market order")
+                    order = self.client.create_market_order(symbol, side, amount, leverage)
             else:
                 order = self.client.create_market_order(symbol, side, amount, leverage)
             
@@ -628,7 +641,11 @@ class PositionManager:
             if not ticker:
                 return None
             
-            current_price = ticker['last']
+            # Bug fix: Safely access 'last' price
+            current_price = ticker.get('last')
+            if not current_price or current_price <= 0:
+                self.logger.warning(f"Invalid price for {symbol}: {current_price}")
+                return None
             
             # Close position on exchange
             success = self.client.close_position(symbol)
@@ -663,7 +680,11 @@ class PositionManager:
                 if not ticker:
                     continue
                 
-                current_price = ticker['last']
+                # Bug fix: Safely access 'last' price
+                current_price = ticker.get('last')
+                if not current_price or current_price <= 0:
+                    self.logger.warning(f"Invalid price for {symbol}: {current_price}, skipping")
+                    continue
                 
                 # Get market data for adaptive parameters
                 ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
@@ -858,7 +879,11 @@ class PositionManager:
             if not ticker:
                 return None
             
-            current_price = ticker['last']
+            # Bug fix: Safely access 'last' price
+            current_price = ticker.get('last')
+            if not current_price or current_price <= 0:
+                self.logger.warning(f"Invalid price for {symbol}: {current_price}")
+                return None
             
             # Close partial position
             side = 'sell' if position.side == 'long' else 'buy'
