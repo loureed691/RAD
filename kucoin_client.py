@@ -75,9 +75,14 @@ class KuCoinClient:
             
             # Log details of found pairs for debugging
             if futures:
-                swap_count = sum(1 for f in futures if f.get('swap'))
-                future_count = sum(1 for f in futures if f.get('future'))
-                self.logger.debug(f"Breakdown: {swap_count} perpetual swaps, {future_count} dated futures")
+                swap_only_count = sum(1 for f in futures if f.get('swap') and not f.get('future'))
+                future_only_count = sum(1 for f in futures if f.get('future') and not f.get('swap'))
+                both_count = sum(1 for f in futures if f.get('swap') and f.get('future'))
+                self.logger.debug(
+                    f"Breakdown: {swap_only_count} perpetual swaps only, "
+                    f"{future_only_count} dated futures only, "
+                    f"{both_count} instruments that are both swap and future"
+                )
             
             return futures
         except Exception as e:
