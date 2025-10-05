@@ -282,9 +282,13 @@ class KuCoinClient:
                 if pos['symbol'] == symbol:
                     contracts = float(pos['contracts'])
                     side = 'sell' if pos['side'] == 'long' else 'buy'
-                    self.create_market_order(symbol, side, abs(contracts))
-                    self.logger.info(f"Closed position for {symbol}")
-                    return True
+                    order = self.create_market_order(symbol, side, abs(contracts))
+                    if order:
+                        self.logger.info(f"Closed position for {symbol}")
+                        return True
+                    else:
+                        self.logger.error(f"Failed to create close order for {symbol}")
+                        return False
             return False
         except Exception as e:
             self.logger.error(f"Error closing position: {e}")
