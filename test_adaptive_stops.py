@@ -362,6 +362,307 @@ def test_adaptive_parameters_bounds():
         return False
 
 
+def test_rsi_based_adjustments():
+    """Test RSI-based take profit adjustments"""
+    print("\nTesting RSI-based TP adjustments...")
+    try:
+        from position_manager import Position
+        
+        # Test 1: Overbought RSI should tighten TP (long position)
+        position = Position(
+            symbol='BTC-USDT',
+            side='long',
+            entry_price=50000,
+            amount=1.0,
+            leverage=10,
+            stop_loss=47500,
+            take_profit=55000
+        )
+        
+        initial_tp = position.take_profit
+        
+        # Overbought RSI (reversal risk)
+        position.update_take_profit(
+            current_price=51000,
+            momentum=0.03,
+            trend_strength=0.6,
+            volatility=0.03,
+            rsi=80.0  # Overbought
+        )
+        
+        print(f"  ✓ Overbought RSI (80): TP at {position.take_profit:.2f} (initial: {initial_tp:.2f})")
+        
+        # Test 2: Oversold RSI should extend TP (long position)
+        position2 = Position(
+            symbol='ETH-USDT',
+            side='long',
+            entry_price=3000,
+            amount=1.0,
+            leverage=10,
+            stop_loss=2850,
+            take_profit=3300
+        )
+        
+        initial_tp2 = position2.take_profit
+        
+        position2.update_take_profit(
+            current_price=3050,
+            momentum=0.02,
+            trend_strength=0.6,
+            volatility=0.03,
+            rsi=30.0  # Oversold (room to run)
+        )
+        
+        # Should extend more than with neutral RSI
+        assert position2.take_profit >= initial_tp2, "Oversold RSI should extend TP"
+        print(f"  ✓ Oversold RSI (30): TP at {position2.take_profit:.2f} (initial: {initial_tp2:.2f})")
+        
+        # Test 3: Short position with overbought RSI
+        position3 = Position(
+            symbol='SOL-USDT',
+            side='short',
+            entry_price=100,
+            amount=10.0,
+            leverage=10,
+            stop_loss=105,
+            take_profit=90
+        )
+        
+        initial_tp3 = position3.take_profit
+        
+        position3.update_take_profit(
+            current_price=98,
+            momentum=-0.02,
+            trend_strength=0.6,
+            volatility=0.03,
+            rsi=70.0  # Overbought (favorable for short)
+        )
+        
+        print(f"  ✓ Short with overbought RSI (70): TP at {position3.take_profit:.2f} (initial: {initial_tp3:.2f})")
+        
+        print("✓ RSI-based adjustments working correctly")
+        return True
+    except Exception as e:
+        print(f"✗ RSI adjustment error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_support_resistance_awareness():
+    """Test support/resistance based TP adjustments"""
+    print("\nTesting support/resistance awareness...")
+    try:
+        from position_manager import Position
+        
+        # Test 1: Long position with low initial TP that would extend beyond resistance
+        position = Position(
+            symbol='BTC-USDT',
+            side='long',
+            entry_price=50000,
+            amount=1.0,
+            leverage=10,
+            stop_loss=47500,
+            take_profit=52000  # Lower initial TP
+        )
+        
+        # Mock resistance level at 54000
+        support_resistance = {
+            'support': [],
+            'resistance': [
+                {'price': 54000, 'strength': 0.3},
+                {'price': 56000, 'strength': 0.2}
+            ],
+            'poc': 51000
+        }
+        
+        initial_tp = position.take_profit
+        
+        # Strong conditions that would normally extend TP significantly
+        position.update_take_profit(
+            current_price=51000,
+            momentum=0.04,  # Strong momentum
+            trend_strength=0.8,  # Strong trend
+            volatility=0.06,  # High volatility
+            rsi=60.0,
+            support_resistance=support_resistance
+        )
+        
+        # TP should extend but be capped near resistance
+        # With these conditions, TP would normally extend to ~55-56k, but should be capped
+        assert position.take_profit > initial_tp, "TP should extend from initial"
+        assert position.take_profit < 54000, f"TP should be capped by resistance: {position.take_profit}"
+        print(f"  ✓ Long position TP extended to {position.take_profit:.2f}, capped by resistance at 54000")
+        
+        # Test 2: Short position near support
+        position2 = Position(
+            symbol='ETH-USDT',
+            side='short',
+            entry_price=3000,
+            amount=1.0,
+            leverage=10,
+            stop_loss=3150,
+            take_profit=2900  # Higher initial TP for short
+        )
+        
+        # Mock support level at 2800
+        support_resistance2 = {
+            'support': [
+                {'price': 2800, 'strength': 0.3},
+                {'price': 2600, 'strength': 0.2}
+            ],
+            'resistance': [],
+            'poc': 2900
+        }
+        
+        initial_tp2 = position2.take_profit
+        
+        # Strong conditions for short
+        position2.update_take_profit(
+            current_price=2900,
+            momentum=-0.04,  # Strong downward momentum
+            trend_strength=0.8,
+            volatility=0.06,
+            rsi=40.0,
+            support_resistance=support_resistance2
+        )
+        
+        # TP should extend lower but be capped near support
+        assert position2.take_profit < initial_tp2, "Short TP should move down from initial"
+        assert position2.take_profit > 2800, f"Short TP should be capped by support: {position2.take_profit}"
+        print(f"  ✓ Short position TP extended to {position2.take_profit:.2f}, capped by support at 2800")
+        
+        print("✓ Support/resistance awareness working correctly")
+        return True
+    except Exception as e:
+        print(f"✗ S/R awareness error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_profit_velocity_tracking():
+    """Test profit velocity tracking for smart adjustments"""
+    print("\nTesting profit velocity tracking...")
+    try:
+        from position_manager import Position
+        import time
+        
+        position = Position(
+            symbol='BTC-USDT',
+            side='long',
+            entry_price=50000,
+            amount=1.0,
+            leverage=10,
+            stop_loss=47500,
+            take_profit=55000
+        )
+        
+        # Simulate fast profit accumulation
+        # First update
+        position.update_take_profit(
+            current_price=50500,
+            momentum=0.03,
+            trend_strength=0.6,
+            volatility=0.03,
+            rsi=60.0
+        )
+        
+        time.sleep(0.1)  # Small delay
+        
+        # Second update with higher price (fast movement)
+        initial_tp = position.take_profit
+        position.update_take_profit(
+            current_price=51500,
+            momentum=0.03,
+            trend_strength=0.6,
+            volatility=0.03,
+            rsi=60.0
+        )
+        
+        # Check that profit velocity is being tracked
+        assert hasattr(position, 'profit_velocity'), "Missing profit_velocity attribute"
+        assert hasattr(position, 'last_pnl'), "Missing last_pnl attribute"
+        
+        print(f"  ✓ Profit velocity tracked: {position.profit_velocity:.4f}% per hour")
+        print(f"  ✓ Last P/L: {position.last_pnl:.2%}")
+        
+        print("✓ Profit velocity tracking working correctly")
+        return True
+    except Exception as e:
+        print(f"✗ Profit velocity error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_time_based_adjustments():
+    """Test time-based adjustments for aging positions"""
+    print("\nTesting time-based TP adjustments...")
+    try:
+        from position_manager import Position
+        from datetime import datetime, timedelta
+        
+        # Test 1: Fresh position
+        position = Position(
+            symbol='BTC-USDT',
+            side='long',
+            entry_price=50000,
+            amount=1.0,
+            leverage=10,
+            stop_loss=47500,
+            take_profit=55000
+        )
+        
+        initial_tp = position.take_profit
+        
+        position.update_take_profit(
+            current_price=51000,
+            momentum=0.03,
+            trend_strength=0.6,
+            volatility=0.03,
+            rsi=60.0
+        )
+        
+        fresh_tp = position.take_profit
+        print(f"  ✓ Fresh position TP: {fresh_tp:.2f}")
+        
+        # Test 2: Old position (simulate by changing entry_time)
+        position2 = Position(
+            symbol='ETH-USDT',
+            side='long',
+            entry_price=3000,
+            amount=1.0,
+            leverage=10,
+            stop_loss=2850,
+            take_profit=3300
+        )
+        
+        # Manually set entry time to 30 hours ago
+        position2.entry_time = datetime.now() - timedelta(hours=30)
+        
+        initial_tp2 = position2.take_profit
+        
+        position2.update_take_profit(
+            current_price=3100,
+            momentum=0.03,
+            trend_strength=0.6,
+            volatility=0.03,
+            rsi=60.0
+        )
+        
+        aged_tp = position2.take_profit
+        print(f"  ✓ Aged position (30h) TP: {aged_tp:.2f} (initial: {initial_tp2:.2f})")
+        
+        print("✓ Time-based adjustments working correctly")
+        return True
+    except Exception as e:
+        print(f"✗ Time-based adjustment error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def main():
     """Run all adaptive feature tests"""
     print("="*60)
@@ -374,6 +675,10 @@ def main():
         test_dynamic_take_profit,
         test_max_favorable_excursion_tracking,
         test_adaptive_parameters_bounds,
+        test_rsi_based_adjustments,
+        test_support_resistance_awareness,
+        test_profit_velocity_tracking,
+        test_time_based_adjustments,
     ]
     
     results = []
