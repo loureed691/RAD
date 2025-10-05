@@ -356,7 +356,7 @@ class Position:
                         distance_to_tp = (current_price - self.take_profit) / current_price
                         if distance_to_tp > 0.03:  # TP is more than 3% away
                             return True, 'take_profit_8pct'
-            elif current_pnl >= 0.05:  # 5% ROI - take profit if TP is very far
+            else:  # 5% ROI - take profit if TP is very far
                 if self.take_profit:
                     if self.side == 'long':
                         distance_to_tp = (self.take_profit - current_price) / current_price
