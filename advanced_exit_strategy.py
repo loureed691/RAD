@@ -282,8 +282,21 @@ class AdvancedExitStrategy:
         
         # If any full exit signal, take it
         full_exits = [sig for sig in exit_signals if sig[2] >= 1.0]
+        # Define priority for exit signal types (lower index = higher priority)
+        priority_order = [
+            'time',
+            'volatility',
+            'momentum_reversal',
+            'profit_lock',
+            'profit_scaling'
+        ]
         if full_exits:
-            signal_type, reason, scale = full_exits[0]
+            # Sort full exits by priority
+            full_exits_sorted = sorted(
+                full_exits,
+                key=lambda x: priority_order.index(x[0]) if x[0] in priority_order else len(priority_order)
+            )
+            signal_type, reason, scale = full_exits_sorted[0]
             self.logger.info(f"Exit signal: {signal_type} - {reason}")
             return True, reason, 1.0
         
