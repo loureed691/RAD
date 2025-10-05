@@ -182,16 +182,35 @@ class MarketScanner:
                 self.logger.debug(f"Skipping {symbol} due to low volume: ${volume_24h:.0f}")
                 continue
             
-            # Always include BTC, ETH, and other major pairs
+            # Always include major perpetual swaps (BTC, ETH, etc.)
+            # Check if it's a swap AND contains a major coin name
             if any(major in symbol for major in ['BTC', 'ETH', 'SOL', 'BNB', 'ADA', 'XRP', 'DOGE', 'MATIC']):
-                priority_symbols.append(symbol)
-            # Include perpetual swaps (typically higher volume)
+                # Only include if it's a perpetual swap, not a dated future
+                if future_info.get('swap', False):
+                    priority_symbols.append(symbol)
+                else:
+                    self.logger.debug(f"Skipping {symbol}: major coin but not a perpetual swap")
+            # Include other perpetual swaps (typically higher volume)
             elif future_info.get('swap', False):
                 priority_symbols.append(symbol)
         
-        # If we filtered too aggressively, include all
-        if len(priority_symbols) < 10:
-            return symbols
+        # If we filtered too aggressively, include all swaps (but still respect volume filter)
+        # Only fall back if we got very few results (< 5) and there are many pairs available
+        if len(priority_symbols) < 5 and len(symbols) > 10:
+            self.logger.warning(f"Only found {len(priority_symbols)} priority pairs from {len(symbols)} total, using all perpetual swaps")
+            # Include all perpetual swaps regardless of major coin status, but still respect volume filter
+            priority_symbols = []
+            for symbol in symbols:
+                future_info = symbol_map.get(symbol, {})
+                volume_24h = future_info.get('quoteVolume', 0)
+                
+                # Still apply volume filter
+                if volume_24h > 0 and volume_24h < 1000000:
+                    continue
+                    
+                # Include all perpetual swaps
+                if future_info.get('swap', False):
+                    priority_symbols.append(symbol)
         
         return priority_symbols
     
