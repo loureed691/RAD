@@ -177,14 +177,15 @@ class Position:
         
         # Additional safeguard: never extend TP if it would move beyond current price by too much
         # This prevents the scenario where TP keeps moving away as price approaches it
+        # However, allow minimal extension even at 100% to let S/R capping work
         if self.side == 'long':
             # Check how close current price is to the original TP
             if current_price > self.entry_price:
                 progress_to_tp = (current_price - self.entry_price) / (self.initial_take_profit - self.entry_price) if self.initial_take_profit > self.entry_price else 0
-                # If we've passed the original TP, don't extend (take the profit!)
+                # If we've passed the original TP, minimal extension only (for S/R capping)
                 if progress_to_tp >= 1.0:
-                    tp_multiplier = min(tp_multiplier, 1.0)  # No extension
-                # If we're 90%+ of the way to original TP, minimal extension
+                    tp_multiplier = min(tp_multiplier, 1.03)  # Minimal extension for S/R capping
+                # If we're 90%+ of the way to original TP, limited extension
                 elif progress_to_tp >= 0.9:
                     tp_multiplier = min(tp_multiplier, 1.05)  # Very limited extension
                 # If we're more than 50% of the way to original TP, limit extension
@@ -193,10 +194,10 @@ class Position:
         else:  # short
             if current_price < self.entry_price:
                 progress_to_tp = (self.entry_price - current_price) / (self.entry_price - self.initial_take_profit) if self.entry_price > self.initial_take_profit else 0
-                # If we've passed the original TP, don't extend (take the profit!)
+                # If we've passed the original TP, minimal extension only (for S/R capping)
                 if progress_to_tp >= 1.0:
-                    tp_multiplier = min(tp_multiplier, 1.0)  # No extension
-                # If we're 90%+ of the way to original TP, minimal extension
+                    tp_multiplier = min(tp_multiplier, 1.03)  # Minimal extension for S/R capping
+                # If we're 90%+ of the way to original TP, limited extension
                 elif progress_to_tp >= 0.9:
                     tp_multiplier = min(tp_multiplier, 1.05)  # Very limited extension
                 # If we're more than 50% of the way to original TP, limit extension
