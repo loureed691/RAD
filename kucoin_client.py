@@ -35,24 +35,48 @@ class KuCoinClient:
             self.logger.error(f"Failed to initialize KuCoin client: {e}")
             raise
     
-    def get_active_futures(self) -> List[Dict]:
-        """Get all active futures trading pairs (perpetual swaps and quarterly futures) - USDT pairs only"""
+    def get_active_futures(self, include_volume: bool = True) -> List[Dict]:
+        """Get all active futures trading pairs (perpetual swaps and quarterly futures) - USDT pairs only
+        
+        Args:
+            include_volume: If True, fetch ticker data to include 24h volume (adds API call overhead)
+        
+        Returns:
+            List of futures with symbol, info, swap, future, and optionally quoteVolume
+        """
         try:
             markets = self.exchange.load_markets()
             futures = [
                 {
                     'symbol': symbol,
-                    'info': market
+                    'info': market,
+                    'swap': market.get('swap', False),
+                    'future': market.get('future', False)
                 }
                 for symbol, market in markets.items()
                 if (market.get('swap') or market.get('future')) and market.get('active') and ':USDT' in symbol
             ]
             self.logger.info(f"Found {len(futures)} active USDT futures pairs")
             
+            # Optionally fetch volume data from tickers
+            if include_volume:
+                try:
+                    tickers = self.exchange.fetch_tickers()
+                    for future in futures:
+                        symbol = future['symbol']
+                        if symbol in tickers:
+                            ticker = tickers[symbol]
+                            # Add 24h quote volume (volume in quote currency, e.g., USDT)
+                            future['quoteVolume'] = ticker.get('quoteVolume', 0)
+                    self.logger.debug(f"Added volume data for {len(futures)} futures")
+                except Exception as e:
+                    self.logger.warning(f"Could not fetch volume data: {e}")
+                    # Continue without volume data
+            
             # Log details of found pairs for debugging
             if futures:
-                swap_count = sum(1 for f in futures if markets[f['symbol']].get('swap'))
-                future_count = sum(1 for f in futures if markets[f['symbol']].get('future'))
+                swap_count = sum(1 for f in futures if f.get('swap'))
+                future_count = sum(1 for f in futures if f.get('future'))
                 self.logger.debug(f"Breakdown: {swap_count} perpetual swaps, {future_count} dated futures")
             
             return futures

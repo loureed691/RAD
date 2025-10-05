@@ -182,10 +182,15 @@ class MarketScanner:
                 self.logger.debug(f"Skipping {symbol} due to low volume: ${volume_24h:.0f}")
                 continue
             
-            # Always include BTC, ETH, and other major pairs
+            # Always include major perpetual swaps (BTC, ETH, etc.)
+            # Check if it's a swap AND contains a major coin name
             if any(major in symbol for major in ['BTC', 'ETH', 'SOL', 'BNB', 'ADA', 'XRP', 'DOGE', 'MATIC']):
-                priority_symbols.append(symbol)
-            # Include perpetual swaps (typically higher volume)
+                # Only include if it's a perpetual swap, not a dated future
+                if future_info.get('swap', False):
+                    priority_symbols.append(symbol)
+                else:
+                    self.logger.debug(f"Skipping {symbol}: major coin but not a perpetual swap")
+            # Include other perpetual swaps (typically higher volume)
             elif future_info.get('swap', False):
                 priority_symbols.append(symbol)
         
