@@ -257,12 +257,50 @@ class Position:
             new_take_profit = self.entry_price * (1 + new_distance)
             # Only move take profit up (more favorable)
             if new_take_profit > self.take_profit:
-                self.take_profit = new_take_profit
+                # Critical fix: Don't move TP further away when price is approaching it
+                # For LONG: TP is above current price, so check if price is getting close
+                if current_price < self.take_profit:
+                    # Price hasn't reached TP yet
+                    # Calculate how close: if price is within 10% of the distance to TP, don't extend further
+                    distance_to_tp = self.take_profit - current_price
+                    progress_pct = (current_price - self.entry_price) / (self.take_profit - self.entry_price) if self.take_profit > self.entry_price else 0
+                    
+                    if progress_pct < 0.75:  # Less than 75% of way to TP - allow extension
+                        self.take_profit = new_take_profit
+                    else:
+                        # Close to TP (75%+) - don't allow extension to prevent moving TP away
+                        # This is the critical fix for "bot doesn't sell" issue
+                        pass  # Keep TP at current value
+                else:
+                    # Price at or past TP - only allow if new TP brings it closer
+                    old_distance_to_tp = abs(current_price - self.take_profit)
+                    new_distance_to_tp = abs(current_price - new_take_profit)
+                    if new_distance_to_tp <= old_distance_to_tp:
+                        self.take_profit = new_take_profit
         else:  # short
             new_take_profit = self.entry_price * (1 - new_distance)
             # Only move take profit down (more favorable)
             if new_take_profit < self.take_profit:
-                self.take_profit = new_take_profit
+                # Critical fix: Don't move TP further away when price is approaching it
+                # For SHORT: TP is below current price, so check if price is getting close
+                if current_price > self.take_profit:
+                    # Price hasn't reached TP yet
+                    # Calculate how close: if price is within 10% of the distance to TP, don't extend further
+                    distance_to_tp = current_price - self.take_profit
+                    progress_pct = (self.entry_price - current_price) / (self.entry_price - self.take_profit) if self.entry_price > self.take_profit else 0
+                    
+                    if progress_pct < 0.75:  # Less than 75% of way to TP - allow extension
+                        self.take_profit = new_take_profit
+                    else:
+                        # Close to TP (75%+) - don't allow extension to prevent moving TP away
+                        # This is the critical fix for "bot doesn't sell" issue
+                        pass  # Keep TP at current value
+                else:
+                    # Price at or past TP - only allow if new TP brings it closer
+                    old_distance_to_tp = abs(current_price - self.take_profit)
+                    new_distance_to_tp = abs(current_price - new_take_profit)
+                    if new_distance_to_tp <= old_distance_to_tp:
+                        self.take_profit = new_take_profit
     
     def calculate_intelligent_targets(self, current_price: float, support_resistance: Dict, 
                                      side: str) -> Tuple[float, float]:
