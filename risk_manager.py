@@ -371,7 +371,17 @@ class RiskManager:
             drawdown_adj = -3  # Light drawdown protection
         
         # Calculate final leverage
-        final_leverage = base_leverage + confidence_adj + momentum_adj + trend_adj + regime_adj + streak_adj + recent_adj + drawdown_adj
+        # FIX BUG 10: Prevent excessive negative adjustments from creating nonsensical values
+        # Cap individual adjustment categories to prevent runaway negative leverage
+        total_adj = confidence_adj + momentum_adj + trend_adj + regime_adj + streak_adj + recent_adj
+        
+        # Apply drawdown adjustment separately (it's intentionally strong)
+        # but ensure combined adjustments don't exceed reasonable bounds
+        if drawdown_adj < -10:
+            # Severe drawdown - limit other adjustments' impact
+            total_adj = max(total_adj, -5)  # Cap other negative adjustments
+        
+        final_leverage = base_leverage + total_adj + drawdown_adj
         
         # Apply hard limits (3x minimum, 20x maximum)
         final_leverage = max(3, min(final_leverage, 20))
