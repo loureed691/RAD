@@ -294,8 +294,13 @@ class RiskManager:
         current_count = group_counts.get(new_group, 0)
         total_positions = len(open_positions)
         
-        # Maximum 40% of portfolio in same correlation group
-        max_group_concentration = max(2, int(self.max_open_positions * 0.4))
+        # Maximum concentration depends on group type
+        # 'other' group gets higher limit (70%) since assets are uncorrelated
+        # Correlated groups get 40% limit
+        if new_group == 'other':
+            max_group_concentration = max(2, int(self.max_open_positions * 0.7))
+        else:
+            max_group_concentration = max(2, int(self.max_open_positions * 0.4))
         
         if current_count >= max_group_concentration:
             return False, f"Too many positions in {new_group} group ({current_count}/{max_group_concentration})"
