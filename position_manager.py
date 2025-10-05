@@ -295,6 +295,10 @@ class Position:
                         # Close to TP (75%+) - don't allow extension to prevent moving TP away
                         # This is the critical fix for "bot doesn't sell" issue
                         pass  # Keep TP at current value
+                elif current_price == self.take_profit:
+                    # Price exactly at TP - allow extension if conditions are strong
+                    # This handles the case where price reaches TP but momentum suggests further move
+                    self.take_profit = new_take_profit
                 else:
                     # Price at or past TP - only allow if new TP brings it closer
                     old_distance_to_tp = abs(current_price - self.take_profit)
