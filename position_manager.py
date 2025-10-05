@@ -216,7 +216,8 @@ class Position:
                     
                     # Use the more conservative target
                     if calculated_tp < max_tp:
-                        tp_multiplier = (1 - max_tp / self.entry_price) / initial_distance
+                        if initial_distance > 0:
+                            tp_multiplier = (1 - max_tp / self.entry_price) / initial_distance
         
         # Calculate new take profit
         new_distance = initial_distance * tp_multiplier
