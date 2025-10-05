@@ -384,9 +384,16 @@ class TradeSimulationTester:
             assert position.stop_loss < initial_sl, "Trailing stop should move down"
             new_sl = position.stop_loss
             # Expected SL with adaptive adjustments (P/L=50% triggers tighter trailing)
-            expected_sl_range = (95.5, 97.5)  # Allow range for adaptive adjustments
-            assert expected_sl_range[0] <= new_sl <= expected_sl_range[1], \
-                f"Expected SL in range {expected_sl_range}, got {new_sl:.2f}"
+            # Base trailing percentage: 2%
+            base_trailing = 0.02
+            volatility_multiplier = 0.8  # Example: low volatility
+            profit_multiplier = 0.7      # Example: high profit (P/L=50%)
+            adaptive_trailing = base_trailing * volatility_multiplier * profit_multiplier  # = 0.0112
+            # For SHORT: trailing stop is set above the lowest price
+            expected_sl = 95.0 + (95.0 * adaptive_trailing)
+            tolerance = 0.5  # Allowable tolerance for floating point and adaptive logic
+            assert abs(new_sl - expected_sl) <= tolerance, \
+                f"Expected SL near {expected_sl:.2f}, got {new_sl:.2f}"
             print(f"  ✓ Price down to 95.0: SL moved to {new_sl:.2f} (adaptive trailing activated)")
             
             # Price increases - trailing stop should NOT move up
