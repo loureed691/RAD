@@ -12,6 +12,96 @@ class Indicators:
     """Calculate technical indicators for trading"""
     
     @staticmethod
+    def detect_candlestick_patterns(df: pd.DataFrame) -> Dict:
+        """
+        Detect advanced candlestick patterns for sentiment analysis
+        
+        Returns:
+            Dict with detected patterns and their sentiment scores
+        """
+        if df.empty or len(df) < 3:
+            return {'patterns': [], 'bullish_score': 0, 'bearish_score': 0}
+        
+        try:
+            last_3 = df.tail(3)
+            current = last_3.iloc[-1]
+            prev = last_3.iloc[-2]
+            prev2 = last_3.iloc[-3] if len(last_3) >= 3 else None
+            
+            patterns = []
+            bullish_score = 0
+            bearish_score = 0
+            
+            # Calculate candle body and wicks
+            body = abs(current['close'] - current['open'])
+            body_pct = body / current['open'] if current['open'] > 0 else 0
+            upper_wick = current['high'] - max(current['close'], current['open'])
+            lower_wick = min(current['close'], current['open']) - current['low']
+            
+            # Hammer (bullish reversal)
+            if (lower_wick > 2 * body and upper_wick < body * 0.3 and 
+                current['close'] > current['open']):
+                patterns.append('hammer')
+                bullish_score += 2
+            
+            # Shooting Star (bearish reversal)
+            if (upper_wick > 2 * body and lower_wick < body * 0.3 and 
+                current['close'] < current['open']):
+                patterns.append('shooting_star')
+                bearish_score += 2
+            
+            # Doji (indecision)
+            if body_pct < 0.001:
+                patterns.append('doji')
+            
+            # Engulfing patterns
+            if prev is not None:
+                prev_body = abs(prev['close'] - prev['open'])
+                
+                # Bullish Engulfing
+                if (prev['close'] < prev['open'] and  # prev bearish
+                    current['close'] > current['open'] and  # current bullish
+                    current['open'] < prev['close'] and
+                    current['close'] > prev['open']):
+                    patterns.append('bullish_engulfing')
+                    bullish_score += 3
+                
+                # Bearish Engulfing
+                if (prev['close'] > prev['open'] and  # prev bullish
+                    current['close'] < current['open'] and  # current bearish
+                    current['open'] > prev['close'] and
+                    current['close'] < prev['open']):
+                    patterns.append('bearish_engulfing')
+                    bearish_score += 3
+            
+            # Morning/Evening Star (3-candle patterns)
+            if prev is not None and prev2 is not None:
+                # Morning Star (bullish)
+                if (prev2['close'] < prev2['open'] and  # first bearish
+                    abs(prev['close'] - prev['open']) < body * 0.3 and  # middle doji-like
+                    current['close'] > current['open'] and  # third bullish
+                    current['close'] > (prev2['open'] + prev2['close']) / 2):
+                    patterns.append('morning_star')
+                    bullish_score += 4
+                
+                # Evening Star (bearish)
+                if (prev2['close'] > prev2['open'] and  # first bullish
+                    abs(prev['close'] - prev['open']) < body * 0.3 and  # middle doji-like
+                    current['close'] < current['open'] and  # third bearish
+                    current['close'] < (prev2['open'] + prev2['close']) / 2):
+                    patterns.append('evening_star')
+                    bearish_score += 4
+            
+            return {
+                'patterns': patterns,
+                'bullish_score': bullish_score,
+                'bearish_score': bearish_score,
+                'net_sentiment': bullish_score - bearish_score
+            }
+        except Exception as e:
+            return {'patterns': [], 'bullish_score': 0, 'bearish_score': 0}
+    
+    @staticmethod
     def calculate_all(ohlcv_data: List) -> pd.DataFrame:
         """
         Calculate all technical indicators from OHLCV data
@@ -162,6 +252,83 @@ class Indicators:
             
         except Exception as e:
             return {'support': [], 'resistance': [], 'poc': None}
+    
+    @staticmethod
+    def analyze_volatility_clustering(df: pd.DataFrame, window: int = 20) -> Dict:
+        """
+        Analyze volatility clustering for adaptive position sizing
+        Uses GARCH-like approach to detect high/low volatility regimes
+        
+        Returns:
+            Dict with volatility metrics and regime classification
+        """
+        if df.empty or len(df) < window:
+            return {
+                'current_volatility': 0.0,
+                'avg_volatility': 0.0,
+                'volatility_regime': 'normal',
+                'volatility_percentile': 0.5,
+                'clustering_detected': False
+            }
+        
+        try:
+            # Calculate returns
+            returns = df['close'].pct_change().dropna()
+            
+            if len(returns) < window:
+                return {
+                    'current_volatility': 0.0,
+                    'avg_volatility': 0.0,
+                    'volatility_regime': 'normal',
+                    'volatility_percentile': 0.5,
+                    'clustering_detected': False
+                }
+            
+            # Rolling standard deviation (volatility)
+            rolling_vol = returns.rolling(window=window).std()
+            
+            # Current volatility
+            current_vol = rolling_vol.iloc[-1] if not pd.isna(rolling_vol.iloc[-1]) else 0.0
+            
+            # Average volatility over period
+            avg_vol = rolling_vol.mean()
+            
+            # Volatility percentile (where current vol ranks)
+            volatility_percentile = (rolling_vol < current_vol).sum() / len(rolling_vol)
+            
+            # Detect volatility clustering (autocorrelation in squared returns)
+            squared_returns = returns ** 2
+            recent_squared = squared_returns.tail(window)
+            if len(recent_squared) >= 2:
+                clustering_detected = recent_squared.autocorr(lag=1) > 0.3
+            else:
+                clustering_detected = False
+            
+            # Classify regime
+            if current_vol > avg_vol * 1.5:
+                regime = 'high'
+            elif current_vol < avg_vol * 0.7:
+                regime = 'low'
+            else:
+                regime = 'normal'
+            
+            return {
+                'current_volatility': float(current_vol),
+                'avg_volatility': float(avg_vol),
+                'volatility_regime': regime,
+                'volatility_percentile': float(volatility_percentile),
+                'clustering_detected': clustering_detected,
+                'volatility_ratio': float(current_vol / avg_vol) if avg_vol > 0 else 1.0
+            }
+            
+        except Exception as e:
+            return {
+                'current_volatility': 0.0,
+                'avg_volatility': 0.0,
+                'volatility_regime': 'normal',
+                'volatility_percentile': 0.5,
+                'clustering_detected': False
+            }
     
     @staticmethod
     def get_latest_indicators(df: pd.DataFrame) -> Dict:

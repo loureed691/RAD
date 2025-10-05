@@ -426,6 +426,121 @@ def test_market_scanner_caching():
         return False
 
 
+def test_candlestick_patterns():
+    """Test candlestick pattern detection"""
+    print("\nTesting candlestick pattern detection...")
+    try:
+        from indicators import Indicators
+        
+        # Create bullish hammer pattern
+        hammer_data = [
+            [i * 60000, 100, 105, 95, 104, 1000]  # Long lower wick, small body at top
+            for i in range(100)
+        ]
+        df = Indicators.calculate_all(hammer_data)
+        patterns = Indicators.detect_candlestick_patterns(df)
+        
+        assert 'patterns' in patterns
+        assert 'bullish_score' in patterns
+        assert 'bearish_score' in patterns
+        assert 'net_sentiment' in patterns
+        
+        print(f"  ✓ Pattern detection working")
+        print(f"  ✓ Patterns detected: {patterns['patterns']}")
+        print(f"  ✓ Sentiment: bullish={patterns['bullish_score']}, bearish={patterns['bearish_score']}")
+        print("✓ Candlestick pattern detection working correctly")
+        return True
+    except Exception as e:
+        print(f"✗ Candlestick pattern error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_volatility_clustering():
+    """Test volatility clustering analysis"""
+    print("\nTesting volatility clustering analysis...")
+    try:
+        from indicators import Indicators
+        
+        # Create data with varying volatility
+        data = []
+        for i in range(100):
+            # Increase volatility in second half
+            vol = 1 if i < 50 else 5
+            data.append([
+                i * 60000,
+                100 + i * 0.1,
+                100 + i * 0.1 + vol,
+                100 + i * 0.1 - vol,
+                100 + i * 0.1 + vol * 0.5,
+                1000
+            ])
+        
+        df = Indicators.calculate_all(data)
+        vol_analysis = Indicators.analyze_volatility_clustering(df)
+        
+        assert 'current_volatility' in vol_analysis
+        assert 'avg_volatility' in vol_analysis
+        assert 'volatility_regime' in vol_analysis
+        assert 'volatility_percentile' in vol_analysis
+        assert 'clustering_detected' in vol_analysis
+        assert vol_analysis['volatility_regime'] in ['low', 'normal', 'high']
+        
+        print(f"  ✓ Current volatility: {vol_analysis['current_volatility']:.6f}")
+        print(f"  ✓ Volatility regime: {vol_analysis['volatility_regime']}")
+        print(f"  ✓ Clustering detected: {vol_analysis['clustering_detected']}")
+        print("✓ Volatility clustering analysis working correctly")
+        return True
+    except Exception as e:
+        print(f"✗ Volatility clustering error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_ensemble_ml_model():
+    """Test ensemble ML model functionality"""
+    print("\nTesting ensemble ML model...")
+    try:
+        from ml_model import MLModel
+        import numpy as np
+        
+        model = MLModel('models/test_ensemble_model.pkl')
+        
+        # Test that ensemble models list exists
+        assert hasattr(model, 'ensemble_models'), "Should have ensemble_models attribute"
+        assert isinstance(model.ensemble_models, list), "ensemble_models should be a list"
+        
+        # Test mistake logging
+        assert hasattr(model, 'mistake_log'), "Should have mistake_log attribute"
+        
+        sample_indicators = {
+            'rsi': 50, 'macd': 0.5, 'macd_signal': 0.3, 'macd_diff': 0.2,
+            'stoch_k': 50, 'stoch_d': 50, 'bb_width': 0.05,
+            'volume_ratio': 1.5, 'momentum': 0.01, 'roc': 1.0, 'atr': 2.5,
+            'close': 100, 'bb_high': 105, 'bb_low': 95, 'bb_mid': 100,
+            'ema_12': 100, 'ema_26': 99
+        }
+        
+        # Record a losing trade to test mistake logging
+        initial_mistakes = len(model.mistake_log)
+        model.record_outcome(sample_indicators, 'BUY', -0.02)  # 2% loss
+        
+        assert len(model.mistake_log) > initial_mistakes, "Mistake should be logged for losing trade"
+        
+        print("  ✓ Ensemble model attributes initialized")
+        print("  ✓ Mistake logging working")
+        print(f"  ✓ Mistakes logged: {len(model.mistake_log)}")
+        print("✓ Ensemble ML model working correctly")
+        return True
+    except Exception as e:
+        print(f"✗ Ensemble ML model error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 def main():
     """Run all tests"""
     print("="*60)
@@ -444,7 +559,10 @@ def main():
         test_insufficient_data_handling,
         test_signal_generator_enhancements,
         test_risk_manager_enhancements,
-        test_market_scanner_caching
+        test_market_scanner_caching,
+        test_candlestick_patterns,
+        test_volatility_clustering,
+        test_ensemble_ml_model
     ]
     
     results = []

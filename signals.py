@@ -136,15 +136,41 @@ class SignalGenerator:
         # Detect market regime for adaptive strategy
         self.market_regime = self.detect_market_regime(df)
         
+        # Advanced: Candlestick pattern analysis for sentiment
+        candlestick_patterns = Indicators.detect_candlestick_patterns(df)
+        
+        # Advanced: Volatility clustering analysis
+        vol_analysis = Indicators.analyze_volatility_clustering(df)
+        
         buy_signals = 0.0
         sell_signals = 0.0
         reasons = {}
         reasons['market_regime'] = self.market_regime
         reasons['mtf_alignment'] = mtf_analysis['trend_alignment']
+        reasons['volatility_regime'] = vol_analysis.get('volatility_regime', 'normal')
         
         # Adaptive weights based on market regime
         trend_weight = 2.5 if self.market_regime == 'trending' else 1.5
         oscillator_weight = 2.0 if self.market_regime == 'ranging' else 1.0
+        
+        # Add candlestick pattern signals (strong reversal/continuation indicators)
+        if candlestick_patterns['net_sentiment'] > 0:
+            buy_signals += candlestick_patterns['bullish_score'] * 0.8
+            reasons['candlestick_patterns'] = f"bullish ({', '.join(candlestick_patterns['patterns'])})"
+        elif candlestick_patterns['net_sentiment'] < 0:
+            sell_signals += candlestick_patterns['bearish_score'] * 0.8
+            reasons['candlestick_patterns'] = f"bearish ({', '.join(candlestick_patterns['patterns'])})"
+        
+        # Adjust signal strength based on volatility regime
+        volatility_multiplier = 1.0
+        if vol_analysis['volatility_regime'] == 'high':
+            # In high volatility, require stronger signals
+            volatility_multiplier = 0.9
+            reasons['volatility_note'] = 'high volatility - stricter signals'
+        elif vol_analysis['volatility_regime'] == 'low':
+            # In low volatility, signals can be slightly weaker
+            volatility_multiplier = 1.1
+            reasons['volatility_note'] = 'low volatility - breakout potential'
         
         # 1. Trend Following - Moving Average Crossover (weighted by regime)
         if indicators['ema_12'] > indicators['ema_26']:
@@ -230,6 +256,10 @@ class SignalGenerator:
         else:
             signal = 'HOLD'
             confidence = 0.5
+        
+        # Apply volatility-based adjustment to confidence
+        confidence *= volatility_multiplier
+        confidence = min(confidence, 0.99)  # Cap at 99%
         
         # Adaptive threshold based on market regime
         if self.market_regime == 'trending':
