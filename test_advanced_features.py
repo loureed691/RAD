@@ -241,6 +241,135 @@ def test_signal_integration():
         traceback.print_exc()
         return False
 
+def test_correlation_matrix():
+    """Test correlation matrix functionality"""
+    print("\n" + "="*60)
+    print("Testing Correlation Matrix")
+    print("="*60)
+    
+    try:
+        from correlation_matrix import CorrelationMatrix
+        
+        corr_matrix = CorrelationMatrix(lookback_periods=50)
+        
+        # Simulate price data for multiple assets
+        symbols = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']
+        base_price = {'BTC/USDT': 40000, 'ETH/USDT': 2500, 'SOL/USDT': 100}
+        
+        # Create correlated price movements
+        for i in range(100):
+            common_movement = np.random.randn() * 0.01
+            timestamp = datetime.now() - timedelta(hours=100-i)
+            
+            for sym in symbols:
+                # Add common movement (correlation) plus individual noise
+                movement = common_movement + np.random.randn() * 0.005
+                price = base_price[sym] * (1 + movement)
+                corr_matrix.update_price(sym, price, timestamp)
+                base_price[sym] = price
+        
+        # Test correlation calculation
+        corr_btc_eth = corr_matrix.calculate_correlation('BTC/USDT', 'ETH/USDT')
+        print(f"  BTC-ETH correlation: {corr_btc_eth:.2f}")
+        
+        # Test correlation matrix
+        matrix = corr_matrix.get_correlation_matrix(symbols)
+        print(f"  Matrix shape: {matrix.shape}")
+        
+        # Test diversification score
+        positions = {sym: 1.0 for sym in symbols}
+        div_score = corr_matrix.get_diversification_score(positions)
+        print(f"  Diversification score: {div_score:.2f}")
+        
+        # Test should_add_position
+        should_add, reason = corr_matrix.should_add_position('BTC/USDT', ['ETH/USDT'])
+        print(f"  Should add BTC when have ETH: {should_add} ({reason})")
+        
+        # Test optimal weights
+        weights = corr_matrix.calculate_dynamic_position_weights(symbols)
+        print(f"  Optimal weights: {weights}")
+        
+        print("✓ Correlation matrix working correctly")
+        return True
+        
+    except Exception as e:
+        print(f"✗ Correlation matrix test error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def test_market_impact():
+    """Test market impact estimation"""
+    print("\n" + "="*60)
+    print("Testing Market Impact Estimation")
+    print("="*60)
+    
+    try:
+        from market_impact import MarketImpact
+        
+        impact_calc = MarketImpact()
+        
+        # Test price impact estimation
+        order_size = 10000  # $10k order
+        avg_volume = 1000000  # $1M daily volume
+        volatility = 0.02
+        spread_pct = 0.001
+        
+        impact = impact_calc.estimate_price_impact(
+            order_size, avg_volume, volatility, spread_pct
+        )
+        print(f"  Estimated impact for $10k order: {impact*100:.3f}%")
+        
+        # Test optimal order sizing
+        sizing = impact_calc.calculate_optimal_order_size(
+            50000, avg_volume, volatility, spread_pct, max_impact_pct=0.002
+        )
+        print(f"  Should split: {sizing['should_split']}")
+        print(f"  Num orders: {sizing['num_orders']}")
+        print(f"  Impact reduction: {sizing.get('impact_reduction', 0)*100:.1f}%")
+        
+        # Test slippage estimation
+        orderbook = {
+            'bids': [[40000, 1.0], [39990, 2.0], [39980, 1.5]],
+            'asks': [[40010, 1.0], [40020, 2.0], [40030, 1.5]]
+        }
+        
+        slippage = impact_calc.estimate_slippage(0.5, orderbook, 'buy')
+        print(f"  Slippage for 0.5 BTC: {slippage['slippage_pct']*100:.3f}%")
+        print(f"  Liquidity sufficient: {slippage['liquidity_sufficient']}")
+        
+        # Test participation rate
+        participation = impact_calc.calculate_participation_rate(
+            50000, avg_volume, max_participation=0.1
+        )
+        print(f"  Participation rate: {participation['participation_rate']*100:.2f}%")
+        print(f"  Is acceptable: {participation['is_acceptable']}")
+        
+        # Test execution strategy
+        strategy = impact_calc.get_execution_strategy(
+            50000, avg_volume, volatility, spread_pct, orderbook
+        )
+        print(f"  Execution strategy: {strategy['strategy']}")
+        print(f"  Reason: {strategy['reason']}")
+        
+        # Test total cost
+        cost = impact_calc.estimate_total_cost(
+            10000, avg_volume, volatility, spread_pct
+        )
+        print(f"  Total cost: {cost['total_cost_pct']*100:.3f}%")
+        print(f"  Cost breakdown: impact={cost['market_impact_pct']*100:.3f}%, "
+              f"commission={cost['commission_pct']*100:.3f}%, "
+              f"spread={cost['spread_cost_pct']*100:.3f}%")
+        
+        print("✓ Market impact estimation working correctly")
+        return True
+        
+    except Exception as e:
+        print(f"✗ Market impact test error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 def main():
     """Run all advanced feature tests"""
     print("\n" + "="*60)
@@ -252,6 +381,8 @@ def main():
         ("Advanced Analytics", test_advanced_analytics),
         ("Advanced Exit Strategies", test_advanced_exit_strategies),
         ("Signal Integration", test_signal_integration),
+        ("Correlation Matrix", test_correlation_matrix),
+        ("Market Impact", test_market_impact),
     ]
     
     results = []
