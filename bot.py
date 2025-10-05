@@ -202,8 +202,10 @@ class TradingBot:
             # Use actual tracked average loss if available, otherwise estimate
             avg_loss = metrics.get('avg_loss', 0)
             if avg_loss == 0 or metrics.get('losses', 0) < 5:
-                # Not enough loss data, use conservative estimate
-                avg_loss = avg_profit * 1.5
+                # FIX BUG 4: Not enough loss data - use conservative estimate based on volatility
+                # rather than avg_profit * 1.5 which may not reflect actual risk
+                # Use max of: current stop loss %, or 2x avg_profit (conservative)
+                avg_loss = max(stop_loss_percentage, avg_profit * 2.0)
             
             optimal_risk = self.risk_manager.calculate_kelly_criterion(
                 win_rate, avg_profit, avg_loss

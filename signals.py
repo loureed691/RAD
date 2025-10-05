@@ -182,12 +182,16 @@ class SignalGenerator:
             reasons['rsi'] = f'strong ({rsi:.1f})'
         
         # 4. Stochastic Oscillator (weighted for ranging)
-        if indicators['stoch_k'] < 20 and indicators['stoch_k'] > indicators['stoch_d']:
-            buy_signals += oscillator_weight
-            reasons['stochastic'] = 'bullish crossover'
-        elif indicators['stoch_k'] > 80 and indicators['stoch_k'] < indicators['stoch_d']:
-            sell_signals += oscillator_weight
-            reasons['stochastic'] = 'bearish crossover'
+        # FIX BUG 6: Check for NaN values before using stochastic indicators
+        stoch_k = indicators.get('stoch_k', 50.0)
+        stoch_d = indicators.get('stoch_d', 50.0)
+        if not pd.isna(stoch_k) and not pd.isna(stoch_d):
+            if stoch_k < 20 and stoch_k > stoch_d:
+                buy_signals += oscillator_weight
+                reasons['stochastic'] = 'bullish crossover'
+            elif stoch_k > 80 and stoch_k < stoch_d:
+                sell_signals += oscillator_weight
+                reasons['stochastic'] = 'bearish crossover'
         
         # 5. Bollinger Bands
         close = indicators['close']
@@ -243,8 +247,11 @@ class SignalGenerator:
             signal = 'SELL'
             confidence = sell_signals / total_signals
         else:
+            # FIX BUG 1: Equal signals should result in HOLD with 0 confidence
+            # to properly fail threshold checks, not 0.5 which may pass
             signal = 'HOLD'
-            confidence = 0.5
+            confidence = 0.0
+            reasons['equal_signals'] = 'buy and sell signals balanced'
         
         # Adaptive threshold based on market regime
         if self.market_regime == 'trending':
@@ -267,14 +274,15 @@ class SignalGenerator:
                 confidence *= mtf_analysis['confidence_multiplier']
                 confidence = min(confidence, 0.99)  # Cap at 99%
                 reasons['mtf_boost'] = f"+{(mtf_analysis['confidence_multiplier']-1)*100:.0f}%"
-            # Reduce confidence if MTF conflicts with signal
+            # FIX BUG 3: Adjust min_confidence proportionally when reducing confidence for MTF conflict
             elif (signal == 'BUY' and mtf_analysis['trend_alignment'] == 'bearish') or \
                  (signal == 'SELL' and mtf_analysis['trend_alignment'] == 'bullish'):
                 confidence *= 0.7  # Penalize conflicting signals
+                adjusted_min_confidence = min_confidence * 0.7  # Also reduce threshold proportionally
                 reasons['mtf_conflict'] = 'warning'
-                if confidence < min_confidence:
+                if confidence < adjusted_min_confidence:
                     signal = 'HOLD'
-                    reasons['confidence'] = f'too low after MTF adjustment ({confidence:.2f} < {min_confidence:.2f})'
+                    reasons['confidence'] = f'too low after MTF adjustment ({confidence:.2f} < {adjusted_min_confidence:.2f})'
         
         self.logger.debug(f"Signal: {signal}, Confidence: {confidence:.2f}, Regime: {self.market_regime}, Buy: {buy_signals:.1f}/{total_signals:.1f}, Sell: {sell_signals:.1f}/{total_signals:.1f}")
         
