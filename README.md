@@ -150,10 +150,37 @@ Key configuration parameters in `.env`:
 
 ## Usage
 
-### Running the Bot
+### 🚀 Quick Deployment to Production
+
+Deploy to a VPS/cloud server in one command:
+
+```bash
+./deploy.sh
+```
+
+This will automatically set up everything including systemd service. See [QUICK_DEPLOY.md](QUICK_DEPLOY.md) for details.
+
+For manual deployment or Docker options, see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+### Running the Bot (Development)
 
 ```bash
 python bot.py
+```
+
+### Running the Bot (Production)
+
+With pre-flight checks:
+
+```bash
+python3 production_start.py
+```
+
+Or as a systemd service (after running deploy.sh):
+
+```bash
+sudo systemctl start kucoin-bot
+sudo systemctl status kucoin-bot
 ```
 
 The bot will:
@@ -166,9 +193,31 @@ The bot will:
 
 > **Note**: The bot automatically detects and manages any existing positions on your account, whether they were opened manually or by a previous bot session. See [POSITION_SYNC.md](POSITION_SYNC.md) for details.
 
+### Monitoring
+
+Check bot health:
+
+```bash
+python3 health_check.py
+```
+
+View logs:
+
+```bash
+tail -f logs/bot.log
+# or for systemd service:
+sudo journalctl -u kucoin-bot -f
+```
+
 ### Stopping the Bot
 
-Press `Ctrl+C` to gracefully stop the bot. The bot will:
+Press `Ctrl+C` to gracefully stop the bot, or:
+
+```bash
+sudo systemctl stop kucoin-bot
+```
+
+The bot will:
 - Log the shutdown request
 - Complete any pending operations
 - Optionally close all positions (configurable)

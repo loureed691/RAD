@@ -1,0 +1,17 @@
+[Unit]
+Description=KuCoin Futures Trading Bot
+After=network.target
+
+[Service]
+Type=simple
+User=%USER%
+WorkingDirectory=%WORKDIR%
+Environment="PATH=%PATH%"
+ExecStart=%PYTHON% %WORKDIR%/bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
