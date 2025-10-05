@@ -4,6 +4,7 @@ Main trading bot orchestrator
 import time
 import signal
 import sys
+import pandas as pd
 from datetime import datetime, timedelta
 from config import Config
 from logger import Logger
@@ -154,6 +155,23 @@ class TradingBot:
         indicators = Indicators.get_latest_indicators(df)
         volatility = indicators.get('bb_width', 0.03)
         
+        # Get additional market context for smarter leverage calculation
+        momentum = indicators.get('momentum', 0.0)
+        
+        # Calculate trend strength from moving averages
+        close = indicators.get('close', entry_price)
+        sma_20 = indicators.get('sma_20', close)
+        sma_50 = indicators.get('sma_50', close)
+        
+        if sma_50 > 0 and not pd.isna(sma_50) and not pd.isna(sma_20):
+            trend_strength = abs(sma_20 - sma_50) / sma_50
+            trend_strength = min(trend_strength * 10, 1.0)  # Scale to 0-1
+        else:
+            trend_strength = 0.5
+        
+        # Detect market regime for leverage adjustment
+        market_regime = self.scanner.signal_generator.detect_market_regime(df)
+        
         # Calculate support/resistance levels for intelligent profit targeting
         support_resistance = Indicators.calculate_support_resistance(df, lookback=50)
         
@@ -165,8 +183,10 @@ class TradingBot:
         else:
             stop_loss_price = entry_price * (1 + stop_loss_percentage)
         
-        # Calculate safe leverage
-        leverage = self.risk_manager.get_max_leverage(volatility, confidence)
+        # Calculate safe leverage with enhanced multi-factor analysis
+        leverage = self.risk_manager.get_max_leverage(
+            volatility, confidence, momentum, trend_strength, market_regime
+        )
         leverage = min(leverage, Config.LEVERAGE)
         
         # Adaptive position sizing using Kelly Criterion if we have performance history
@@ -253,6 +273,9 @@ class TradingBot:
             
             signal = 'BUY' if position.side == 'long' else 'SELL'
             self.ml_model.record_outcome(indicators, signal, pnl)
+            
+            # Record outcome for risk manager (for streak tracking)
+            self.risk_manager.record_trade_outcome(pnl)
         
         # Record current equity for analytics
         balance = self.client.get_balance()

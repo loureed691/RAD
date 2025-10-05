@@ -32,6 +32,12 @@ class RiskManager:
         self.current_drawdown = 0.0
         self.drawdown_threshold = 0.15  # Reduce risk at 15% drawdown
         
+        # Performance streak tracking for adaptive leverage
+        self.win_streak = 0
+        self.loss_streak = 0
+        self.recent_trades = []  # Last 10 trades for rolling performance
+        self.max_recent_trades = 10
+        
         # Correlation tracking for portfolio diversification
         self.correlation_groups = {
             'major_coins': ['BTC', 'ETH'],
@@ -41,6 +47,36 @@ class RiskManager:
             'meme': ['DOGE', 'SHIB', 'PEPE'],
             'exchange': ['BNB', 'OKB', 'FTT']
         }
+    
+    def record_trade_outcome(self, pnl: float):
+        """
+        Record trade outcome to track win/loss streaks
+        
+        Args:
+            pnl: Profit/loss percentage (positive for win, negative for loss)
+        """
+        is_win = pnl > 0
+        
+        # Update streaks
+        if is_win:
+            self.win_streak += 1
+            self.loss_streak = 0
+        else:
+            self.loss_streak += 1
+            self.win_streak = 0
+        
+        # Track recent trades (rolling window)
+        self.recent_trades.append(pnl)
+        if len(self.recent_trades) > self.max_recent_trades:
+            self.recent_trades.pop(0)
+    
+    def get_recent_win_rate(self) -> float:
+        """Calculate win rate from recent trades"""
+        if not self.recent_trades:
+            return 0.5
+        
+        wins = sum(1 for pnl in self.recent_trades if pnl > 0)
+        return wins / len(self.recent_trades)
     
     def analyze_order_book_imbalance(self, orderbook: Dict) -> Dict:
         """
@@ -218,38 +254,138 @@ class RiskManager:
         
         return stop_loss
     
-    def get_max_leverage(self, volatility: float, confidence: float) -> int:
+    def get_max_leverage(self, volatility: float, confidence: float, 
+                        momentum: float = 0.0, trend_strength: float = 0.5,
+                        market_regime: str = 'neutral') -> int:
         """
-        Calculate maximum safe leverage based on market conditions
+        Calculate maximum safe leverage based on multiple market conditions and performance
         
         Args:
-            volatility: Market volatility measure
-            confidence: Signal confidence
+            volatility: Market volatility measure (ATR or BB width)
+            confidence: Signal confidence (0-1)
+            momentum: Current price momentum (-1 to 1)
+            trend_strength: Trend strength indicator (0-1)
+            market_regime: Market regime ('trending', 'ranging', 'neutral')
         
         Returns:
-            Maximum leverage to use
+            Maximum leverage to use (3-20x)
         """
-        # Start with base leverage based on volatility
-        if volatility > 0.08:
-            base_leverage = 3  # Very high volatility - minimal leverage
+        # 1. Base leverage from volatility regime classification
+        if volatility > 0.10:
+            base_leverage = 3  # Extreme volatility - minimal leverage
+            volatility_regime = 'extreme'
+        elif volatility > 0.08:
+            base_leverage = 4  # Very high volatility
+            volatility_regime = 'very_high'
         elif volatility > 0.05:
-            base_leverage = 5  # High volatility
+            base_leverage = 6  # High volatility
+            volatility_regime = 'high'
         elif volatility > 0.03:
-            base_leverage = 7  # Medium volatility
+            base_leverage = 8  # Medium volatility
+            volatility_regime = 'medium'
         elif volatility > 0.02:
-            base_leverage = 10  # Normal volatility
+            base_leverage = 11  # Normal volatility
+            volatility_regime = 'normal'
+        elif volatility > 0.01:
+            base_leverage = 14  # Low volatility
+            volatility_regime = 'low'
         else:
-            base_leverage = 12  # Low volatility - can use higher leverage
+            base_leverage = 16  # Very low volatility
+            volatility_regime = 'very_low'
         
-        # Adjust based on signal confidence
-        if confidence >= 0.75:
-            # Very high confidence - can increase leverage slightly
-            base_leverage = min(base_leverage + 2, 15)
-        elif confidence < 0.65:
+        # 2. Confidence adjustment (±3x)
+        if confidence >= 0.80:
+            # Exceptionally high confidence
+            confidence_adj = 3
+        elif confidence >= 0.75:
+            # Very high confidence
+            confidence_adj = 2
+        elif confidence >= 0.65:
+            # Good confidence
+            confidence_adj = 1
+        elif confidence >= 0.55:
+            # Acceptable confidence
+            confidence_adj = 0
+        else:
             # Lower confidence - reduce leverage
-            base_leverage = max(base_leverage - 2, 3)
+            confidence_adj = -2
         
-        return base_leverage
+        # 3. Momentum adjustment (±2x)
+        momentum_adj = 0
+        if abs(momentum) > 0.03:  # Strong momentum
+            momentum_adj = 2
+        elif abs(momentum) > 0.02:  # Good momentum
+            momentum_adj = 1
+        elif abs(momentum) < 0.005:  # Weak momentum
+            momentum_adj = -1
+        
+        # 4. Trend strength adjustment (±2x)
+        trend_adj = 0
+        if trend_strength > 0.7:  # Strong trend
+            trend_adj = 2
+        elif trend_strength > 0.5:  # Moderate trend
+            trend_adj = 1
+        elif trend_strength < 0.3:  # Weak/no trend
+            trend_adj = -1
+        
+        # 5. Market regime adjustment (±2x)
+        regime_adj = 0
+        if market_regime == 'trending':
+            regime_adj = 2  # Can be more aggressive in trends
+        elif market_regime == 'ranging':
+            regime_adj = -2  # More conservative in ranges
+        
+        # 6. Performance streak adjustment (±3x)
+        streak_adj = 0
+        if self.win_streak >= 5:
+            # Hot streak - can be slightly more aggressive
+            streak_adj = 2
+        elif self.win_streak >= 3:
+            streak_adj = 1
+        elif self.loss_streak >= 4:
+            # Cold streak - reduce leverage significantly
+            streak_adj = -3
+        elif self.loss_streak >= 2:
+            streak_adj = -2
+        
+        # 7. Recent performance adjustment (±2x)
+        recent_adj = 0
+        recent_win_rate = self.get_recent_win_rate()
+        if len(self.recent_trades) >= 5:  # Need minimum data
+            if recent_win_rate >= 0.70:
+                recent_adj = 2  # Excellent recent performance
+            elif recent_win_rate >= 0.60:
+                recent_adj = 1  # Good recent performance
+            elif recent_win_rate <= 0.30:
+                recent_adj = -2  # Poor recent performance
+            elif recent_win_rate <= 0.40:
+                recent_adj = -1  # Below average performance
+        
+        # 8. Drawdown adjustment (overrides other factors)
+        drawdown_adj = 0
+        if self.current_drawdown > 0.20:
+            drawdown_adj = -10  # Severe drawdown protection - override most factors
+        elif self.current_drawdown > 0.15:
+            drawdown_adj = -6  # Moderate drawdown protection
+        elif self.current_drawdown > 0.10:
+            drawdown_adj = -3  # Light drawdown protection
+        
+        # Calculate final leverage
+        final_leverage = base_leverage + confidence_adj + momentum_adj + trend_adj + regime_adj + streak_adj + recent_adj + drawdown_adj
+        
+        # Apply hard limits (3x minimum, 20x maximum)
+        final_leverage = max(3, min(final_leverage, 20))
+        
+        # Log reasoning for transparency
+        if confidence_adj != 0 or streak_adj != 0 or drawdown_adj != 0:
+            self.logger.debug(
+                f"Leverage calculation: base={base_leverage}x ({volatility_regime} vol), "
+                f"conf={confidence_adj:+d}, mom={momentum_adj:+d}, trend={trend_adj:+d}, "
+                f"regime={regime_adj:+d}, streak={streak_adj:+d}, recent={recent_adj:+d}, "
+                f"drawdown={drawdown_adj:+d} → {final_leverage}x"
+            )
+        
+        return final_leverage
     
     def get_symbol_group(self, symbol: str) -> str:
         """
@@ -312,14 +448,15 @@ class RiskManager:
         return True, "Portfolio diversification OK"
     
     def calculate_kelly_criterion(self, win_rate: float, avg_win: float, 
-                                  avg_loss: float) -> float:
+                                  avg_loss: float, use_fractional: bool = True) -> float:
         """
-        Calculate optimal position size using Kelly Criterion
+        Calculate optimal position size using Kelly Criterion with adaptive fractional adjustment
         
         Args:
             win_rate: Historical win rate (0-1)
             avg_win: Average win percentage
             avg_loss: Average loss percentage (positive number)
+            use_fractional: Whether to use adaptive fractional Kelly (default: True)
         
         Returns:
             Optimal fraction of capital to risk (0-1)
@@ -335,11 +472,50 @@ class RiskManager:
         
         kelly_fraction = (b * p - q) / b
         
-        # Be conservative: use half-Kelly to reduce volatility
-        conservative_kelly = kelly_fraction * 0.5
+        # Adaptive fractional Kelly based on performance confidence
+        if use_fractional:
+            # Start with half-Kelly as baseline (0.5)
+            fraction = 0.5
+            
+            # Adjust fraction based on recent performance stability
+            if len(self.recent_trades) >= 5:
+                recent_win_rate = self.get_recent_win_rate()
+                
+                # If recent performance matches historical, can be more aggressive
+                performance_consistency = 1.0 - abs(recent_win_rate - win_rate)
+                
+                if performance_consistency > 0.85:
+                    # Very consistent performance - can use 60% Kelly
+                    fraction = 0.6
+                elif performance_consistency > 0.70:
+                    # Good consistency - use 55% Kelly
+                    fraction = 0.55
+                elif performance_consistency < 0.50:
+                    # Inconsistent performance - more conservative (40% Kelly)
+                    fraction = 0.4
+                elif performance_consistency < 0.60:
+                    # Below average consistency - 45% Kelly
+                    fraction = 0.45
+            
+            # Further reduce during losing streaks
+            if self.loss_streak >= 3:
+                fraction *= 0.7  # 30% reduction during 3+ loss streak
+            elif self.loss_streak >= 2:
+                fraction *= 0.85  # 15% reduction during 2+ loss streak
+            
+            # Can increase slightly during win streaks (but capped)
+            if self.win_streak >= 5:
+                fraction = min(fraction * 1.1, 0.65)  # Max 10% increase, capped at 65%
+            elif self.win_streak >= 3:
+                fraction = min(fraction * 1.05, 0.65)  # Max 5% increase
+            
+            conservative_kelly = kelly_fraction * fraction
+        else:
+            # Standard half-Kelly
+            conservative_kelly = kelly_fraction * 0.5
         
-        # Cap between 0.5% and 3% of portfolio
-        optimal_risk = max(0.005, min(conservative_kelly, 0.03))
+        # Cap between 0.5% and 3.5% of portfolio
+        optimal_risk = max(0.005, min(conservative_kelly, 0.035))
         
         return optimal_risk
     
