@@ -19,7 +19,7 @@ Simply set up your API keys and start trading - the bot handles the rest!
 
 The bot has been **significantly enhanced with institutional-grade intelligence**:
 
-### Latest Optimizations (December 2024) ⭐⭐
+### Latest Optimizations⭐⭐
 - **Kelly Criterion with Real Data:** Tracks actual wins/losses for accurate position sizing (0.5-3% dynamic risk)
 - **Drawdown Protection:** Automatically reduces risk during losing streaks (75% at 15% DD, 50% at 20% DD)
 - **Volume-Based Filtering:** Only scans pairs with $1M+ daily volume for better liquidity
