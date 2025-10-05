@@ -1,0 +1,190 @@
+┌─────────────────────────────────────────────────────────────────────┐
+│              MARGIN LIMIT FIX - ERROR 330008 PREVENTION             │
+└─────────────────────────────────────────────────────────────────────┘
+
+BEFORE FIX (❌ Error 330008):
+═══════════════════════════════════════════════════════════════════════
+
+ Bot calculates:
+   • Position: 2086 contracts @ $0.0012942
+   • Leverage: 12x
+   • Position value: $2.70
+   • Required margin: $0.225
+                │
+                │ No margin check!
+                ↓
+ Exchange receives order
+   • Available margin: $0.10 (insufficient!)
+   • Required: $0.225
+                │
+                ↓
+ ❌ ERROR 330008: "Maximum open limit reached"
+    Trade fails, opportunity lost
+
+
+AFTER FIX (✅ Auto-Adjusted):
+═══════════════════════════════════════════════════════════════════════
+
+ Bot calculates:
+   • Position: 2086 contracts @ $0.0012942
+   • Leverage: 12x
+   • Position value: $2.70
+   • Required margin: $0.225
+                │
+                │ ✓ New: check_available_margin()
+                ↓
+ Margin check:
+   • Available margin: $0.10
+   • Required (with 5% buffer): $0.236
+   • Status: ⚠️ INSUFFICIENT
+                │
+                │ ✓ New: adjust_position_for_margin()
+                ↓
+ Auto-adjustment:
+   • Use 90% of available: $0.09
+   • Max position value: $0.09 × 12 = $1.08
+   • Adjusted contracts: $1.08 / $0.0012942 = 834
+   • Adjusted leverage: 12x (unchanged)
+                │
+                ↓
+ Exchange receives adjusted order
+   • Position: 834 contracts @ $0.0012942
+   • Leverage: 12x
+   • Required margin: $0.090 ✓
+                │
+                ↓
+ ✅ SUCCESS: Trade executed within available margin!
+
+
+FLOW DIAGRAM:
+═══════════════════════════════════════════════════════════════════════
+
+┌──────────────────────┐
+│  create_market_order │
+│  (symbol, amount,    │
+│   leverage)          │
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│  1. Get ticker price │ ← New step
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│  2. Validate amount  │
+│     (exchange limits)│
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────────────┐
+│  3. check_available_margin() │ ← NEW METHOD
+│     • Get balance            │
+│     • Calculate required     │
+│     • Compare with buffer    │
+└──────────┬───────────────────┘
+           │
+           ├─── Sufficient? ──→ YES ──┐
+           │                           │
+           NO                          │
+           │                           │
+           ↓                           │
+┌──────────────────────────────┐      │
+│  4. adjust_position_for_     │      │
+│     margin()                 │      │
+│     • Reduce position size   │      │
+│     • Or reduce leverage     │      │
+│     • Use 90% of available   │      │
+└──────────┬───────────────────┘      │
+           │                           │
+           ├─── Viable? (>10%) ──→ YES┤
+           │                           │
+           NO                          │
+           │                           │
+           ↓                           │
+     ❌ Reject trade                   │
+        (log error)                    │
+                                       │
+           ┌───────────────────────────┘
+           │
+           ↓
+┌──────────────────────┐
+│  5. Check order book │
+│     depth (if large) │
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│  6. Set margin mode  │
+│     and leverage     │
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│  7. Create order on  │
+│     exchange         │
+└──────────┬───────────┘
+           │
+           ↓
+┌──────────────────────┐
+│  8. Log success and  │
+│     check slippage   │
+└──────────────────────┘
+
+
+KEY COMPONENTS:
+═══════════════════════════════════════════════════════════════════════
+
+calculate_required_margin(symbol, amount, price, leverage)
+├─ Formula: (amount × price × contract_size) / leverage
+├─ Example: (2086 × $0.0012942 × 1) / 12 = $0.225
+└─ Purpose: Know how much margin is needed
+
+check_available_margin(symbol, amount, price, leverage)
+├─ Gets: balance['free']['USDT']
+├─ Calculates: required_margin × 1.05 (5% buffer)
+├─ Returns: (has_sufficient, available, reason)
+└─ Purpose: Verify margin before order
+
+adjust_position_for_margin(symbol, amount, price, leverage, available)
+├─ Uses: 90% of available (10% safety reserve)
+├─ Adjusts: Position size first, leverage second
+├─ Validates: Against exchange limits
+└─ Purpose: Fit trade within available margin
+
+
+SCENARIOS:
+═══════════════════════════════════════════════════════════════════════
+
+Scenario 1: Plenty of margin
+  Available: $100.00
+  Required:  $0.23
+  Result:    ✅ Trade executes as planned
+
+Scenario 2: Limited margin (position adjusted)
+  Available: $0.50
+  Required:  $0.23
+  Result:    ✅ Trade executes with reduced size
+
+Scenario 3: Very limited margin (leverage reduced)
+  Available: $0.15
+  Required:  $0.23
+  Adjusted:  Reduce size AND leverage to fit
+  Result:    ✅ Trade executes with adjustments
+
+Scenario 4: Insufficient margin (trade rejected)
+  Available: $0.01
+  Required:  $0.23
+  Adjusted:  Would be only 4% of desired size
+  Result:    ❌ Trade rejected (not viable)
+
+
+BENEFITS:
+═══════════════════════════════════════════════════════════════════════
+
+✓ No more error 330008
+✓ Automatic position optimization
+✓ Maximum capital efficiency
+✓ Transparent logging
+✓ Safe margin usage
+✓ No manual intervention needed
