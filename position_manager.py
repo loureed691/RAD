@@ -30,6 +30,11 @@ class Position:
         self.max_favorable_excursion = 0.0  # Peak profit %
         self.initial_stop_loss = stop_loss  # Store initial stop loss
         self.initial_take_profit = take_profit  # Store initial take profit
+        
+        # Track profit velocity for smarter adjustments
+        self.last_pnl = 0.0  # Last recorded P/L
+        self.last_pnl_time = datetime.now()  # Time of last P/L update
+        self.profit_velocity = 0.0  # Rate of profit change (% per hour)
     
     def update_trailing_stop(self, current_price: float, trailing_percentage: float, 
                             volatility: float = 0.03, momentum: float = 0.0):
@@ -89,7 +94,8 @@ class Position:
                     self.trailing_stop_activated = True
     
     def update_take_profit(self, current_price: float, momentum: float = 0.0, 
-                          trend_strength: float = 0.5, volatility: float = 0.03):
+                          trend_strength: float = 0.5, volatility: float = 0.03,
+                          rsi: float = 50.0, support_resistance: Optional[Dict] = None):
         """
         Dynamically adjust take profit based on market conditions
         
@@ -98,6 +104,8 @@ class Position:
             momentum: Current price momentum
             trend_strength: Strength of current trend (0-1)
             volatility: Market volatility
+            rsi: RSI indicator value (0-100)
+            support_resistance: Dict with support/resistance levels
         """
         if not self.take_profit:
             return
@@ -105,6 +113,15 @@ class Position:
         # Calculate current P/L and initial target
         current_pnl = self.get_pnl(current_price)
         initial_distance = abs(self.initial_take_profit - self.entry_price) / self.entry_price
+        
+        # Update profit velocity tracking
+        now = datetime.now()
+        time_delta = (now - self.last_pnl_time).total_seconds() / 3600  # hours
+        if time_delta > 0:
+            pnl_change = current_pnl - self.last_pnl
+            self.profit_velocity = pnl_change / time_delta  # % per hour
+            self.last_pnl = current_pnl
+            self.last_pnl_time = now
         
         # Base multiplier for extending take profit
         tp_multiplier = 1.0
@@ -127,9 +144,79 @@ class Position:
         if volatility > 0.05:
             tp_multiplier *= 1.2
         
-        # 4. Already profitable - be more conservative with extensions
+        # 4. RSI-based adjustments - tighten when overbought/oversold (reversal risk)
+        if self.side == 'long' and rsi > 75:
+            # Overbought - high reversal risk, be more conservative
+            tp_multiplier *= 0.9
+        elif self.side == 'short' and rsi < 25:
+            # Oversold in short - high reversal risk
+            tp_multiplier *= 0.9
+        elif self.side == 'long' and rsi < 40:
+            # Oversold in long - still room to run
+            tp_multiplier *= 1.1
+        elif self.side == 'short' and rsi > 60:
+            # Overbought in short - still room to run
+            tp_multiplier *= 1.1
+        
+        # 5. Profit velocity - fast profit accumulation suggests strong move
+        if abs(self.profit_velocity) > 0.05:  # >5% per hour
+            tp_multiplier *= 1.2  # Extend target for fast-moving trades
+        elif abs(self.profit_velocity) < 0.01:  # <1% per hour
+            tp_multiplier *= 0.95  # Tighten for slow moves
+        
+        # 6. Time-based adjustment - be more conservative on aging positions
+        position_age_hours = (now - self.entry_time).total_seconds() / 3600
+        if position_age_hours > 24:  # > 1 day old
+            tp_multiplier *= 0.9  # Tighten 10% on old positions
+        elif position_age_hours > 48:  # > 2 days old
+            tp_multiplier *= 0.85  # Tighten 15% on very old positions
+        
+        # 7. Already profitable - be more conservative with extensions
         if current_pnl > 0.05:
             tp_multiplier = min(tp_multiplier, 1.2)  # Cap extension when already in profit
+        
+        # 8. Support/Resistance awareness - adjust near key levels
+        if support_resistance:
+            resistance_levels = support_resistance.get('resistance', [])
+            support_levels = support_resistance.get('support', [])
+            
+            if self.side == 'long' and resistance_levels:
+                # Check if TP is near a resistance level
+                nearest_resistance = None
+                for level in resistance_levels:
+                    level_price = level['price']
+                    if level_price > current_price:
+                        if nearest_resistance is None or level_price < nearest_resistance:
+                            nearest_resistance = level_price
+                
+                # If we found a resistance level, don't extend TP beyond it
+                if nearest_resistance:
+                    # Set TP slightly before resistance (98% of distance to resistance)
+                    max_tp = current_price + (nearest_resistance - current_price) * 0.98
+                    calculated_tp = self.entry_price * (1 + initial_distance * tp_multiplier)
+                    
+                    # Use the more conservative target
+                    if calculated_tp > max_tp:
+                        tp_multiplier = (max_tp / self.entry_price - 1) / initial_distance
+            
+            elif self.side == 'short' and support_levels:
+                # Check if TP is near a support level
+                nearest_support = None
+                for level in support_levels:
+                    level_price = level['price']
+                    if level_price < current_price:
+                        if nearest_support is None or level_price > nearest_support:
+                            nearest_support = level_price
+                
+                # If we found a support level, don't extend TP beyond it
+                if nearest_support:
+                    # Set TP slightly above support (98% of distance to support)
+                    max_tp = current_price - (current_price - nearest_support) * 0.98
+                    calculated_tp = self.entry_price * (1 - initial_distance * tp_multiplier)
+                    
+                    # Use the more conservative target
+                    if calculated_tp < max_tp:
+                        tp_multiplier = (1 - max_tp / self.entry_price) / initial_distance
         
         # Calculate new take profit
         new_distance = initial_distance * tp_multiplier
@@ -456,6 +543,10 @@ class PositionManager:
                         # Extract adaptive parameters
                         volatility = indicators.get('bb_width', 0.03)
                         momentum = indicators.get('momentum', 0.0)
+                        rsi = indicators.get('rsi', 50.0)
+                        
+                        # Calculate support/resistance levels
+                        support_resistance = Indicators.calculate_support_resistance(df)
                         
                         # Calculate trend strength from moving averages
                         close = indicators.get('close', current_price)
@@ -478,12 +569,14 @@ class PositionManager:
                             momentum=momentum
                         )
                         
-                        # Update take profit dynamically
+                        # Update take profit dynamically with all parameters
                         position.update_take_profit(
                             current_price,
                             momentum=momentum,
                             trend_strength=trend_strength,
-                            volatility=volatility
+                            volatility=volatility,
+                            rsi=rsi,
+                            support_resistance=support_resistance
                         )
                     else:
                         # Fallback to simple update if indicators fail

@@ -254,11 +254,11 @@ weak momentum (<1%):   ×0.9  # Tighten when momentum fades
 - Adapts to momentum to ride strong trends
 - Protects against reversals when momentum fades
 
-### 3.5 Dynamic Take Profit Targets ⭐ NEW
+### 3.5 Dynamic Take Profit Targets ⭐ ENHANCED
 
 **Before:** Static take profit at 2× stop loss distance
 
-**After:** Dynamic adjustment based on market opportunity
+**After:** Dynamic adjustment based on comprehensive market analysis
 
 **Extension Multipliers:**
 
@@ -276,19 +276,43 @@ moderate trend (>0.5): ×1.15
 # 3. Volatility Extension
 high volatility (>5%): ×1.2  # Capture bigger moves
 
-# 4. Profit Protection
+# 4. RSI-Based Protection ⭐ NEW
+overbought (RSI > 75) in long: ×0.9   # Tighten on reversal risk
+oversold (RSI < 40) in long: ×1.1     # Extend when room to run
+overbought (RSI > 60) in short: ×1.1  # Extend short in overbought
+oversold (RSI < 25) in short: ×0.9    # Tighten short on reversal risk
+
+# 5. Profit Velocity ⭐ NEW
+fast profit (>5% per hour): ×1.2   # Extend for momentum trades
+slow profit (<1% per hour): ×0.95   # Tighten for slow moves
+
+# 6. Time-Based Adjustment ⭐ NEW
+position age > 24h: ×0.9   # More conservative on old positions
+position age > 48h: ×0.85  # Even more conservative
+
+# 7. Support/Resistance Awareness ⭐ NEW
+# Caps TP at 98% of nearest resistance (long) or support (short)
+# Prevents setting unrealistic targets beyond key levels
+
+# 8. Profit Protection
 already > 5% profit: cap at ×1.2  # Conservative when winning
 ```
 
 **Examples:**
 - **Strong trending + momentum:** 10% base → **19.5%** target (1.5×1.3)
 - **High vol ranging market:** 10% base → **12%** target (1.2×)
-- **Already profitable:** 10% base → **12%** max (capped)
+- **Overbought + profitable:** 10% base → **10.8%** target (protected)
+- **Near resistance:** Automatically capped at key resistance level
+- **Fast moving trade:** 10% base → **14.4%** target (1.2× velocity bonus)
+- **Old position (>24h):** 10% base → **9%** target (0.9× age adjustment)
 
 **Benefits:**
 - Captures larger moves in strong trends
 - Adapts to volatile markets for bigger targets
-- Protects profits by being conservative when ahead
+- Protects profits when reversal risk is high (RSI)
+- Respects key support/resistance levels
+- Adjusts for profit accumulation speed
+- More conservative on aging positions
 - Only moves targets in favorable direction
 
 ### 3.6 Max Favorable Excursion (MFE) Tracking ⭐ NEW
@@ -391,14 +415,18 @@ Performance - Win Rate: 62.50%, Avg P/L: 1.23%, Total Trades: 48
    - Validates volatility-based stop loss
    - Confirms confidence-based adjustments
 
-4. **test_adaptive_stops.py** - New Test Suite ⭐
+4. **test_adaptive_stops.py** - Enhanced Test Suite ⭐
    - **test_position_tracking_enhancements()** - Validates MFE tracking
    - **test_adaptive_trailing_stop()** - Tests volatility/profit/momentum adjustments
    - **test_dynamic_take_profit()** - Tests TP extensions based on conditions
    - **test_max_favorable_excursion_tracking()** - Validates MFE updates
    - **test_adaptive_parameters_bounds()** - Ensures safe bounds (0.5-5%)
+   - **test_rsi_based_adjustments()** ⭐ NEW - Tests RSI-based TP protection
+   - **test_support_resistance_awareness()** ⭐ NEW - Validates S/R level awareness
+   - **test_profit_velocity_tracking()** ⭐ NEW - Tests profit accumulation speed tracking
+   - **test_time_based_adjustments()** ⭐ NEW - Tests age-based position adjustments
 
-**Test Coverage:** 17/17 tests passing (was 12/12)
+**Test Coverage:** 21/21 tests passing (was 17/17)
 
 **Key Validations:**
 - ✓ Adaptive stops respond correctly to volatility changes
@@ -407,6 +435,10 @@ Performance - Win Rate: 62.50%, Avg P/L: 1.23%, Total Trades: 48
 - ✓ Dynamic TP extends only in favorable direction
 - ✓ All parameters stay within safe bounds
 - ✓ MFE tracking never decreases
+- ✓ RSI-based adjustments protect against reversals
+- ✓ Support/resistance levels respected in TP calculations
+- ✓ Profit velocity tracking influences TP extensions
+- ✓ Time-based adjustments make positions more conservative
 
 ---
 
