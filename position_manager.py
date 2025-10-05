@@ -348,24 +348,11 @@ class Position:
                 return True, 'take_profit_12pct'
             elif current_pnl >= 0.08:  # 8% ROI - take profit if TP is far
                 if self.take_profit:
-                    if self.side == 'long':
-                        distance_to_tp = (self.take_profit - current_price) / current_price
-                        if distance_to_tp > 0.03:  # TP is more than 3% away
-                            return True, 'take_profit_8pct'
-                    else:
-                        distance_to_tp = (current_price - self.take_profit) / current_price
-                        if distance_to_tp > 0.03:  # TP is more than 3% away
-                            return True, 'take_profit_8pct'
-            else:  # 5% ROI - take profit if TP is very far
-                if self.take_profit:
-                    if self.side == 'long':
-                        distance_to_tp = (self.take_profit - current_price) / current_price
-                        if distance_to_tp > 0.05:  # TP is more than 5% away
-                            return True, 'take_profit_5pct'
-                    else:
-                        distance_to_tp = (current_price - self.take_profit) / current_price
-                        if distance_to_tp > 0.05:  # TP is more than 5% away
-                            return True, 'take_profit_5pct'
+                    distance_to_tp = abs(self.take_profit - current_price) / current_price
+                    if current_pnl >= 0.08 and distance_to_tp > 0.03:  # TP is more than 3% away
+                        return True, 'take_profit_8pct'
+                    elif current_pnl >= 0.05 and distance_to_tp > 0.05:  # TP is more than 5% away
+                        return True, 'take_profit_5pct'
         
         # Standard stop loss and take profit checks
         if self.side == 'long':
