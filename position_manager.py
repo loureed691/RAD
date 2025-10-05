@@ -689,8 +689,9 @@ class PositionManager:
                     'side': position.side,
                     'entry_price': position.entry_price,
                     'current_price': current_price,
-                    'pnl_pct': current_pnl,
+                    'current_pnl_pct': current_pnl,  # Leveraged P&L
                     'peak_pnl_pct': position.max_favorable_excursion,
+                    'leverage': position.leverage,
                     'entry_time': position.entry_time,
                     'stop_loss': position.stop_loss,
                     'take_profit': position.take_profit
