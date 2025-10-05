@@ -1,5 +1,19 @@
 """
-Tests for enhanced trading methods
+Comprehensive test suite for enhanced trading methods in the KuCoin client and position manager.
+
+This module verifies advanced trading functionalities including:
+- Limit order creation with post-only and reduce-only flags
+- Stop-limit order creation
+- Order status checking and validation
+- Order book depth fetching
+- Price slippage validation
+- Market order execution with depth checks
+- Position scaling in and out
+- Position target modification
+- Closing positions with limit orders
+
+The purpose of these tests is to ensure robust and correct behavior of advanced trading features,
+helping to prevent regressions and maintain reliability in automated trading systems.
 """
 import sys
 import os
