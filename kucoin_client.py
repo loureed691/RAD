@@ -307,7 +307,6 @@ class KuCoinClient:
             max_position_value = usable_margin * leverage
             
             # Calculate adjusted amount based on available margin
-            # adjusted_amount = max_position_value / (price * contract_size)
             adjusted_amount = max_position_value / (price * contract_size)
             
             # If adjusted amount is still too large, also reduce leverage
