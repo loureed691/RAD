@@ -279,6 +279,59 @@ class KuCoinClient:
             # If error checking, proceed with order and let exchange handle it
             return True, 0, f"Error checking margin: {e}"
     
+    def is_position_viable(self, symbol: str, amount: float, price: float, leverage: int) -> tuple[bool, str]:
+        """Check if a position size is viable for trading
+        
+        Args:
+            symbol: Trading pair symbol
+            amount: Position size in contracts
+            price: Entry price
+            leverage: Leverage to use
+            
+        Returns:
+            Tuple of (is_viable, reason)
+        """
+        try:
+            # Get market limits
+            limits = self.get_market_limits(symbol)
+            
+            # Check against exchange minimum amount
+            if limits and limits['amount']['min']:
+                min_amount = limits['amount']['min']
+                if amount < min_amount:
+                    return False, f"Position size {amount:.4f} below exchange minimum {min_amount}"
+            
+            # Get contract size for accurate position value
+            markets = self.exchange.load_markets()
+            contract_size = 1
+            if symbol in markets:
+                contract_size = markets[symbol].get('contractSize', 1)
+            
+            # Calculate position value
+            position_value = amount * price * contract_size
+            
+            # Check against exchange minimum cost
+            if limits and limits['cost']['min']:
+                min_cost = limits['cost']['min']
+                if position_value < min_cost:
+                    return False, f"Position value ${position_value:.2f} below exchange minimum ${min_cost}"
+            
+            # Check that position value is meaningful (at least $1)
+            if position_value < 1.0:
+                return False, f"Position value ${position_value:.2f} too small to be meaningful"
+            
+            # Check that required margin is meaningful (at least $0.10)
+            required_margin = self.calculate_required_margin(symbol, amount, price, leverage)
+            if required_margin < 0.10:
+                return False, f"Required margin ${required_margin:.4f} too small to be meaningful"
+            
+            return True, "Position is viable"
+            
+        except Exception as e:
+            self.logger.error(f"Error checking position viability: {e}")
+            # If we can't check, assume it's viable and let exchange handle it
+            return True, "Unable to verify viability, proceeding"
+    
     def adjust_position_for_margin(self, symbol: str, amount: float, price: float, 
                                    leverage: int, available_margin: float) -> tuple[float, int]:
         """Adjust position size and/or leverage to fit available margin
@@ -382,10 +435,13 @@ class KuCoinClient:
                     symbol, validated_amount, reference_price, leverage, available_margin
                 )
                 
-                # Check if adjusted position is viable
-                if adjusted_amount < validated_amount * 0.1:  # Less than 10% of desired
+                # Check if adjusted position is viable (meets exchange minimums and meaningful size)
+                is_viable, viability_reason = self.is_position_viable(
+                    symbol, adjusted_amount, reference_price, adjusted_leverage
+                )
+                if not is_viable:
                     self.logger.error(
-                        f"Cannot open position: even with adjustments, position would be too small "
+                        f"Cannot open position: adjusted position not viable - {viability_reason} "
                         f"(adjusted: {adjusted_amount:.4f}, desired: {validated_amount:.4f})"
                     )
                     return None
@@ -480,10 +536,13 @@ class KuCoinClient:
                         symbol, validated_amount, price, leverage, available_margin
                     )
                     
-                    # Check if adjusted position is viable
-                    if adjusted_amount < validated_amount * 0.1:  # Less than 10% of desired
+                    # Check if adjusted position is viable (meets exchange minimums and meaningful size)
+                    is_viable, viability_reason = self.is_position_viable(
+                        symbol, adjusted_amount, price, adjusted_leverage
+                    )
+                    if not is_viable:
                         self.logger.error(
-                            f"Cannot open position: even with adjustments, position would be too small "
+                            f"Cannot open position: adjusted position not viable - {viability_reason} "
                             f"(adjusted: {adjusted_amount:.4f}, desired: {validated_amount:.4f})"
                         )
                         return None
