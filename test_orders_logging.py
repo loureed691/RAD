@@ -67,7 +67,32 @@ def test_orders_logger_setup():
         orders_logger.info("=" * 80)
         orders_logger.info("")
         
-        print("   ✓ Orders log: Test orders written")
+        orders_logger.info("=" * 80)
+        orders_logger.info("BUY ORDER CREATED: BTC/USDT:USDT")
+        orders_logger.info("-" * 80)
+        orders_logger.info("  Order ID: test_order_99999")
+        orders_logger.info("  Type: STOP-LIMIT")
+        orders_logger.info("  Side: BUY")
+        orders_logger.info("  Symbol: BTC/USDT:USDT")
+        orders_logger.info("  Amount: 0.01 contracts")
+        orders_logger.info("  Stop Price: 49000.00")
+        orders_logger.info("  Limit Price: 49500.00")
+        orders_logger.info("  Leverage: 10x")
+        orders_logger.info("  Reduce Only: False")
+        orders_logger.info("  Status: open")
+        orders_logger.info("  Timestamp: 1234567890")
+        orders_logger.info("=" * 80)
+        orders_logger.info("")
+        
+        orders_logger.info("=" * 80)
+        orders_logger.info("ORDER CANCELLED: BTC/USDT:USDT")
+        orders_logger.info("-" * 80)
+        orders_logger.info("  Order ID: test_order_99999")
+        orders_logger.info("  Symbol: BTC/USDT:USDT")
+        orders_logger.info("=" * 80)
+        orders_logger.info("")
+        
+        print("   ✓ Orders log: Test orders written (market, limit, stop-limit, cancel)")
         
         # Verify file was created
         print("\n3. Verifying log file...")
@@ -84,7 +109,7 @@ def test_orders_logger_setup():
         
         print(f"\n   Orders Log ({Config.ORDERS_LOG_FILE}):")
         with open(Config.ORDERS_LOG_FILE, 'r') as f:
-            lines = f.readlines()[-15:]  # Last 15 lines
+            lines = f.readlines()[-20:]  # Last 20 lines
             for line in lines:
                 print(f"      {line.rstrip()}")
         

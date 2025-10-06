@@ -635,6 +635,16 @@ class KuCoinClient:
         try:
             self.exchange.cancel_order(order_id, symbol)
             self.logger.info(f"Cancelled order {order_id} for {symbol}")
+            
+            # Log cancellation to orders logger
+            self.orders_logger.info("=" * 80)
+            self.orders_logger.info(f"ORDER CANCELLED: {symbol}")
+            self.orders_logger.info("-" * 80)
+            self.orders_logger.info(f"  Order ID: {order_id}")
+            self.orders_logger.info(f"  Symbol: {symbol}")
+            self.orders_logger.info("=" * 80)
+            self.orders_logger.info("")  # Empty line for readability
+            
             return True
         except Exception as e:
             self.logger.error(f"Error cancelling order: {e}")
@@ -745,10 +755,31 @@ class KuCoinClient:
                 price=limit_price,
                 params=params
             )
+            
+            # Log order details to main logger
             self.logger.info(
                 f"Created {side} stop-limit order for {validated_amount} {symbol} "
                 f"(stop={stop_price}, limit={limit_price}, reduce_only={reduce_only})"
             )
+            
+            # Log detailed order information to orders logger
+            self.orders_logger.info("=" * 80)
+            self.orders_logger.info(f"{side.upper()} ORDER CREATED: {symbol}")
+            self.orders_logger.info("-" * 80)
+            self.orders_logger.info(f"  Order ID: {order.get('id', 'N/A')}")
+            self.orders_logger.info(f"  Type: STOP-LIMIT")
+            self.orders_logger.info(f"  Side: {side.upper()}")
+            self.orders_logger.info(f"  Symbol: {symbol}")
+            self.orders_logger.info(f"  Amount: {validated_amount} contracts")
+            self.orders_logger.info(f"  Stop Price: {stop_price}")
+            self.orders_logger.info(f"  Limit Price: {limit_price}")
+            self.orders_logger.info(f"  Leverage: {leverage}x")
+            self.orders_logger.info(f"  Reduce Only: {reduce_only}")
+            self.orders_logger.info(f"  Status: {order.get('status', 'N/A')}")
+            self.orders_logger.info(f"  Timestamp: {order.get('timestamp', 'N/A')}")
+            self.orders_logger.info("=" * 80)
+            self.orders_logger.info("")  # Empty line for readability
+            
             return order
         except Exception as e:
             self.logger.error(f"Error creating stop-limit order: {e}")
