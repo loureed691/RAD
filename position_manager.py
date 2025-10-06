@@ -2,6 +2,7 @@
 Position management with trailing stop loss
 """
 import time
+import threading
 import pandas as pd
 from typing import Dict, Optional, Tuple
 from datetime import datetime
@@ -482,6 +483,11 @@ class PositionManager:
         self.logger = Logger.get_logger()
         self.position_logger = Logger.get_position_logger()
         self.advanced_exit_strategy = AdvancedExitStrategy()
+        
+        # Thread lock for positions dictionary to prevent race conditions
+        # Note: This is mainly for safety, as the bot is typically single-threaded
+        # but protects against future multi-threaded enhancements
+        self._positions_lock = threading.Lock()
     
     def sync_existing_positions(self):
         """Sync existing positions from the exchange and import them into management
@@ -1022,8 +1028,10 @@ class PositionManager:
                 # Try simple update as fallback
                 try:
                     position.update_trailing_stop(current_price, self.trailing_stop_percentage)
-                except Exception:
-                    pass
+                except Exception as fallback_error:
+                    # Log the fallback error rather than silently ignoring it
+                    self.logger.error(f"Fallback update also failed for {symbol}: {fallback_error}")
+                    self.position_logger.error(f"  ✗ Fallback update failed: {fallback_error}")
         
         if self.positions:
             self.position_logger.info(f"{'='*80}\n")

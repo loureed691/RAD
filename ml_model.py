@@ -194,6 +194,10 @@ class MLModel:
             'profit_loss': profit_loss
         })
         
+        # Limit training data to prevent memory leak - keep only last 10,000 records
+        if len(self.training_data) > 10000:
+            self.training_data = self.training_data[-10000:]
+        
         # Update performance metrics
         self.performance_metrics['total_trades'] = self.performance_metrics.get('total_trades', 0) + 1
         total = self.performance_metrics['total_trades']

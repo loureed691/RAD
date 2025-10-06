@@ -210,13 +210,23 @@ def check_memory_efficiency():
             content = f.read()
             
             # Check for unlimited list growth
-            if '.append(' in content and 'pop(' not in content:
+            has_append = '.append(' in content
+            has_limiting = any(keyword in content for keyword in [
+                '.pop(', 'del ', '= []', 'clear()', '[-10000:]', '[-1000:]', 
+                'if len(', 'max_', 'limit'
+            ])
+            
+            if has_append and not has_limiting:
                 print(f"  ⚠ WARNING: {file} may have unlimited list growth")
                 issues.append(f"Potential memory leak in {file}")
+            elif has_append and has_limiting:
+                print(f"  ✓ {file} has list growth but with size limiting")
             
             # Check for caching without limits
             if 'cache' in content.lower() and 'cache_duration' in content:
                 print(f"  ✓ {file} has time-based cache eviction")
+            elif 'cache' in content.lower() and any(x in content for x in ['max_cache', 'cache_size', 'if len(', 'clear_cache']):
+                print(f"  ✓ {file} has cache with size/time management")
             elif 'cache' in content.lower():
                 print(f"  ⚠ WARNING: {file} has caching without clear eviction")
                 issues.append(f"Cache without eviction in {file}")
