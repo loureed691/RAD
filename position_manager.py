@@ -710,7 +710,10 @@ class PositionManager:
             orders_logger.info(f"  Take Profit %: {abs(take_profit_pct):.2%} from entry")
             orders_logger.info(f"  Take Profit Type: Monitored (closes position when price reaches TP)")
             orders_logger.info("")
-            orders_logger.info(f"  Risk/Reward Ratio: 1:{abs(take_profit_pct / stop_loss_pct):.2f}")
+            if abs(stop_loss_pct) < 1e-8:
+                orders_logger.info("  Risk/Reward Ratio: N/A (stop loss percent is zero)")
+            else:
+                orders_logger.info(f"  Risk/Reward Ratio: 1:{abs(take_profit_pct / stop_loss_pct):.2f}")
             orders_logger.info(f"  Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             orders_logger.info("=" * 80)
             orders_logger.info("")
