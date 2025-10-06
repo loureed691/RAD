@@ -690,6 +690,34 @@ class PositionManager:
             self.position_logger.info(f"  Stop Loss: {format_price(stop_loss)} ({stop_loss_pct:.2%})")
             self.position_logger.info(f"  Take Profit: {format_price(take_profit)} ({take_profit_pct:.2%})")
             
+            # Log stop loss and take profit placement to orders logger
+            from logger import Logger
+            orders_logger = Logger.get_orders_logger()
+            orders_logger.info("=" * 80)
+            orders_logger.info(f"STOP LOSS & TAKE PROFIT SET: {symbol}")
+            orders_logger.info("-" * 80)
+            orders_logger.info(f"  Symbol: {symbol}")
+            orders_logger.info(f"  Position Side: {signal} ({'LONG' if signal == 'BUY' else 'SHORT'})")
+            orders_logger.info(f"  Entry Price: {format_price(fill_price)}")
+            orders_logger.info(f"  Amount: {amount} contracts")
+            orders_logger.info(f"  Leverage: {leverage}x")
+            orders_logger.info("")
+            orders_logger.info(f"  Stop Loss Price: {format_price(stop_loss)}")
+            orders_logger.info(f"  Stop Loss %: {abs(stop_loss_pct):.2%} from entry")
+            orders_logger.info(f"  Stop Loss Type: Monitored (closes position when price reaches SL)")
+            orders_logger.info("")
+            orders_logger.info(f"  Take Profit Price: {format_price(take_profit)}")
+            orders_logger.info(f"  Take Profit %: {abs(take_profit_pct):.2%} from entry")
+            orders_logger.info(f"  Take Profit Type: Monitored (closes position when price reaches TP)")
+            orders_logger.info("")
+            if abs(stop_loss_pct) < 1e-8:
+                orders_logger.info("  Risk/Reward Ratio: N/A (stop loss percent is zero)")
+            else:
+                orders_logger.info(f"  Risk/Reward Ratio: 1:{abs(take_profit_pct / stop_loss_pct):.2f}")
+            orders_logger.info(f"  Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            orders_logger.info("=" * 80)
+            orders_logger.info("")
+            
             # Create position object
             position = Position(
                 symbol=symbol,
@@ -774,6 +802,31 @@ class PositionManager:
                 return None
             
             self.position_logger.info(f"  ✓ Position closed on exchange")
+            
+            # Log SL/TP trigger to orders logger if applicable
+            if reason in ['stop_loss', 'take_profit']:
+                from logger import Logger
+                orders_logger = Logger.get_orders_logger()
+                orders_logger.info("=" * 80)
+                orders_logger.info(f"{'STOP LOSS' if reason == 'stop_loss' else 'TAKE PROFIT'} TRIGGERED: {symbol}")
+                orders_logger.info("-" * 80)
+                orders_logger.info(f"  Symbol: {symbol}")
+                orders_logger.info(f"  Position Side: {position.side.upper()}")
+                orders_logger.info(f"  Entry Price: {format_price(position.entry_price)}")
+                orders_logger.info(f"  Exit Price: {format_price(current_price)}")
+                orders_logger.info(f"  Amount: {position.amount} contracts")
+                orders_logger.info(f"  Leverage: {position.leverage}x")
+                if reason == 'stop_loss':
+                    orders_logger.info(f"  Stop Loss Price: {format_price(position.stop_loss)}")
+                    orders_logger.info(f"  Trigger: Price {'fell below' if position.side == 'long' else 'rose above'} stop loss")
+                else:
+                    orders_logger.info(f"  Take Profit Price: {format_price(position.take_profit)}")
+                    orders_logger.info(f"  Trigger: Price {'rose above' if position.side == 'long' else 'fell below'} take profit")
+                orders_logger.info(f"  P/L: {pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
+                orders_logger.info(f"  Duration: {duration_mins:.1f} minutes")
+                orders_logger.info(f"  Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                orders_logger.info("=" * 80)
+                orders_logger.info("")
             
             self.logger.info(
                 f"Closed {position.side} position: {symbol} @ {format_price(current_price)}, "

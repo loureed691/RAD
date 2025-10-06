@@ -482,8 +482,26 @@ class KuCoinClient:
                 params={"marginMode": "cross"}
             )
             
+            # Wait briefly for order to be filled and fetch updated status
+            # Market orders typically fill immediately, but we need to fetch the status to get fill details
+            time.sleep(0.5)  # Brief pause to allow order to be processed
+            if order.get('id'):
+                try:
+                    filled_order = self.exchange.fetch_order(order['id'], symbol)
+                    # Update order with filled details if available
+                    if filled_order:
+                        order.update({
+                            'status': filled_order.get('status', order.get('status')),
+                            'average': filled_order.get('average', order.get('average')),
+                            'filled': filled_order.get('filled', order.get('filled')),
+                            'cost': filled_order.get('cost', order.get('cost')),
+                            'timestamp': filled_order.get('timestamp', order.get('timestamp'))
+                        })
+                except Exception as e:
+                    self.logger.warning(f"Could not fetch order status immediately: {e}")
+            
             # Log order details to main logger
-            avg_price = order.get('average') or order.get('price', 'N/A')
+            avg_price = order.get('average') or order.get('price') or reference_price
             self.logger.info(
                 f"Created {side} market order for {validated_amount} {symbol} "
                 f"at {leverage}x leverage (avg fill: {avg_price})"
@@ -506,7 +524,27 @@ class KuCoinClient:
             if order.get('cost'):
                 self.orders_logger.info(f"  Total Cost: {order.get('cost')}")
             self.orders_logger.info(f"  Status: {order.get('status', 'N/A')}")
-            self.orders_logger.info(f"  Timestamp: {order.get('timestamp', 'N/A')}")
+            # Format timestamp if available
+            timestamp = order.get('timestamp', 'N/A')
+            if timestamp and timestamp != 'N/A':
+                try:
+                    from datetime import datetime
+                    # Heuristic: if timestamp > 10^12, it's milliseconds; if < 10^10, it's seconds
+                    ts = float(timestamp)
+                    if ts > 1e12:
+                        ts = ts / 1000.0
+                    elif ts < 1e10:
+                        ts = ts
+                    else:
+                        # Ambiguous, log a warning and assume milliseconds
+                        self.orders_logger.warning(f"Ambiguous timestamp units for value: {timestamp}, assuming milliseconds.")
+                        ts = ts / 1000.0
+                    timestamp_str = datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+                    self.orders_logger.info(f"  Timestamp: {timestamp_str}")
+                except Exception as e:
+                    self.orders_logger.info(f"  Timestamp: {timestamp} (error: {e})")
+            else:
+                self.orders_logger.info(f"  Timestamp: N/A")
             
             # Check actual slippage if we have both prices
             if order.get('average'):

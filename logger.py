@@ -202,3 +202,8 @@ class Logger:
     def get_orders_logger():
         """Get the orders logger"""
         return logging.getLogger('OrdersLogger')
+    
+    @staticmethod
+    def get_strategy_logger():
+        """Get the strategy logger"""
+        return logging.getLogger('StrategyLogger')

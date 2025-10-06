@@ -38,6 +38,7 @@ class Config:
     POSITION_LOG_FILE = os.getenv('POSITION_LOG_FILE', 'logs/positions.log')
     SCANNING_LOG_FILE = os.getenv('SCANNING_LOG_FILE', 'logs/scanning.log')
     ORDERS_LOG_FILE = os.getenv('ORDERS_LOG_FILE', 'logs/orders.log')
+    STRATEGY_LOG_FILE = os.getenv('STRATEGY_LOG_FILE', 'logs/strategy.log')
     DETAILED_LOG_LEVEL = os.getenv('DETAILED_LOG_LEVEL', 'DEBUG')  # Level for position and scanning logs
     
     # Machine Learning
