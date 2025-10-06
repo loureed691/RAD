@@ -2,6 +2,7 @@
 Market scanner to find the best trading pairs
 """
 import time
+import threading
 from typing import List, Dict, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
@@ -24,6 +25,9 @@ class MarketScanner:
         self.cache_duration = 300  # 5 minutes cache
         self.last_full_scan = None
         self.scan_results_cache = []
+        
+        # Thread lock for cache access to prevent race conditions
+        self._cache_lock = threading.Lock()
     
     def scan_pair(self, symbol: str) -> Tuple[str, float, str, float, Dict]:
         """
@@ -34,14 +38,15 @@ class MarketScanner:
         """
         self.scanning_logger.debug(f"--- Scanning {symbol} ---")
         
-        # Check cache first
+        # Check cache first (thread-safe)
         cache_key = symbol
-        if cache_key in self.cache:
-            cached_data, timestamp = self.cache[cache_key]
-            if time.time() - timestamp < self.cache_duration:
-                self.logger.debug(f"Using cached data for {symbol}")
-                self.scanning_logger.debug(f"  Using cached data (age: {int(time.time() - timestamp)}s)")
-                return cached_data
+        with self._cache_lock:
+            if cache_key in self.cache:
+                cached_data, timestamp = self.cache[cache_key]
+                if time.time() - timestamp < self.cache_duration:
+                    self.logger.debug(f"Using cached data for {symbol}")
+                    self.scanning_logger.debug(f"  Using cached data (age: {int(time.time() - timestamp)}s)")
+                    return cached_data
         
         try:
             # Get OHLCV data for multiple timeframes
@@ -51,7 +56,8 @@ class MarketScanner:
                 self.logger.warning(f"No OHLCV data for {symbol}")
                 self.scanning_logger.warning(f"  ⚠ No OHLCV data available")
                 result = (symbol, 0.0, 'HOLD', 0.0, {'error': 'No OHLCV data'})
-                self.cache[cache_key] = (result, time.time())
+                with self._cache_lock:
+                    self.cache[cache_key] = (result, time.time())
                 return result
             
             # Check if we have enough data
@@ -59,7 +65,8 @@ class MarketScanner:
                 self.logger.warning(f"Insufficient OHLCV data for {symbol}: only {len(ohlcv_1h)} candles (need 50+)")
                 self.scanning_logger.warning(f"  ⚠ Insufficient data: {len(ohlcv_1h)} candles (need 50+)")
                 result = (symbol, 0.0, 'HOLD', 0.0, {'error': f'Insufficient data: {len(ohlcv_1h)} candles'})
-                self.cache[cache_key] = (result, time.time())
+                with self._cache_lock:
+                    self.cache[cache_key] = (result, time.time())
                 return result
             
             self.scanning_logger.debug(f"  1h data: {len(ohlcv_1h)} candles")
@@ -78,7 +85,8 @@ class MarketScanner:
                 self.logger.warning(f"Could not calculate indicators for {symbol}")
                 self.scanning_logger.warning(f"  ⚠ Indicator calculation failed")
                 result = (symbol, 0.0, 'HOLD', 0.0, {'error': 'Indicator calculation failed'})
-                self.cache[cache_key] = (result, time.time())
+                with self._cache_lock:
+                    self.cache[cache_key] = (result, time.time())
                 return result
             
             # Calculate indicators for higher timeframes
@@ -98,8 +106,9 @@ class MarketScanner:
             
             result = (symbol, score, signal, confidence, reasons)
             
-            # Cache the result
-            self.cache[cache_key] = (result, time.time())
+            # Cache the result (thread-safe)
+            with self._cache_lock:
+                self.cache[cache_key] = (result, time.time())
             
             return result
             
@@ -107,7 +116,8 @@ class MarketScanner:
             self.logger.error(f"Error scanning {symbol}: {e}")
             self.scanning_logger.error(f"  ✗ Error: {e}")
             result = (symbol, 0.0, 'HOLD', 0.0, {'error': str(e)})
-            self.cache[cache_key] = (result, time.time())
+            with self._cache_lock:
+                self.cache[cache_key] = (result, time.time())
             return result
     
     def scan_all_pairs(self, max_workers: int = 10, use_cache: bool = True) -> List[Dict]:
@@ -292,8 +302,9 @@ class MarketScanner:
         return best_pairs
     
     def clear_cache(self):
-        """Clear all cached data"""
-        self.cache.clear()
-        self.scan_results_cache = []
-        self.last_full_scan = None
+        """Clear all cached data (thread-safe)"""
+        with self._cache_lock:
+            self.cache.clear()
+            self.scan_results_cache = []
+            self.last_full_scan = None
         self.logger.info("Market scanner cache cleared")
