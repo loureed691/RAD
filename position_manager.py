@@ -431,6 +431,7 @@ class PositionManager:
         self.trailing_stop_percentage = trailing_stop_percentage
         self.positions: Dict[str, Position] = {}
         self.logger = Logger.get_logger()
+        self.position_logger = Logger.get_position_logger()
         self.advanced_exit_strategy = AdvancedExitStrategy()
     
     def sync_existing_positions(self):
@@ -550,16 +551,30 @@ class PositionManager:
             True if position opened successfully, False otherwise
         """
         try:
+            # Log position opening attempt
+            self.position_logger.info(f"=" * 80)
+            self.position_logger.info(f"OPENING POSITION: {symbol}")
+            self.position_logger.info(f"  Signal: {signal} ({'LONG' if signal == 'BUY' else 'SHORT'})")
+            self.position_logger.info(f"  Amount: {amount:.4f} contracts")
+            self.position_logger.info(f"  Leverage: {leverage}x")
+            self.position_logger.info(f"  Stop Loss %: {stop_loss_percentage:.2%}")
+            self.position_logger.info(f"  Order Type: {'LIMIT' if use_limit else 'MARKET'}")
+            
             # Get current price
             ticker = self.client.get_ticker(symbol)
             if not ticker:
+                self.position_logger.error(f"  Failed to get ticker for {symbol}")
                 return False
             
             # Bug fix: Safely access 'last' price
             current_price = ticker.get('last')
             if not current_price or current_price <= 0:
                 self.logger.warning(f"Invalid price for {symbol}: {current_price}")
+                self.position_logger.error(f"  Invalid price: {current_price}")
                 return False
+            
+            self.position_logger.info(f"  Current Price: {current_price:.2f}")
+            
             side = 'buy' if signal == 'BUY' else 'sell'
             
             # Create order (market or limit)
@@ -570,16 +585,20 @@ class PositionManager:
                 else:
                     limit_price = current_price * (1 + limit_offset)
                 
+                self.position_logger.info(f"  Placing LIMIT order at {limit_price:.2f} (offset: {limit_offset:.2%})")
+                
                 order = self.client.create_limit_order(
                     symbol, side, amount, limit_price, leverage, post_only=True
                 )
                 
                 if not order:
                     self.logger.warning(f"Limit order failed, falling back to market order")
+                    self.position_logger.warning(f"  Limit order failed, using MARKET order")
                     order = self.client.create_market_order(symbol, side, amount, leverage)
                 elif 'id' in order:
                     # Bug fix: Check order has 'id' key before accessing
                     # Wait briefly for fill, cancel if not filled
+                    self.position_logger.info(f"  Limit order placed, waiting for fill (Order ID: {order['id']})")
                     order_status = self.client.wait_for_order_fill(
                         order['id'], symbol, timeout=10, check_interval=2
                     )
@@ -589,18 +608,25 @@ class PositionManager:
                         # Not filled, cancel and use market order
                         self.client.cancel_order(order['id'], symbol)
                         self.logger.info(f"Limit order not filled, using market order instead")
+                        self.position_logger.warning(f"  Limit order not filled, cancelled and using MARKET order")
                         order = self.client.create_market_order(symbol, side, amount, leverage)
+                    else:
+                        self.position_logger.info(f"  Limit order filled successfully")
                 else:
                     self.logger.warning(f"Limit order missing 'id', falling back to market order")
+                    self.position_logger.warning(f"  Limit order missing 'id', using MARKET order")
                     order = self.client.create_market_order(symbol, side, amount, leverage)
             else:
+                self.position_logger.info(f"  Placing MARKET order")
                 order = self.client.create_market_order(symbol, side, amount, leverage)
             
             if not order:
+                self.position_logger.error(f"  Order creation failed")
                 return False
             
             # Get actual fill price
             fill_price = order.get('average') or current_price
+            self.position_logger.info(f"  Order filled at: {fill_price:.2f}")
             
             # Calculate stop loss and take profit
             if signal == 'BUY':
@@ -609,6 +635,9 @@ class PositionManager:
             else:
                 stop_loss = fill_price * (1 + stop_loss_percentage)
                 take_profit = fill_price * (1 - stop_loss_percentage * 2)
+            
+            self.position_logger.info(f"  Stop Loss: {stop_loss:.2f} ({((stop_loss/fill_price - 1) if signal == 'SELL' else (stop_loss/fill_price - 1)):.2%})")
+            self.position_logger.info(f"  Take Profit: {take_profit:.2f} ({((take_profit/fill_price - 1) if signal == 'BUY' else (take_profit/fill_price - 1)):.2%})")
             
             # Create position object
             position = Position(
@@ -623,6 +652,12 @@ class PositionManager:
             
             self.positions[symbol] = position
             
+            position_value = amount * fill_price
+            self.position_logger.info(f"  Position Value: ${position_value:.2f}")
+            self.position_logger.info(f"  Leveraged Exposure: ${position_value * leverage:.2f}")
+            self.position_logger.info(f"✓ Position opened successfully at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            self.position_logger.info(f"=" * 80)
+            
             self.logger.info(
                 f"Opened {position.side} position: {symbol} @ {fill_price:.2f}, "
                 f"Amount: {amount}, Leverage: {leverage}x, "
@@ -633,6 +668,8 @@ class PositionManager:
             
         except Exception as e:
             self.logger.error(f"Error opening position: {e}")
+            self.position_logger.error(f"✗ FAILED to open position: {e}")
+            self.position_logger.info(f"=" * 80)
             return False
     
     def close_position(self, symbol: str, reason: str = 'manual') -> Optional[float]:
@@ -643,29 +680,57 @@ class PositionManager:
             
             position = self.positions[symbol]
             
+            self.position_logger.info(f"\n{'='*80}")
+            self.position_logger.info(f"CLOSING POSITION: {symbol}")
+            self.position_logger.info(f"  Reason: {reason}")
+            self.position_logger.info(f"  Side: {position.side.upper()}")
+            self.position_logger.info(f"  Entry Price: {position.entry_price:.2f}")
+            self.position_logger.info(f"  Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            
             # Get current price
             ticker = self.client.get_ticker(symbol)
             if not ticker:
+                self.position_logger.error(f"  ✗ Failed to get ticker")
                 return None
             
             # Bug fix: Safely access 'last' price
             current_price = ticker.get('last')
             if not current_price or current_price <= 0:
                 self.logger.warning(f"Invalid price for {symbol}: {current_price}")
+                self.position_logger.error(f"  ✗ Invalid price: {current_price}")
                 return None
             
-            # Close position on exchange
-            success = self.client.close_position(symbol)
-            if not success:
-                return None
+            self.position_logger.info(f"  Exit Price: {current_price:.2f}")
             
             # Calculate P/L
             pnl = position.get_pnl(current_price)
+            position_value = position.amount * position.entry_price
+            pnl_usd = (pnl / position.leverage) * position_value if position.leverage > 0 else 0
+            
+            # Calculate duration
+            duration = datetime.now() - position.entry_time
+            duration_mins = duration.total_seconds() / 60
+            
+            self.position_logger.info(f"  P/L: {pnl:+.2%} (${pnl_usd:+.2f})")
+            self.position_logger.info(f"  Duration: {duration_mins:.1f} minutes")
+            self.position_logger.info(f"  Max Favorable Excursion: {position.max_favorable_excursion:.2%}")
+            
+            # Close position on exchange
+            self.position_logger.info(f"  Closing position on exchange...")
+            success = self.client.close_position(symbol)
+            if not success:
+                self.position_logger.error(f"  ✗ Failed to close position on exchange")
+                return None
+            
+            self.position_logger.info(f"  ✓ Position closed on exchange")
             
             self.logger.info(
                 f"Closed {position.side} position: {symbol} @ {current_price:.2f}, "
                 f"Entry: {position.entry_price:.2f}, P/L: {pnl:.2%}, Reason: {reason}"
             )
+            
+            self.position_logger.info(f"✓ Position closed successfully at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            self.position_logger.info(f"{'='*80}\n")
             
             # Remove from positions
             del self.positions[symbol]
@@ -674,24 +739,51 @@ class PositionManager:
             
         except Exception as e:
             self.logger.error(f"Error closing position: {e}")
+            self.position_logger.error(f"✗ FAILED to close position: {e}")
+            self.position_logger.info(f"{'='*80}\n")
             return None
     
     def update_positions(self):
         """Update all positions and manage trailing stops with adaptive parameters"""
+        if self.positions:
+            self.position_logger.info(f"\n{'='*80}")
+            self.position_logger.info(f"UPDATING {len(self.positions)} OPEN POSITION(S) - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            self.position_logger.info(f"{'='*80}")
+        
         for symbol in list(self.positions.keys()):
             try:
                 position = self.positions[symbol]
                 
+                self.position_logger.info(f"\n--- Position: {symbol} ({position.side.upper()}) ---")
+                self.position_logger.debug(f"  Entry Price: {position.entry_price:.2f}")
+                self.position_logger.debug(f"  Amount: {position.amount:.4f} contracts")
+                self.position_logger.debug(f"  Leverage: {position.leverage}x")
+                self.position_logger.debug(f"  Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                
                 # Get current price
                 ticker = self.client.get_ticker(symbol)
                 if not ticker:
+                    self.position_logger.warning(f"  ⚠ Failed to get ticker")
                     continue
                 
                 # Bug fix: Safely access 'last' price
                 current_price = ticker.get('last')
                 if not current_price or current_price <= 0:
                     self.logger.warning(f"Invalid price for {symbol}: {current_price}, skipping")
+                    self.position_logger.warning(f"  ⚠ Invalid price: {current_price}")
                     continue
+                
+                self.position_logger.info(f"  Current Price: {current_price:.2f}")
+                
+                # Calculate current P/L
+                current_pnl = position.get_pnl(current_price)
+                position_value = position.amount * position.entry_price
+                pnl_usd = (current_pnl / position.leverage) * position_value if position.leverage > 0 else 0
+                
+                self.position_logger.info(f"  Current P/L: {current_pnl:+.2%} (${pnl_usd:+.2f})")
+                self.position_logger.debug(f"  Stop Loss: {position.stop_loss:.2f}")
+                self.position_logger.debug(f"  Take Profit: {position.take_profit:.2f}")
+                self.position_logger.debug(f"  Max Favorable Excursion: {position.max_favorable_excursion:.2%}")
                 
                 # Get market data for adaptive parameters
                 ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
@@ -705,6 +797,11 @@ class PositionManager:
                         volatility = indicators.get('bb_width', 0.03)
                         momentum = indicators.get('momentum', 0.0)
                         rsi = indicators.get('rsi', 50.0)
+                        
+                        self.position_logger.debug(f"  Market Indicators:")
+                        self.position_logger.debug(f"    Volatility (BB Width): {volatility:.4f}")
+                        self.position_logger.debug(f"    Momentum: {momentum:+.4f}")
+                        self.position_logger.debug(f"    RSI: {rsi:.2f}")
                         
                         # Calculate support/resistance levels
                         support_resistance = Indicators.calculate_support_resistance(df)
@@ -722,7 +819,10 @@ class PositionManager:
                         else:
                             trend_strength = 0.5
                         
+                        self.position_logger.debug(f"    Trend Strength: {trend_strength:.2f}")
+                        
                         # Update trailing stop with adaptive parameters
+                        old_stop = position.stop_loss
                         position.update_trailing_stop(
                             current_price, 
                             self.trailing_stop_percentage,
@@ -730,7 +830,11 @@ class PositionManager:
                             momentum=momentum
                         )
                         
+                        if position.stop_loss != old_stop:
+                            self.position_logger.info(f"  🔄 Trailing stop updated: {old_stop:.2f} -> {position.stop_loss:.2f}")
+                        
                         # Update take profit dynamically with all parameters
+                        old_tp = position.take_profit
                         position.update_take_profit(
                             current_price,
                             momentum=momentum,
@@ -739,11 +843,16 @@ class PositionManager:
                             rsi=rsi,
                             support_resistance=support_resistance
                         )
+                        
+                        if position.take_profit != old_tp:
+                            self.position_logger.info(f"  🎯 Take profit adjusted: {old_tp:.2f} -> {position.take_profit:.2f}")
                     else:
                         # Fallback to simple update if indicators fail
+                        self.position_logger.debug(f"  Using simple trailing stop (indicators failed)")
                         position.update_trailing_stop(current_price, self.trailing_stop_percentage)
                 else:
                     # Fallback to simple update if no market data
+                    self.position_logger.debug(f"  Using simple trailing stop (no market data)")
                     position.update_trailing_stop(current_price, self.trailing_stop_percentage)
                 
                 # Check if position should be closed
@@ -775,14 +884,19 @@ class PositionManager:
                     position_data, market_data
                 )
                 
+                if should_exit_advanced:
+                    self.position_logger.info(f"  🚨 Advanced exit signal: {exit_reason}")
+                
                 # Update stop loss if breakeven+ suggests a new level
                 if suggested_stop is not None and suggested_stop != position.stop_loss:
                     old_stop = position.stop_loss
                     position.stop_loss = suggested_stop
                     self.logger.info(f"🔒 Updated {symbol} stop loss: {old_stop:.2f} -> {suggested_stop:.2f} ({exit_reason})")
+                    self.position_logger.info(f"  🔒 Stop loss adjusted: {old_stop:.2f} -> {suggested_stop:.2f} ({exit_reason})")
                 
                 # If advanced strategy says exit, do it
                 if should_exit_advanced:
+                    self.position_logger.info(f"  ✓ Closing position: {exit_reason}")
                     pnl = self.close_position(symbol, exit_reason)
                     if pnl is not None:
                         yield symbol, pnl, position
@@ -791,17 +905,24 @@ class PositionManager:
                 # Check standard stop loss and take profit conditions
                 should_close, reason = position.should_close(current_price)
                 if should_close:
+                    self.position_logger.info(f"  ✓ Closing position: {reason}")
                     pnl = self.close_position(symbol, reason)
                     if pnl is not None:
                         yield symbol, pnl, position
+                else:
+                    self.position_logger.info(f"  ✓ Position still open and healthy")
                 
             except Exception as e:
                 self.logger.error(f"Error updating position {symbol}: {e}")
+                self.position_logger.error(f"  ✗ Error updating position: {e}")
                 # Try simple update as fallback
                 try:
                     position.update_trailing_stop(current_price, self.trailing_stop_percentage)
                 except Exception:
                     pass
+        
+        if self.positions:
+            self.position_logger.info(f"{'='*80}\n")
     
     def get_open_positions_count(self) -> int:
         """Get number of open positions"""
