@@ -17,22 +17,39 @@ class Indicators:
         Calculate all technical indicators from OHLCV data
         
         Args:
-            ohlcv_data: List of [timestamp, open, high, low, close, volume]
+            ohlcv_data: List of [timestamp, open, high, low, close, volume] or DataFrame
         
         Returns:
             DataFrame with all indicators
         """
-        if not ohlcv_data:
-            return pd.DataFrame()
-            
-        if len(ohlcv_data) < 50:
-            # Return empty DataFrame with a note - caller should check for this
+        # Handle empty data
+        if ohlcv_data is None:
             return pd.DataFrame()
         
-        try:
+        # If it's a DataFrame, use it directly
+        if isinstance(ohlcv_data, pd.DataFrame):
+            df = ohlcv_data.copy()
+            # Ensure timestamp column exists and is datetime
+            if 'timestamp' in df.columns and not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
+                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', errors='coerce')
+        else:
+            # Handle list input
+            if len(ohlcv_data) == 0:
+                return pd.DataFrame()
+            
+            if len(ohlcv_data) < 50:
+                # Return empty DataFrame - caller should check for this
+                return pd.DataFrame()
+            
             # Convert to DataFrame
             df = pd.DataFrame(ohlcv_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        
+        # Check minimum data requirement
+        if len(df) < 50:
+            return pd.DataFrame()
+        
+        try:
             
             # Moving Averages
             df['sma_20'] = SMAIndicator(df['close'], window=20).sma_indicator()
