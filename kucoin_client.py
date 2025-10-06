@@ -397,7 +397,7 @@ class KuCoinClient:
     
     def create_market_order(self, symbol: str, side: str, amount: float, 
                            leverage: int = 10, max_slippage: float = 0.01,
-                           validate_depth: bool = True) -> Optional[Dict]:
+                           validate_depth: bool = True, strategy: str = None) -> Optional[Dict]:
         """Create a market order with leverage and slippage protection
         
         Args:
@@ -407,6 +407,7 @@ class KuCoinClient:
             leverage: Leverage to use
             max_slippage: Maximum acceptable slippage (default 1%)
             validate_depth: Check order book depth before large orders
+            strategy: Trading strategy that triggered this order (optional)
         
         Returns:
             Order dict if successful, None otherwise
@@ -482,8 +483,18 @@ class KuCoinClient:
                 params={"marginMode": "cross"}
             )
             
+            # Wait for order to fill and get complete order details
+            order_id = order.get('id')
+            if order_id:
+                # Wait a short time for market order to fill (they usually fill instantly)
+                time.sleep(0.5)
+                filled_order = self.get_order_status(order_id, symbol)
+                if filled_order:
+                    # Merge the filled order details with the initial order
+                    order.update(filled_order)
+            
             # Log order details to main logger
-            avg_price = order.get('average') or order.get('price', 'N/A')
+            avg_price = order.get('average') or order.get('price', reference_price)
             self.logger.info(
                 f"Created {side} market order for {validated_amount} {symbol} "
                 f"at {leverage}x leverage (avg fill: {avg_price})"
@@ -493,6 +504,8 @@ class KuCoinClient:
             self.orders_logger.info("=" * 80)
             self.orders_logger.info(f"{side.upper()} ORDER EXECUTED: {symbol}")
             self.orders_logger.info("-" * 80)
+            if strategy:
+                self.orders_logger.info(f"  Strategy: {strategy}")
             self.orders_logger.info(f"  Order ID: {order.get('id', 'N/A')}")
             self.orders_logger.info(f"  Type: MARKET")
             self.orders_logger.info(f"  Side: {side.upper()}")
@@ -506,7 +519,19 @@ class KuCoinClient:
             if order.get('cost'):
                 self.orders_logger.info(f"  Total Cost: {order.get('cost')}")
             self.orders_logger.info(f"  Status: {order.get('status', 'N/A')}")
-            self.orders_logger.info(f"  Timestamp: {order.get('timestamp', 'N/A')}")
+            
+            # Format timestamp if available
+            timestamp = order.get('timestamp')
+            if timestamp:
+                from datetime import datetime
+                if isinstance(timestamp, (int, float)):
+                    # Convert Unix timestamp (milliseconds) to readable format
+                    timestamp_str = datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S')
+                    self.orders_logger.info(f"  Timestamp: {timestamp_str}")
+                else:
+                    self.orders_logger.info(f"  Timestamp: {timestamp}")
+            else:
+                self.orders_logger.info(f"  Timestamp: N/A")
             
             # Check actual slippage if we have both prices
             if order.get('average'):
@@ -713,7 +738,8 @@ class KuCoinClient:
     
     def create_stop_limit_order(self, symbol: str, side: str, amount: float,
                                stop_price: float, limit_price: float, 
-                               leverage: int = 10, reduce_only: bool = False) -> Optional[Dict]:
+                               leverage: int = 10, reduce_only: bool = False,
+                               order_type_label: str = None) -> Optional[Dict]:
         """Create a stop-limit order for stop loss or take profit
         
         Args:
@@ -724,6 +750,7 @@ class KuCoinClient:
             limit_price: Limit price after stop triggers
             leverage: Leverage to use
             reduce_only: If True, order only reduces position
+            order_type_label: Label for order type (e.g., 'STOP-LOSS', 'TAKE-PROFIT')
         
         Returns:
             Order dict if successful, None otherwise
@@ -764,10 +791,11 @@ class KuCoinClient:
             
             # Log detailed order information to orders logger
             self.orders_logger.info("=" * 80)
-            self.orders_logger.info(f"{side.upper()} ORDER CREATED: {symbol}")
+            order_label = order_type_label if order_type_label else "STOP-LIMIT"
+            self.orders_logger.info(f"{side.upper()} {order_label} ORDER CREATED: {symbol}")
             self.orders_logger.info("-" * 80)
             self.orders_logger.info(f"  Order ID: {order.get('id', 'N/A')}")
-            self.orders_logger.info(f"  Type: STOP-LIMIT")
+            self.orders_logger.info(f"  Type: {order_label}")
             self.orders_logger.info(f"  Side: {side.upper()}")
             self.orders_logger.info(f"  Symbol: {symbol}")
             self.orders_logger.info(f"  Amount: {validated_amount} contracts")

@@ -584,7 +584,8 @@ class PositionManager:
     
     def open_position(self, symbol: str, signal: str, amount: float, 
                      leverage: int, stop_loss_percentage: float = 0.05,
-                     use_limit: bool = False, limit_offset: float = 0.001) -> bool:
+                     use_limit: bool = False, limit_offset: float = 0.001,
+                     strategy: str = 'unknown') -> bool:
         """Open a new position with optional limit order
         
         Args:
@@ -595,6 +596,7 @@ class PositionManager:
             stop_loss_percentage: Stop loss distance as percentage
             use_limit: If True, uses limit order instead of market order
             limit_offset: Price offset for limit orders (default 0.1%)
+            strategy: Trading strategy that triggered this position (e.g., 'RSI', 'MACD', 'ML')
         
         Returns:
             True if position opened successfully, False otherwise
@@ -603,6 +605,7 @@ class PositionManager:
             # Log position opening attempt
             self.position_logger.info(f"=" * 80)
             self.position_logger.info(f"OPENING POSITION: {symbol}")
+            self.position_logger.info(f"  Strategy: {strategy}")
             self.position_logger.info(f"  Signal: {signal} ({'LONG' if signal == 'BUY' else 'SHORT'})")
             self.position_logger.info(f"  Amount: {amount:.4f} contracts")
             self.position_logger.info(f"  Leverage: {leverage}x")
@@ -643,7 +646,7 @@ class PositionManager:
                 if not order:
                     self.logger.warning(f"Limit order failed, falling back to market order")
                     self.position_logger.warning(f"  Limit order failed, using MARKET order")
-                    order = self.client.create_market_order(symbol, side, amount, leverage)
+                    order = self.client.create_market_order(symbol, side, amount, leverage, strategy=strategy)
                 elif 'id' in order:
                     # Bug fix: Check order has 'id' key before accessing
                     # Wait briefly for fill, cancel if not filled
@@ -658,16 +661,16 @@ class PositionManager:
                         self.client.cancel_order(order['id'], symbol)
                         self.logger.info(f"Limit order not filled, using market order instead")
                         self.position_logger.warning(f"  Limit order not filled, cancelled and using MARKET order")
-                        order = self.client.create_market_order(symbol, side, amount, leverage)
+                        order = self.client.create_market_order(symbol, side, amount, leverage, strategy=strategy)
                     else:
                         self.position_logger.info(f"  Limit order filled successfully")
                 else:
                     self.logger.warning(f"Limit order missing 'id', falling back to market order")
                     self.position_logger.warning(f"  Limit order missing 'id', using MARKET order")
-                    order = self.client.create_market_order(symbol, side, amount, leverage)
+                    order = self.client.create_market_order(symbol, side, amount, leverage, strategy=strategy)
             else:
                 self.position_logger.info(f"  Placing MARKET order")
-                order = self.client.create_market_order(symbol, side, amount, leverage)
+                order = self.client.create_market_order(symbol, side, amount, leverage, strategy=strategy)
             
             if not order:
                 self.position_logger.error(f"  Order creation failed")
@@ -689,6 +692,54 @@ class PositionManager:
             take_profit_pct = (1 - take_profit/fill_price) if signal == 'SELL' else (take_profit/fill_price - 1)
             self.position_logger.info(f"  Stop Loss: {format_price(stop_loss)} ({stop_loss_pct:.2%})")
             self.position_logger.info(f"  Take Profit: {format_price(take_profit)} ({take_profit_pct:.2%})")
+            
+            # Place stop-loss and take-profit orders on the exchange
+            self.position_logger.info(f"  Placing Stop-Loss and Take-Profit orders...")
+            
+            # Place stop-loss order (close position on adverse price move)
+            sl_side = 'sell' if signal == 'BUY' else 'buy'  # Opposite side to close position
+            try:
+                stop_loss_order = self.client.create_stop_limit_order(
+                    symbol=symbol,
+                    side=sl_side,
+                    amount=amount,
+                    stop_price=stop_loss,
+                    limit_price=stop_loss,  # Use same price for stop and limit
+                    leverage=leverage,
+                    reduce_only=True,  # Only close position, don't open new one
+                    order_type_label='STOP-LOSS'
+                )
+                if stop_loss_order:
+                    self.position_logger.info(f"  ✓ Stop-Loss order placed: ID {stop_loss_order.get('id', 'N/A')}")
+                    self.logger.info(f"Placed stop-loss order for {symbol} at {format_price(stop_loss)}")
+                else:
+                    self.position_logger.warning(f"  ⚠ Failed to place Stop-Loss order")
+                    self.logger.warning(f"Failed to place stop-loss order for {symbol}")
+            except Exception as e:
+                self.position_logger.warning(f"  ⚠ Stop-Loss order error: {e}")
+                self.logger.warning(f"Error placing stop-loss order for {symbol}: {e}")
+            
+            # Place take-profit order (close position on favorable price move)
+            try:
+                take_profit_order = self.client.create_stop_limit_order(
+                    symbol=symbol,
+                    side=sl_side,  # Same as stop-loss (opposite side to entry)
+                    amount=amount,
+                    stop_price=take_profit,
+                    limit_price=take_profit,  # Use same price for stop and limit
+                    leverage=leverage,
+                    reduce_only=True,  # Only close position, don't open new one
+                    order_type_label='TAKE-PROFIT'
+                )
+                if take_profit_order:
+                    self.position_logger.info(f"  ✓ Take-Profit order placed: ID {take_profit_order.get('id', 'N/A')}")
+                    self.logger.info(f"Placed take-profit order for {symbol} at {format_price(take_profit)}")
+                else:
+                    self.position_logger.warning(f"  ⚠ Failed to place Take-Profit order")
+                    self.logger.warning(f"Failed to place take-profit order for {symbol}")
+            except Exception as e:
+                self.position_logger.warning(f"  ⚠ Take-Profit order error: {e}")
+                self.logger.warning(f"Error placing take-profit order for {symbol}: {e}")
             
             # Create position object
             position = Position(
