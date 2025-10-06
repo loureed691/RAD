@@ -235,11 +235,46 @@ Multiple layers of risk management:
 
 ## Logging and Monitoring
 
-Logs are written to both console and file (default: `logs/bot.log`):
+The bot uses a comprehensive logging system with three separate log files:
 
-- **INFO**: General operation logs (trades, signals, positions)
+### Main Log (`logs/bot.log`)
+- **Level**: INFO (configurable)
+- **Content**: General bot operations, trades, signals, and positions
+- **Purpose**: High-level overview of bot activity
+
+### Position Tracking Log (`logs/positions.log`)
+- **Level**: DEBUG (configurable)
+- **Content**: Detailed position lifecycle tracking
+  - Position opening with entry price, leverage, stop loss, take profit
+  - Real-time position updates with current P/L and market indicators
+  - Trailing stop and take profit adjustments
+  - Position closing with exit price, final P/L, and duration
+- **Purpose**: Comprehensive tracking of all position-related activities
+
+### Market Scanning Log (`logs/scanning.log`)
+- **Level**: DEBUG (configurable)
+- **Content**: Detailed market scanning activity
+  - Individual pair analysis with indicators and signals
+  - Scan results and filtering decisions
+  - Trading opportunities with scores and confidence levels
+  - Scan summaries with top opportunities
+- **Purpose**: Complete visibility into market analysis and opportunity detection
+
+### Log Levels
+- **DEBUG**: Detailed information for debugging and analysis
+- **INFO**: General operational information
 - **WARNING**: Important notices (insufficient balance, max positions reached)
 - **ERROR**: Errors and exceptions with full stack traces
+
+### Configuration
+You can customize the logging behavior in your `.env` file:
+```bash
+LOG_LEVEL=INFO              # Main log level
+LOG_FILE=logs/bot.log       # Main log file
+POSITION_LOG_FILE=logs/positions.log   # Position tracking log
+SCANNING_LOG_FILE=logs/scanning.log    # Market scanning log
+DETAILED_LOG_LEVEL=DEBUG    # Level for position and scanning logs
+```
 
 ## Safety Features
 
