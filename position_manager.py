@@ -529,13 +529,27 @@ class PositionManager:
                 # 1. Try CCXT unified 'leverage' field
                 leverage = pos.get('leverage')
                 if leverage is not None:
-                    leverage = int(leverage)
+                    try:
+                        leverage = int(leverage)
+                    except (ValueError, TypeError):
+                        self.logger.warning(
+                            f"Invalid leverage value '{leverage}' for {symbol}, defaulting to 10x. "
+                            f"Position data: contracts={contracts}, side={side}"
+                        )
+                        leverage = 10
                 else:
                     # 2. Try KuCoin-specific 'realLeverage' in raw info
                     info = pos.get('info', {})
                     real_leverage = info.get('realLeverage')
                     if real_leverage is not None:
-                        leverage = int(real_leverage)
+                        try:
+                            leverage = int(real_leverage)
+                        except (ValueError, TypeError):
+                            self.logger.warning(
+                                f"Invalid realLeverage value '{real_leverage}' for {symbol}, defaulting to 10x. "
+                                f"Position data: contracts={contracts}, side={side}"
+                            )
+                            leverage = 10
                     else:
                         # 3. Default to 10x with warning
                         leverage = 10
