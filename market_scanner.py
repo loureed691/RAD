@@ -31,30 +31,33 @@ class MarketScanner:
     
     def scan_pair(self, symbol: str) -> Tuple[str, float, str, float, Dict]:
         """
-        Scan a single trading pair with caching and multi-timeframe analysis
+        Scan a single trading pair with caching as fallback only
         
         Returns:
             Tuple of (symbol, score, signal, confidence, reasons)
         """
         self.scanning_logger.debug(f"--- Scanning {symbol} ---")
         
-        # Check cache first (thread-safe)
+        # Always try to fetch live data first
         cache_key = symbol
-        with self._cache_lock:
-            if cache_key in self.cache:
-                cached_data, timestamp = self.cache[cache_key]
-                if time.time() - timestamp < self.cache_duration:
-                    self.logger.debug(f"Using cached data for {symbol}")
-                    self.scanning_logger.debug(f"  Using cached data (age: {int(time.time() - timestamp)}s)")
-                    return cached_data
         
         try:
             # Get OHLCV data for multiple timeframes
             self.scanning_logger.debug(f"  Fetching OHLCV data...")
             ohlcv_1h = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
             if not ohlcv_1h:
-                self.logger.warning(f"No OHLCV data for {symbol}")
-                self.scanning_logger.warning(f"  ⚠ No OHLCV data available")
+                self.logger.warning(f"No OHLCV data for {symbol}, checking cache...")
+                self.scanning_logger.warning(f"  ⚠ No OHLCV data available, checking cache...")
+                # Try to use cached data as fallback
+                with self._cache_lock:
+                    if cache_key in self.cache:
+                        cached_data, timestamp = self.cache[cache_key]
+                        cache_age = time.time() - timestamp
+                        if cache_age < self.cache_duration:
+                            self.logger.info(f"Using cached data as fallback for {symbol} (age: {int(cache_age)}s)")
+                            self.scanning_logger.info(f"  ℹ Using cached data as fallback (age: {int(cache_age)}s)")
+                            return cached_data
+                # No cache available, return empty result
                 result = (symbol, 0.0, 'HOLD', 0.0, {'error': 'No OHLCV data'})
                 with self._cache_lock:
                     self.cache[cache_key] = (result, time.time())
@@ -62,8 +65,18 @@ class MarketScanner:
             
             # Check if we have enough data
             if len(ohlcv_1h) < 50:
-                self.logger.warning(f"Insufficient OHLCV data for {symbol}: only {len(ohlcv_1h)} candles (need 50+)")
-                self.scanning_logger.warning(f"  ⚠ Insufficient data: {len(ohlcv_1h)} candles (need 50+)")
+                self.logger.warning(f"Insufficient OHLCV data for {symbol}: only {len(ohlcv_1h)} candles (need 50+), checking cache...")
+                self.scanning_logger.warning(f"  ⚠ Insufficient data: {len(ohlcv_1h)} candles (need 50+), checking cache...")
+                # Try to use cached data as fallback
+                with self._cache_lock:
+                    if cache_key in self.cache:
+                        cached_data, timestamp = self.cache[cache_key]
+                        cache_age = time.time() - timestamp
+                        if cache_age < self.cache_duration:
+                            self.logger.info(f"Using cached data as fallback for {symbol} (age: {int(cache_age)}s)")
+                            self.scanning_logger.info(f"  ℹ Using cached data as fallback (age: {int(cache_age)}s)")
+                            return cached_data
+                # No cache available, return empty result
                 result = (symbol, 0.0, 'HOLD', 0.0, {'error': f'Insufficient data: {len(ohlcv_1h)} candles'})
                 with self._cache_lock:
                     self.cache[cache_key] = (result, time.time())
@@ -82,8 +95,18 @@ class MarketScanner:
             self.scanning_logger.debug(f"  Calculating indicators...")
             df_1h = Indicators.calculate_all(ohlcv_1h)
             if df_1h.empty:
-                self.logger.warning(f"Could not calculate indicators for {symbol}")
-                self.scanning_logger.warning(f"  ⚠ Indicator calculation failed")
+                self.logger.warning(f"Could not calculate indicators for {symbol}, checking cache...")
+                self.scanning_logger.warning(f"  ⚠ Indicator calculation failed, checking cache...")
+                # Try to use cached data as fallback
+                with self._cache_lock:
+                    if cache_key in self.cache:
+                        cached_data, timestamp = self.cache[cache_key]
+                        cache_age = time.time() - timestamp
+                        if cache_age < self.cache_duration:
+                            self.logger.info(f"Using cached data as fallback for {symbol} (age: {int(cache_age)}s)")
+                            self.scanning_logger.info(f"  ℹ Using cached data as fallback (age: {int(cache_age)}s)")
+                            return cached_data
+                # No cache available, return empty result
                 result = (symbol, 0.0, 'HOLD', 0.0, {'error': 'Indicator calculation failed'})
                 with self._cache_lock:
                     self.cache[cache_key] = (result, time.time())
@@ -113,8 +136,18 @@ class MarketScanner:
             return result
             
         except Exception as e:
-            self.logger.error(f"Error scanning {symbol}: {e}")
-            self.scanning_logger.error(f"  ✗ Error: {e}")
+            self.logger.error(f"Error scanning {symbol}: {e}, checking cache...")
+            self.scanning_logger.error(f"  ✗ Error: {e}, checking cache...")
+            # Try to use cached data as fallback
+            with self._cache_lock:
+                if cache_key in self.cache:
+                    cached_data, timestamp = self.cache[cache_key]
+                    cache_age = time.time() - timestamp
+                    if cache_age < self.cache_duration:
+                        self.logger.info(f"Using cached data as fallback for {symbol} (age: {int(cache_age)}s)")
+                        self.scanning_logger.info(f"  ℹ Using cached data as fallback (age: {int(cache_age)}s)")
+                        return cached_data
+            # No cache available, return error result
             result = (symbol, 0.0, 'HOLD', 0.0, {'error': str(e)})
             with self._cache_lock:
                 self.cache[cache_key] = (result, time.time())
@@ -126,7 +159,7 @@ class MarketScanner:
         
         Args:
             max_workers: Number of parallel workers
-            use_cache: Whether to use cached results if available
+            use_cache: Whether to use cached results as fallback if live fetch fails
         
         Returns:
             List of dicts with scan results sorted by score
@@ -135,23 +168,23 @@ class MarketScanner:
         self.scanning_logger.info(f"FULL MARKET SCAN - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.scanning_logger.info(f"{'='*80}")
         
-        # Check if we can use cached results
-        if use_cache and self.scan_results_cache and self.last_full_scan:
-            time_since_scan = (datetime.now() - self.last_full_scan).total_seconds()
-            if time_since_scan < self.cache_duration:
-                self.logger.info(f"Using cached market scan results ({time_since_scan:.0f}s old)")
-                self.scanning_logger.info(f"Using cached results (age: {time_since_scan:.0f}s)")
-                self.scanning_logger.info(f"{'='*80}\n")
-                return self.scan_results_cache
-        
-        self.logger.info("Starting market scan...")
+        self.logger.info("Starting market scan with live data...")
         
         # Get all active futures
         self.scanning_logger.info("Fetching active futures contracts...")
         futures = self.client.get_active_futures()
         if not futures:
-            self.logger.warning("No active futures found")
-            self.scanning_logger.warning("⚠ No active futures found")
+            self.logger.warning("No active futures found, checking for cached results...")
+            self.scanning_logger.warning("⚠ No active futures found, checking for cached results...")
+            # Try to use cached results as fallback
+            if use_cache and self.scan_results_cache and self.last_full_scan:
+                time_since_scan = (datetime.now() - self.last_full_scan).total_seconds()
+                if time_since_scan < self.cache_duration:
+                    self.logger.info(f"Using cached market scan results as fallback ({time_since_scan:.0f}s old)")
+                    self.scanning_logger.info(f"Using cached results as fallback (age: {time_since_scan:.0f}s)")
+                    self.scanning_logger.info(f"{'='*80}\n")
+                    return self.scan_results_cache
+            # No cache available
             self.scanning_logger.info(f"{'='*80}\n")
             return []
         
