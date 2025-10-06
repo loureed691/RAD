@@ -13,6 +13,7 @@ class SignalGenerator:
     
     def __init__(self):
         self.logger = Logger.get_logger()
+        self.strategy_logger = Logger.get_strategy_logger()
         self.market_regime = 'neutral'  # 'trending', 'ranging', 'neutral'
         self.adaptive_threshold = 0.55
         self.pattern_recognizer = PatternRecognition()
@@ -285,6 +286,25 @@ class SignalGenerator:
                     reasons['confidence'] = f'too low after MTF adjustment ({confidence:.2f} < {adjusted_min_confidence:.2f})'
         
         self.logger.debug(f"Signal: {signal}, Confidence: {confidence:.2f}, Regime: {self.market_regime}, Buy: {buy_signals:.1f}/{total_signals:.1f}, Sell: {sell_signals:.1f}/{total_signals:.1f}")
+        
+        # Log strategy details to strategy logger if signal is not HOLD
+        if signal != 'HOLD':
+            self.strategy_logger.info("=" * 80)
+            self.strategy_logger.info(f"TRADING STRATEGY ANALYSIS")
+            self.strategy_logger.info("-" * 80)
+            self.strategy_logger.info(f"  Signal: {signal}")
+            self.strategy_logger.info(f"  Confidence: {confidence:.2%}")
+            self.strategy_logger.info(f"  Market Regime: {self.market_regime}")
+            self.strategy_logger.info(f"  Buy Signals: {buy_signals:.2f} / {total_signals:.2f}")
+            self.strategy_logger.info(f"  Sell Signals: {sell_signals:.2f} / {total_signals:.2f}")
+            self.strategy_logger.info(f"  Multi-Timeframe Alignment: {mtf_analysis['trend_alignment']}")
+            self.strategy_logger.info("")
+            self.strategy_logger.info("  Strategy Components:")
+            for key, value in reasons.items():
+                if key not in ['no_signals', 'equal_signals', 'confidence']:
+                    self.strategy_logger.info(f"    - {key}: {value}")
+            self.strategy_logger.info("=" * 80)
+            self.strategy_logger.info("")
         
         return signal, confidence, reasons
     
