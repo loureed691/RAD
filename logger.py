@@ -101,6 +101,9 @@ class Logger:
         logger = logging.getLogger('TradingBot')
         logger.setLevel(getattr(logging, log_level))
         
+        # Prevent propagation to root logger to avoid duplicate messages
+        logger.propagate = False
+        
         # Clear existing handlers
         logger.handlers.clear()
         
