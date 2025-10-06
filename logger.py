@@ -142,6 +142,58 @@ class Logger:
         return logger
     
     @staticmethod
+    def setup_specialized_logger(name: str, log_file: str, log_level='DEBUG'):
+        """
+        Set up a specialized logger for specific components (e.g., positions, scanning)
+        
+        Args:
+            name: Logger name (e.g., 'PositionLogger', 'ScanningLogger')
+            log_file: Path to log file
+            log_level: Logging level for this logger
+        
+        Returns:
+            Configured logger instance
+        """
+        # Create logs directory if it doesn't exist
+        log_dir = os.path.dirname(log_file)
+        if log_dir and not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        
+        # Configure specialized logger
+        logger = logging.getLogger(name)
+        logger.setLevel(getattr(logging, log_level))
+        
+        # Clear existing handlers
+        logger.handlers.clear()
+        
+        # Prevent propagation to parent logger to avoid duplicate logs
+        logger.propagate = False
+        
+        # File handler (plain text, detailed)
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setLevel(getattr(logging, log_level))
+        file_formatter = logging.Formatter(
+            '%(asctime)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        file_handler.setFormatter(file_formatter)
+        
+        # Add only file handler (no console output for specialized loggers)
+        logger.addHandler(file_handler)
+        
+        return logger
+    
+    @staticmethod
     def get_logger():
         """Get the trading bot logger"""
         return logging.getLogger('TradingBot')
+    
+    @staticmethod
+    def get_position_logger():
+        """Get the position tracking logger"""
+        return logging.getLogger('PositionLogger')
+    
+    @staticmethod
+    def get_scanning_logger():
+        """Get the market scanning logger"""
+        return logging.getLogger('ScanningLogger')

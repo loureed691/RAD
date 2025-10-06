@@ -35,6 +35,9 @@ class Config:
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     LOG_FILE = os.getenv('LOG_FILE', 'logs/bot.log')
+    POSITION_LOG_FILE = os.getenv('POSITION_LOG_FILE', 'logs/positions.log')
+    SCANNING_LOG_FILE = os.getenv('SCANNING_LOG_FILE', 'logs/scanning.log')
+    DETAILED_LOG_LEVEL = os.getenv('DETAILED_LOG_LEVEL', 'DEBUG')  # Level for position and scanning logs
     
     # Machine Learning
     RETRAIN_INTERVAL = int(os.getenv('RETRAIN_INTERVAL', '86400'))

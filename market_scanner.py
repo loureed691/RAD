@@ -17,6 +17,7 @@ class MarketScanner:
         self.client = client
         self.signal_generator = SignalGenerator()
         self.logger = Logger.get_logger()
+        self.scanning_logger = Logger.get_scanning_logger()
         
         # Caching mechanism to avoid redundant scans
         self.cache = {}
@@ -31,19 +32,24 @@ class MarketScanner:
         Returns:
             Tuple of (symbol, score, signal, confidence, reasons)
         """
+        self.scanning_logger.debug(f"--- Scanning {symbol} ---")
+        
         # Check cache first
         cache_key = symbol
         if cache_key in self.cache:
             cached_data, timestamp = self.cache[cache_key]
             if time.time() - timestamp < self.cache_duration:
                 self.logger.debug(f"Using cached data for {symbol}")
+                self.scanning_logger.debug(f"  Using cached data (age: {int(time.time() - timestamp)}s)")
                 return cached_data
         
         try:
             # Get OHLCV data for multiple timeframes
+            self.scanning_logger.debug(f"  Fetching OHLCV data...")
             ohlcv_1h = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
             if not ohlcv_1h:
                 self.logger.warning(f"No OHLCV data for {symbol}")
+                self.scanning_logger.warning(f"  ⚠ No OHLCV data available")
                 result = (symbol, 0.0, 'HOLD', 0.0, {'error': 'No OHLCV data'})
                 self.cache[cache_key] = (result, time.time())
                 return result
@@ -51,18 +57,26 @@ class MarketScanner:
             # Check if we have enough data
             if len(ohlcv_1h) < 50:
                 self.logger.warning(f"Insufficient OHLCV data for {symbol}: only {len(ohlcv_1h)} candles (need 50+)")
+                self.scanning_logger.warning(f"  ⚠ Insufficient data: {len(ohlcv_1h)} candles (need 50+)")
                 result = (symbol, 0.0, 'HOLD', 0.0, {'error': f'Insufficient data: {len(ohlcv_1h)} candles'})
                 self.cache[cache_key] = (result, time.time())
                 return result
+            
+            self.scanning_logger.debug(f"  1h data: {len(ohlcv_1h)} candles")
             
             # Get higher timeframe data for confirmation
             ohlcv_4h = self.client.get_ohlcv(symbol, timeframe='4h', limit=50)
             ohlcv_1d = self.client.get_ohlcv(symbol, timeframe='1d', limit=30)
             
+            self.scanning_logger.debug(f"  4h data: {len(ohlcv_4h) if ohlcv_4h else 0} candles")
+            self.scanning_logger.debug(f"  1d data: {len(ohlcv_1d) if ohlcv_1d else 0} candles")
+            
             # Calculate indicators
+            self.scanning_logger.debug(f"  Calculating indicators...")
             df_1h = Indicators.calculate_all(ohlcv_1h)
             if df_1h.empty:
                 self.logger.warning(f"Could not calculate indicators for {symbol}")
+                self.scanning_logger.warning(f"  ⚠ Indicator calculation failed")
                 result = (symbol, 0.0, 'HOLD', 0.0, {'error': 'Indicator calculation failed'})
                 self.cache[cache_key] = (result, time.time())
                 return result
@@ -72,10 +86,15 @@ class MarketScanner:
             df_1d = Indicators.calculate_all(ohlcv_1d) if ohlcv_1d and len(ohlcv_1d) >= 20 else None
             
             # Generate signal with multi-timeframe analysis
+            self.scanning_logger.debug(f"  Generating trading signal...")
             signal, confidence, reasons = self.signal_generator.generate_signal(df_1h, df_4h, df_1d)
             
             # Calculate score
             score = self.signal_generator.calculate_score(df_1h)
+            
+            self.scanning_logger.info(f"  Result: Signal={signal}, Score={score:.2f}, Confidence={confidence:.2%}")
+            if reasons:
+                self.scanning_logger.debug(f"  Reasons: {', '.join([f'{k}={v}' for k, v in reasons.items()])}")
             
             result = (symbol, score, signal, confidence, reasons)
             
@@ -86,6 +105,7 @@ class MarketScanner:
             
         except Exception as e:
             self.logger.error(f"Error scanning {symbol}: {e}")
+            self.scanning_logger.error(f"  ✗ Error: {e}")
             result = (symbol, 0.0, 'HOLD', 0.0, {'error': str(e)})
             self.cache[cache_key] = (result, time.time())
             return result
@@ -101,29 +121,44 @@ class MarketScanner:
         Returns:
             List of dicts with scan results sorted by score
         """
+        self.scanning_logger.info(f"\n{'='*80}")
+        self.scanning_logger.info(f"FULL MARKET SCAN - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        self.scanning_logger.info(f"{'='*80}")
+        
         # Check if we can use cached results
         if use_cache and self.scan_results_cache and self.last_full_scan:
             time_since_scan = (datetime.now() - self.last_full_scan).total_seconds()
             if time_since_scan < self.cache_duration:
                 self.logger.info(f"Using cached market scan results ({time_since_scan:.0f}s old)")
+                self.scanning_logger.info(f"Using cached results (age: {time_since_scan:.0f}s)")
+                self.scanning_logger.info(f"{'='*80}\n")
                 return self.scan_results_cache
         
         self.logger.info("Starting market scan...")
         
         # Get all active futures
+        self.scanning_logger.info("Fetching active futures contracts...")
         futures = self.client.get_active_futures()
         if not futures:
             self.logger.warning("No active futures found")
+            self.scanning_logger.warning("⚠ No active futures found")
+            self.scanning_logger.info(f"{'='*80}\n")
             return []
         
         symbols = [f['symbol'] for f in futures]
+        self.scanning_logger.info(f"Total futures contracts: {len(symbols)}")
         
         # Smart filtering: prioritize high-volume pairs
+        self.scanning_logger.info("Filtering high-priority pairs...")
         filtered_symbols = self._filter_high_priority_pairs(symbols, futures)
         
         self.logger.info(f"Scanning {len(filtered_symbols)} high-priority pairs (filtered from {len(symbols)} total)...")
+        self.scanning_logger.info(f"Filtered to {len(filtered_symbols)} high-priority pairs")
+        self.scanning_logger.info(f"Max workers: {max_workers}")
+        self.scanning_logger.info(f"\nScanning pairs in parallel...")
         
         results = []
+        scan_count = 0
         
         # Scan pairs in parallel
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -134,6 +169,7 @@ class MarketScanner:
             
             for future in as_completed(future_to_symbol):
                 symbol, score, signal, confidence, reasons = future.result()
+                scan_count += 1
                 
                 # Log all scanned pairs for debugging
                 self.logger.debug(f"Scanned {symbol}: Signal={signal}, Confidence={confidence:.2f}, Score={score:.2f}")
@@ -146,13 +182,30 @@ class MarketScanner:
                         'confidence': confidence,
                         'reasons': reasons
                     })
+                    self.scanning_logger.info(f"✓ Found opportunity: {symbol} - {signal} (score: {score:.2f}, confidence: {confidence:.2%})")
                 else:
                     self.logger.debug(f"Skipped {symbol}: signal={signal}, score={score:.2f}")
+                    self.scanning_logger.debug(f"  Skipped {symbol}: {signal} (score: {score:.2f})")
         
         # Sort by score descending
         results.sort(key=lambda x: x['score'], reverse=True)
         
         self.logger.info(f"Market scan complete. Found {len(results)} trading opportunities")
+        
+        self.scanning_logger.info(f"\n{'='*40}")
+        self.scanning_logger.info(f"SCAN SUMMARY")
+        self.scanning_logger.info(f"{'='*40}")
+        self.scanning_logger.info(f"Pairs scanned: {scan_count}")
+        self.scanning_logger.info(f"Opportunities found: {len(results)}")
+        
+        if results:
+            self.scanning_logger.info(f"\nTop opportunities:")
+            for i, opp in enumerate(results[:10], 1):
+                self.scanning_logger.info(f"  {i}. {opp['symbol']}: {opp['signal']} (score: {opp['score']:.2f}, conf: {opp['confidence']:.2%})")
+        else:
+            self.scanning_logger.info("No trading opportunities found")
+        
+        self.scanning_logger.info(f"{'='*80}\n")
         
         # Cache the results
         self.scan_results_cache = results
