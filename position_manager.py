@@ -636,8 +636,10 @@ class PositionManager:
                 stop_loss = fill_price * (1 + stop_loss_percentage)
                 take_profit = fill_price * (1 - stop_loss_percentage * 2)
             
-            self.position_logger.info(f"  Stop Loss: {stop_loss:.2f} ({((stop_loss/fill_price - 1) if signal == 'SELL' else (stop_loss/fill_price - 1)):.2%})")
-            self.position_logger.info(f"  Take Profit: {take_profit:.2f} ({((take_profit/fill_price - 1) if signal == 'BUY' else (take_profit/fill_price - 1)):.2%})")
+            stop_loss_pct = (1 - stop_loss/fill_price) if signal == 'SELL' else (stop_loss/fill_price - 1)
+            take_profit_pct = (1 - take_profit/fill_price) if signal == 'SELL' else (take_profit/fill_price - 1)
+            self.position_logger.info(f"  Stop Loss: {stop_loss:.2f} ({stop_loss_pct:.2%})")
+            self.position_logger.info(f"  Take Profit: {take_profit:.2f} ({take_profit_pct:.2%})")
             
             # Create position object
             position = Position(
