@@ -524,7 +524,25 @@ class PositionManager:
                 
                 side = pos.get('side', 'long')  # 'long' or 'short'
                 entry_price = float(pos.get('entryPrice', 0))
-                leverage = int(pos.get('leverage', 10))
+                
+                # Extract leverage with multiple fallback options
+                # 1. Try CCXT unified 'leverage' field
+                leverage = pos.get('leverage')
+                if leverage is not None:
+                    leverage = int(leverage)
+                else:
+                    # 2. Try KuCoin-specific 'realLeverage' in raw info
+                    info = pos.get('info', {})
+                    real_leverage = info.get('realLeverage')
+                    if real_leverage is not None:
+                        leverage = int(real_leverage)
+                    else:
+                        # 3. Default to 10x with warning
+                        leverage = 10
+                        self.logger.warning(
+                            f"Leverage not found for {symbol}, defaulting to 10x. "
+                            f"Position data: contracts={contracts}, side={side}"
+                        )
                 
                 # Get current price for calculating stop loss
                 ticker = self.client.get_ticker(symbol)
@@ -568,6 +586,12 @@ class PositionManager:
                 
                 self.positions[symbol] = position
                 synced_count += 1
+                
+                self.logger.info(
+                    f"Synced position: {symbol} {side} @ {entry_price:.2f}, "
+                    f"Contracts: {abs(contracts):.4f}, Leverage: {leverage}x, "
+                    f"SL: {stop_loss:.2f}, TP: {take_profit:.2f}"
+                )
                 
                 # Calculate current P/L
                 pnl = position.get_pnl(current_price)
