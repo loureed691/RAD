@@ -235,7 +235,7 @@ Multiple layers of risk management:
 
 ## Logging and Monitoring
 
-The bot uses a comprehensive logging system with three separate log files:
+The bot uses a comprehensive logging system with four separate log files:
 
 ### Main Log (`logs/bot.log`)
 - **Level**: INFO (configurable)
@@ -260,6 +260,15 @@ The bot uses a comprehensive logging system with three separate log files:
   - Scan summaries with top opportunities
 - **Purpose**: Complete visibility into market analysis and opportunity detection
 
+### Orders Log (`logs/orders.log`)
+- **Level**: DEBUG (configurable)
+- **Content**: Detailed order execution tracking
+  - All buy and sell orders (market, limit, stop-limit)
+  - Order parameters: price, amount, leverage, side
+  - Execution details: fill price, slippage, status
+  - Order cancellations
+- **Purpose**: Complete audit trail of all trading orders
+
 ### Log Levels
 - **DEBUG**: Detailed information for debugging and analysis
 - **INFO**: General operational information
@@ -273,7 +282,8 @@ LOG_LEVEL=INFO              # Main log level
 LOG_FILE=logs/bot.log       # Main log file
 POSITION_LOG_FILE=logs/positions.log   # Position tracking log
 SCANNING_LOG_FILE=logs/scanning.log    # Market scanning log
-DETAILED_LOG_LEVEL=DEBUG    # Level for position and scanning logs
+ORDERS_LOG_FILE=logs/orders.log        # Order execution log
+DETAILED_LOG_LEVEL=DEBUG    # Level for specialized logs
 ```
 
 ## Safety Features
