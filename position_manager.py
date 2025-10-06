@@ -9,6 +9,55 @@ from kucoin_client import KuCoinClient
 from logger import Logger
 from advanced_exit_strategy import AdvancedExitStrategy
 
+def format_price(price: float) -> str:
+    """
+    Format price with appropriate precision based on magnitude.
+    
+    Args:
+        price: Price value to format
+        
+    Returns:
+        Formatted price string with appropriate decimal places
+    """
+    if price == 0:
+        return "0.00"
+    
+    abs_price = abs(price)
+    
+    # For prices >= 1000, use 2 decimals (e.g., 1213.68)
+    if abs_price >= 1000:
+        return f"{price:.2f}"
+    # For prices >= 1, use 2 decimals (e.g., 5.33, 16.78)
+    elif abs_price >= 1:
+        return f"{price:.2f}"
+    # For prices >= 0.1, use 2 decimals (e.g., 0.88, 0.50)
+    elif abs_price >= 0.1:
+        return f"{price:.2f}"
+    # For prices >= 0.01, use 4 decimals (e.g., 0.0567)
+    elif abs_price >= 0.01:
+        return f"{price:.4f}"
+    # For prices >= 0.001, use 5 decimals (e.g., 0.00567)
+    elif abs_price >= 0.001:
+        return f"{price:.5f}"
+    # For very small prices, use 6 decimals (e.g., 0.001234)
+    else:
+        return f"{price:.6f}"
+
+def format_pnl_usd(pnl_usd: float) -> str:
+    """
+    Format P/L USD amount with sign prefix and appropriate precision.
+    
+    Args:
+        pnl_usd: P/L in USD
+        
+    Returns:
+        Formatted P/L string with sign (e.g., "$+1.23", "$-0.0045")
+    """
+    sign = "+" if pnl_usd >= 0 else "-"
+    abs_value = abs(pnl_usd)
+    formatted = format_price(abs_value)
+    return f"${sign}{formatted}"
+
 class Position:
     """Represents an open trading position"""
     
@@ -518,10 +567,10 @@ class PositionManager:
                 pnl = position.get_pnl(current_price)
                 
                 self.logger.info(
-                    f"Synced {side} position: {symbol} @ {entry_price:.2f}, "
-                    f"Current: {current_price:.2f}, Amount: {abs(contracts)}, "
+                    f"Synced {side} position: {symbol} @ {format_price(entry_price)}, "
+                    f"Current: {format_price(current_price)}, Amount: {abs(contracts)}, "
                     f"Leverage: {leverage}x, P/L: {pnl:.2%}, "
-                    f"Stop Loss: {stop_loss:.2f}, Take Profit: {take_profit:.2f}"
+                    f"Stop Loss: {format_price(stop_loss)}, Take Profit: {format_price(take_profit)}"
                 )
             
             if synced_count > 0:
@@ -573,7 +622,7 @@ class PositionManager:
                 self.position_logger.error(f"  Invalid price: {current_price}")
                 return False
             
-            self.position_logger.info(f"  Current Price: {current_price:.2f}")
+            self.position_logger.info(f"  Current Price: {format_price(current_price)}")
             
             side = 'buy' if signal == 'BUY' else 'sell'
             
@@ -585,7 +634,7 @@ class PositionManager:
                 else:
                     limit_price = current_price * (1 + limit_offset)
                 
-                self.position_logger.info(f"  Placing LIMIT order at {limit_price:.2f} (offset: {limit_offset:.2%})")
+                self.position_logger.info(f"  Placing LIMIT order at {format_price(limit_price)} (offset: {limit_offset:.2%})")
                 
                 order = self.client.create_limit_order(
                     symbol, side, amount, limit_price, leverage, post_only=True
@@ -626,7 +675,7 @@ class PositionManager:
             
             # Get actual fill price
             fill_price = order.get('average') or current_price
-            self.position_logger.info(f"  Order filled at: {fill_price:.2f}")
+            self.position_logger.info(f"  Order filled at: {format_price(fill_price)}")
             
             # Calculate stop loss and take profit
             if signal == 'BUY':
@@ -638,8 +687,8 @@ class PositionManager:
             
             stop_loss_pct = (1 - stop_loss/fill_price) if signal == 'SELL' else (stop_loss/fill_price - 1)
             take_profit_pct = (1 - take_profit/fill_price) if signal == 'SELL' else (take_profit/fill_price - 1)
-            self.position_logger.info(f"  Stop Loss: {stop_loss:.2f} ({stop_loss_pct:.2%})")
-            self.position_logger.info(f"  Take Profit: {take_profit:.2f} ({take_profit_pct:.2%})")
+            self.position_logger.info(f"  Stop Loss: {format_price(stop_loss)} ({stop_loss_pct:.2%})")
+            self.position_logger.info(f"  Take Profit: {format_price(take_profit)} ({take_profit_pct:.2%})")
             
             # Create position object
             position = Position(
@@ -655,15 +704,15 @@ class PositionManager:
             self.positions[symbol] = position
             
             position_value = amount * fill_price
-            self.position_logger.info(f"  Position Value: ${position_value:.2f}")
-            self.position_logger.info(f"  Leveraged Exposure: ${position_value * leverage:.2f}")
+            self.position_logger.info(f"  Position Value: ${format_price(position_value)}")
+            self.position_logger.info(f"  Leveraged Exposure: ${format_price(position_value * leverage)}")
             self.position_logger.info(f"✓ Position opened successfully at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             self.position_logger.info(f"=" * 80)
             
             self.logger.info(
-                f"Opened {position.side} position: {symbol} @ {fill_price:.2f}, "
+                f"Opened {position.side} position: {symbol} @ {format_price(fill_price)}, "
                 f"Amount: {amount}, Leverage: {leverage}x, "
-                f"Stop Loss: {stop_loss:.2f}, Take Profit: {take_profit:.2f}"
+                f"Stop Loss: {format_price(stop_loss)}, Take Profit: {format_price(take_profit)}"
             )
             
             return True
@@ -686,7 +735,7 @@ class PositionManager:
             self.position_logger.info(f"CLOSING POSITION: {symbol}")
             self.position_logger.info(f"  Reason: {reason}")
             self.position_logger.info(f"  Side: {position.side.upper()}")
-            self.position_logger.info(f"  Entry Price: {position.entry_price:.2f}")
+            self.position_logger.info(f"  Entry Price: {format_price(position.entry_price)}")
             self.position_logger.info(f"  Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
             
             # Get current price
@@ -702,7 +751,7 @@ class PositionManager:
                 self.position_logger.error(f"  ✗ Invalid price: {current_price}")
                 return None
             
-            self.position_logger.info(f"  Exit Price: {current_price:.2f}")
+            self.position_logger.info(f"  Exit Price: {format_price(current_price)}")
             
             # Calculate P/L
             pnl = position.get_pnl(current_price)
@@ -713,7 +762,7 @@ class PositionManager:
             duration = datetime.now() - position.entry_time
             duration_mins = duration.total_seconds() / 60
             
-            self.position_logger.info(f"  P/L: {pnl:+.2%} (${pnl_usd:+.2f})")
+            self.position_logger.info(f"  P/L: {pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
             self.position_logger.info(f"  Duration: {duration_mins:.1f} minutes")
             self.position_logger.info(f"  Max Favorable Excursion: {position.max_favorable_excursion:.2%}")
             
@@ -727,8 +776,8 @@ class PositionManager:
             self.position_logger.info(f"  ✓ Position closed on exchange")
             
             self.logger.info(
-                f"Closed {position.side} position: {symbol} @ {current_price:.2f}, "
-                f"Entry: {position.entry_price:.2f}, P/L: {pnl:.2%}, Reason: {reason}"
+                f"Closed {position.side} position: {symbol} @ {format_price(current_price)}, "
+                f"Entry: {format_price(position.entry_price)}, P/L: {pnl:.2%}, Reason: {reason}"
             )
             
             self.position_logger.info(f"✓ Position closed successfully at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -757,7 +806,7 @@ class PositionManager:
                 position = self.positions[symbol]
                 
                 self.position_logger.info(f"\n--- Position: {symbol} ({position.side.upper()}) ---")
-                self.position_logger.debug(f"  Entry Price: {position.entry_price:.2f}")
+                self.position_logger.debug(f"  Entry Price: {format_price(position.entry_price)}")
                 self.position_logger.debug(f"  Amount: {position.amount:.4f} contracts")
                 self.position_logger.debug(f"  Leverage: {position.leverage}x")
                 self.position_logger.debug(f"  Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -775,16 +824,16 @@ class PositionManager:
                     self.position_logger.warning(f"  ⚠ Invalid price: {current_price}")
                     continue
                 
-                self.position_logger.info(f"  Current Price: {current_price:.2f}")
+                self.position_logger.info(f"  Current Price: {format_price(current_price)}")
                 
                 # Calculate current P/L
                 current_pnl = position.get_pnl(current_price)
                 position_value = position.amount * position.entry_price
                 pnl_usd = (current_pnl / position.leverage) * position_value if position.leverage > 0 else 0
                 
-                self.position_logger.info(f"  Current P/L: {current_pnl:+.2%} (${pnl_usd:+.2f})")
-                self.position_logger.debug(f"  Stop Loss: {position.stop_loss:.2f}")
-                self.position_logger.debug(f"  Take Profit: {position.take_profit:.2f}")
+                self.position_logger.info(f"  Current P/L: {current_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
+                self.position_logger.debug(f"  Stop Loss: {format_price(position.stop_loss)}")
+                self.position_logger.debug(f"  Take Profit: {format_price(position.take_profit)}")
                 self.position_logger.debug(f"  Max Favorable Excursion: {position.max_favorable_excursion:.2%}")
                 
                 # Get market data for adaptive parameters
@@ -972,7 +1021,7 @@ class PositionManager:
             
             self.logger.info(
                 f"Scaled into {symbol}: added {additional_amount} contracts, "
-                f"new avg entry: {position.entry_price:.2f}, total: {total_amount}"
+                f"new avg entry: {format_price(position.entry_price)}, total: {total_amount}"
             )
             
             return True
