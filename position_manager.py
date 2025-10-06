@@ -271,8 +271,12 @@ class Position:
                         # Close to TP (75%+) - don't allow extension to prevent moving TP away
                         # This is the critical fix for "bot doesn't sell" issue
                         pass  # Keep TP at current value
+                elif current_price == self.take_profit:
+                    # Bug fix: Price is exactly at TP - allow extension if conditions are favorable
+                    # This enables TP to extend when price reaches the initial target
+                    self.take_profit = new_take_profit
                 else:
-                    # Price at or past TP - only allow if new TP brings it closer
+                    # Price past TP - only allow if new TP brings it closer
                     old_distance_to_tp = abs(current_price - self.take_profit)
                     new_distance_to_tp = abs(current_price - new_take_profit)
                     if new_distance_to_tp <= old_distance_to_tp:
@@ -295,8 +299,12 @@ class Position:
                         # Close to TP (75%+) - don't allow extension to prevent moving TP away
                         # This is the critical fix for "bot doesn't sell" issue
                         pass  # Keep TP at current value
+                elif current_price == self.take_profit:
+                    # Bug fix: Price is exactly at TP - allow extension if conditions are favorable
+                    # This enables TP to extend when price reaches the initial target
+                    self.take_profit = new_take_profit
                 else:
-                    # Price at or past TP - only allow if new TP brings it closer
+                    # Price past TP - only allow if new TP brings it closer
                     old_distance_to_tp = abs(current_price - self.take_profit)
                     new_distance_to_tp = abs(current_price - new_take_profit)
                     if new_distance_to_tp <= old_distance_to_tp:
