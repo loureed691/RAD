@@ -12,6 +12,7 @@ class KuCoinClient:
     def __init__(self, api_key: str, api_secret: str, api_passphrase: str):
         """Initialize KuCoin client"""
         self.logger = Logger.get_logger()
+        self.orders_logger = Logger.get_orders_logger()
         
         try:
             self.exchange = ccxt.kucoinfutures({
@@ -481,21 +482,44 @@ class KuCoinClient:
                 params={"marginMode": "cross"}
             )
             
-            # Log order details
+            # Log order details to main logger
             avg_price = order.get('average') or order.get('price', 'N/A')
             self.logger.info(
                 f"Created {side} market order for {validated_amount} {symbol} "
                 f"at {leverage}x leverage (avg fill: {avg_price})"
             )
             
+            # Log detailed order information to orders logger
+            self.orders_logger.info("=" * 80)
+            self.orders_logger.info(f"{side.upper()} ORDER EXECUTED: {symbol}")
+            self.orders_logger.info("-" * 80)
+            self.orders_logger.info(f"  Order ID: {order.get('id', 'N/A')}")
+            self.orders_logger.info(f"  Type: MARKET")
+            self.orders_logger.info(f"  Side: {side.upper()}")
+            self.orders_logger.info(f"  Symbol: {symbol}")
+            self.orders_logger.info(f"  Amount: {validated_amount} contracts")
+            self.orders_logger.info(f"  Leverage: {leverage}x")
+            self.orders_logger.info(f"  Reference Price: {reference_price}")
+            self.orders_logger.info(f"  Average Fill Price: {avg_price}")
+            if order.get('filled'):
+                self.orders_logger.info(f"  Filled Amount: {order.get('filled')}")
+            if order.get('cost'):
+                self.orders_logger.info(f"  Total Cost: {order.get('cost')}")
+            self.orders_logger.info(f"  Status: {order.get('status', 'N/A')}")
+            self.orders_logger.info(f"  Timestamp: {order.get('timestamp', 'N/A')}")
+            
             # Check actual slippage if we have both prices
             if order.get('average'):
                 actual_slippage = abs(order['average'] - reference_price) / reference_price
+                self.orders_logger.info(f"  Slippage: {actual_slippage:.4%}")
                 if actual_slippage > max_slippage:
+                    self.orders_logger.warning(f"  ⚠ High slippage detected (threshold: {max_slippage:.2%})")
                     self.logger.warning(
                         f"High slippage detected: {actual_slippage:.2%} "
                         f"(reference: {reference_price}, filled: {order['average']})"
                     )
+            self.orders_logger.info("=" * 80)
+            self.orders_logger.info("")  # Empty line for readability
             
             return order
         except Exception as e:
@@ -576,10 +600,31 @@ class KuCoinClient:
                 price=price,
                 params=params
             )
+            
+            # Log order details to main logger
             self.logger.info(
                 f"Created {side} limit order for {validated_amount} {symbol} at {price} "
                 f"(leverage={leverage}x, post_only={post_only}, reduce_only={reduce_only})"
             )
+            
+            # Log detailed order information to orders logger
+            self.orders_logger.info("=" * 80)
+            self.orders_logger.info(f"{side.upper()} ORDER CREATED: {symbol}")
+            self.orders_logger.info("-" * 80)
+            self.orders_logger.info(f"  Order ID: {order.get('id', 'N/A')}")
+            self.orders_logger.info(f"  Type: LIMIT")
+            self.orders_logger.info(f"  Side: {side.upper()}")
+            self.orders_logger.info(f"  Symbol: {symbol}")
+            self.orders_logger.info(f"  Amount: {validated_amount} contracts")
+            self.orders_logger.info(f"  Limit Price: {price}")
+            self.orders_logger.info(f"  Leverage: {leverage}x")
+            self.orders_logger.info(f"  Post Only: {post_only}")
+            self.orders_logger.info(f"  Reduce Only: {reduce_only}")
+            self.orders_logger.info(f"  Status: {order.get('status', 'N/A')}")
+            self.orders_logger.info(f"  Timestamp: {order.get('timestamp', 'N/A')}")
+            self.orders_logger.info("=" * 80)
+            self.orders_logger.info("")  # Empty line for readability
+            
             return order
         except Exception as e:
             self.logger.error(f"Error creating limit order: {e}")

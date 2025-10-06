@@ -41,11 +41,17 @@ class TradingBot:
             Config.SCANNING_LOG_FILE, 
             Config.DETAILED_LOG_LEVEL
         )
+        self.orders_logger = Logger.setup_specialized_logger(
+            'OrdersLogger',
+            Config.ORDERS_LOG_FILE,
+            Config.DETAILED_LOG_LEVEL
+        )
         
         self.logger.info(f"📝 Logging configuration:")
         self.logger.info(f"   Main log: {Config.LOG_FILE} (level: {Config.LOG_LEVEL})")
         self.logger.info(f"   Position tracking: {Config.POSITION_LOG_FILE} (level: {Config.DETAILED_LOG_LEVEL})")
         self.logger.info(f"   Market scanning: {Config.SCANNING_LOG_FILE} (level: {Config.DETAILED_LOG_LEVEL})")
+        self.logger.info(f"   Order execution: {Config.ORDERS_LOG_FILE} (level: {Config.DETAILED_LOG_LEVEL})")
         
         # Initialize components
         self.client = KuCoinClient(
