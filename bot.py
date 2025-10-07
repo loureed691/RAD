@@ -157,9 +157,26 @@ class TradingBot:
             return False
         
         available_balance = float(balance.get('free', {}).get('USDT', 0))
+        used_balance = float(balance.get('used', {}).get('USDT', 0))
+        total_balance = float(balance.get('total', {}).get('USDT', 0))
+        
+        # Get current position count for context
+        current_positions = self.position_manager.get_open_positions_count()
         
         if available_balance <= 0:
-            self.logger.warning("💰 No available balance")
+            # Provide detailed context about why there's no available balance
+            if total_balance <= 0:
+                # Truly no funds in account
+                self.logger.warning("💰 No available balance - account has no funds")
+            else:
+                # Funds exist but are in use
+                self.logger.info(
+                    f"💰 No free balance available "
+                    f"(Free: ${available_balance:.2f}, "
+                    f"In use: ${used_balance:.2f}, "
+                    f"Total: ${total_balance:.2f}, "
+                    f"Positions: {current_positions}/{Config.MAX_OPEN_POSITIONS})"
+                )
             return False
         
         # Check portfolio diversification
