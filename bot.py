@@ -439,6 +439,13 @@ class TradingBot:
                 except Exception as e:
                     self.logger.error(f"Error closing position {symbol} during shutdown: {e}")
         
+        # Save ML model to preserve training data and performance metrics
+        try:
+            self.ml_model.save_model()
+            self.logger.info("💾 ML model saved successfully")
+        except Exception as e:
+            self.logger.error(f"Error saving ML model during shutdown: {e}")
+        
         self.logger.info("=" * 60)
         self.logger.info("✅ BOT SHUTDOWN COMPLETE")
         self.logger.info("=" * 60)
