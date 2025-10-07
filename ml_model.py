@@ -7,13 +7,14 @@ import pandas as pd
 import joblib
 from datetime import datetime
 from typing import Dict, List, Tuple
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
+from sklearn.calibration import CalibratedClassifierCV
 from logger import Logger
 
 class MLModel:
-    """Self-learning ML model for optimizing trading signals"""
+    """Self-learning ML model for optimizing trading signals with ensemble methods"""
     
     def __init__(self, model_path: str = 'models/signal_model.pkl'):
         self.model_path = model_path
@@ -28,7 +29,8 @@ class MLModel:
             'avg_loss': 0.0,
             'total_trades': 0,
             'wins': 0,
-            'losses': 0
+            'losses': 0,
+            'recent_trades': []  # Track last 20 trades for momentum
         }
         
         # Create models directory if it doesn't exist
@@ -72,7 +74,7 @@ class MLModel:
             self.logger.error(f"Error saving model: {e}")
     
     def prepare_features(self, indicators: Dict) -> np.array:
-        """Prepare enhanced feature vector from indicators with derived features"""
+        """Prepare enhanced feature vector from indicators with advanced derived features"""
         # Base technical indicators
         rsi = indicators.get('rsi', 50)
         macd = indicators.get('macd', 0)
@@ -93,6 +95,33 @@ class MLModel:
         bb_mid = indicators.get('bb_mid', close)
         ema_12 = indicators.get('ema_12', close)
         ema_26 = indicators.get('ema_26', close)
+        sma_20 = indicators.get('sma_20', close)
+        sma_50 = indicators.get('sma_50', close)
+        
+        # Calculate trend acceleration (change in momentum)
+        prev_momentum = indicators.get('momentum_prev', momentum)
+        momentum_acceleration = momentum - prev_momentum if prev_momentum is not None else 0
+        
+        # Calculate sentiment score from price action
+        # Positive sentiment: price above MA, rising volume, strong momentum
+        sentiment_score = 0
+        if close > ema_12:
+            sentiment_score += 0.3
+        if close > ema_26:
+            sentiment_score += 0.2
+        if volume_ratio > 1.2:
+            sentiment_score += 0.2
+        if momentum > 0.01:
+            sentiment_score += 0.3
+        # Negative sentiment
+        if close < ema_12:
+            sentiment_score -= 0.3
+        if close < ema_26:
+            sentiment_score -= 0.2
+        if volume_ratio < 0.8:
+            sentiment_score -= 0.2
+        if momentum < -0.01:
+            sentiment_score -= 0.3
         
         # Derived features for better signal quality
         features = [
@@ -123,19 +152,29 @@ class MLModel:
             1 if macd > macd_signal else 0,
             # Strong momentum flag
             1 if abs(momentum) > 0.02 else 0,
-            # NEW: Price position in BB (0-1, 0.5 = middle)
+            # Price position in BB (0-1, 0.5 = middle)
             (close - bb_low) / (bb_high - bb_low) if (bb_high - bb_low) > 0 else 0.5,
-            # NEW: Distance from EMA (trend strength)
+            # Distance from EMA (trend strength)
             (close - ema_12) / ema_12 if ema_12 > 0 else 0,
             (close - ema_26) / ema_26 if ema_26 > 0 else 0,
-            # NEW: EMA separation (trend divergence)
+            # EMA separation (trend divergence)
             (ema_12 - ema_26) / ema_26 if ema_26 > 0 else 0,
-            # NEW: RSI momentum (rate of change)
+            # RSI momentum (rate of change)
             indicators.get('rsi_prev', rsi) - rsi if 'rsi_prev' in indicators else 0,
-            # NEW: Volume trend
+            # Volume trend
             1 if volume_ratio > 1.2 else (-1 if volume_ratio < 0.8 else 0),
-            # NEW: Volatility regime
+            # Volatility regime
             1 if bb_width > 0.05 else (-1 if bb_width < 0.02 else 0),
+            # NEW: Sentiment score (price action based)
+            sentiment_score,
+            # NEW: Momentum acceleration (trend strength change)
+            momentum_acceleration,
+            # NEW: Multi-timeframe trend alignment indicator
+            1 if (close > sma_20 and sma_20 > sma_50) else (-1 if (close < sma_20 and sma_20 < sma_50) else 0),
+            # NEW: Breakout potential (price near BB bands with low volatility)
+            1 if (close > 0 and abs(close - bb_high) / close < 0.01 and bb_width < 0.03) else 0,
+            # NEW: Mean reversion signal (price far from MA with high volatility)
+            1 if (close > 0 and abs(close - bb_mid) / close > 0.03 and bb_width > 0.05) else 0,
         ]
         return np.array(features).reshape(1, -1)
     
@@ -202,6 +241,13 @@ class MLModel:
         self.performance_metrics['total_trades'] = self.performance_metrics.get('total_trades', 0) + 1
         total = self.performance_metrics['total_trades']
         
+        # Track recent trades for momentum-based threshold adjustment (last 20 trades)
+        recent_trades = self.performance_metrics.get('recent_trades', [])
+        recent_trades.append(profit_loss)
+        if len(recent_trades) > 20:
+            recent_trades = recent_trades[-20:]
+        self.performance_metrics['recent_trades'] = recent_trades
+        
         # Track wins and losses separately for better Kelly Criterion
         if profit_loss > 0.005:  # Profitable trade (>0.5%)
             wins = self.performance_metrics.get('wins', 0) + 1
@@ -223,13 +269,13 @@ class MLModel:
         self.logger.debug(f"Recorded outcome: signal={signal}, P/L={profit_loss:.4f}, label={label}, Win rate: {self.performance_metrics.get('win_rate', 0):.2%}")
     
     def train(self, min_samples: int = 100):
-        """Train or retrain the model with collected data using optimized hyperparameters"""
+        """Train or retrain the model with ensemble methods for improved accuracy"""
         if len(self.training_data) < min_samples:
             self.logger.info(f"Not enough training data ({len(self.training_data)}/{min_samples})")
             return False
         
         try:
-            self.logger.info(f"Training model with {len(self.training_data)} samples...")
+            self.logger.info(f"Training ensemble model with {len(self.training_data)} samples...")
             
             # Prepare data
             X = np.array([d['features'] for d in self.training_data])
@@ -244,9 +290,9 @@ class MLModel:
             X_train_scaled = self.scaler.fit_transform(X_train)
             X_test_scaled = self.scaler.transform(X_test)
             
-            # Train model with optimized hyperparameters
-            # Use GradientBoosting for better performance on imbalanced data
-            self.model = GradientBoostingClassifier(
+            # Create ensemble model with multiple algorithms for robustness
+            # GradientBoosting: Best for sequential error correction
+            gb_model = GradientBoostingClassifier(
                 n_estimators=150,
                 max_depth=6,
                 learning_rate=0.1,
@@ -255,30 +301,57 @@ class MLModel:
                 subsample=0.8,
                 random_state=42
             )
+            
+            # RandomForest: Best for feature diversity
+            rf_model = RandomForestClassifier(
+                n_estimators=100,
+                max_depth=8,
+                min_samples_split=4,
+                min_samples_leaf=2,
+                random_state=42
+            )
+            
+            # Use VotingClassifier for ensemble approach (soft voting for probabilities)
+            ensemble = VotingClassifier(
+                estimators=[
+                    ('gb', gb_model),
+                    ('rf', rf_model)
+                ],
+                voting='soft',  # Use probability averaging
+                weights=[2, 1]  # Give more weight to GradientBoosting (empirically better)
+            )
+            
+            # Calibrate the ensemble for better probability estimates
+            self.model = CalibratedClassifierCV(ensemble, cv=3, method='sigmoid')
             self.model.fit(X_train_scaled, y_train)
             
             # Evaluate
             train_score = self.model.score(X_train_scaled, y_train)
             test_score = self.model.score(X_test_scaled, y_test)
             
-            # Get feature importance
-            if hasattr(self.model, 'feature_importances_'):
-                feature_names = [
-                    'rsi', 'macd', 'macd_signal', 'macd_diff', 'stoch_k', 'stoch_d',
-                    'bb_width', 'volume_ratio', 'momentum', 'roc', 'atr',
-                    'rsi_strength', 'macd_strength', 'stoch_momentum', 'volume_surge',
-                    'volatility_norm', 'rsi_zone', 'macd_bullish', 'momentum_flag',
-                    'bb_position', 'price_to_ema12', 'price_to_ema26', 'ema_separation',
-                    'rsi_momentum', 'volume_trend', 'volatility_regime'
-                ]
-                importances = self.model.feature_importances_
-                self.feature_importance = {name: float(imp) for name, imp in zip(feature_names, importances)}
-                
-                # Log top 5 features
-                top_features = sorted(self.feature_importance.items(), key=lambda x: x[1], reverse=True)[:5]
-                self.logger.info(f"Top features: {', '.join([f'{k}:{v:.3f}' for k, v in top_features])}")
+            # Get feature importance from the base GradientBoosting model
+            try:
+                gb_estimator = ensemble.estimators_[0]  # Get GradientBoosting
+                if hasattr(gb_estimator, 'feature_importances_'):
+                    feature_names = [
+                        'rsi', 'macd', 'macd_signal', 'macd_diff', 'stoch_k', 'stoch_d',
+                        'bb_width', 'volume_ratio', 'momentum', 'roc', 'atr',
+                        'rsi_strength', 'macd_strength', 'stoch_momentum', 'volume_surge',
+                        'volatility_norm', 'rsi_zone', 'macd_bullish', 'momentum_flag',
+                        'bb_position', 'price_to_ema12', 'price_to_ema26', 'ema_separation',
+                        'rsi_momentum', 'volume_trend', 'volatility_regime', 'sentiment_score',
+                        'momentum_accel', 'mtf_trend', 'breakout_potential', 'mean_reversion'
+                    ]
+                    importances = gb_estimator.feature_importances_
+                    self.feature_importance = {name: float(imp) for name, imp in zip(feature_names, importances)}
+                    
+                    # Log top 5 features
+                    top_features = sorted(self.feature_importance.items(), key=lambda x: x[1], reverse=True)[:5]
+                    self.logger.info(f"Top features: {', '.join([f'{k}:{v:.3f}' for k, v in top_features])}")
+            except Exception as e:
+                self.logger.warning(f"Could not extract feature importance: {e}")
             
-            self.logger.info(f"Model trained - Train accuracy: {train_score:.3f}, Test accuracy: {test_score:.3f}")
+            self.logger.info(f"Ensemble model trained - Train accuracy: {train_score:.3f}, Test accuracy: {test_score:.3f}")
             
             # Save model
             self.save_model()
@@ -295,20 +368,97 @@ class MLModel:
     
     def get_adaptive_confidence_threshold(self) -> float:
         """
-        Calculate adaptive confidence threshold based on model performance
+        Calculate adaptive confidence threshold based on model performance and recent momentum
         
         Returns:
             Adjusted confidence threshold (0.5-0.75)
         """
         base_threshold = 0.6
         
-        # Adjust based on win rate
+        # Adjust based on overall win rate
         win_rate = self.performance_metrics.get('win_rate', 0.5)
-        if win_rate > 0.6:
-            # If winning more, can be slightly more aggressive
-            return max(0.55, base_threshold - 0.05)
-        elif win_rate < 0.4:
-            # If losing more, be more conservative
-            return min(0.75, base_threshold + 0.1)
+        total_trades = self.performance_metrics.get('total_trades', 0)
         
-        return base_threshold
+        # Need minimum trades for reliable adjustment
+        if total_trades < 10:
+            return base_threshold
+        
+        # Calculate recent momentum (last 20 trades)
+        recent_trades = self.performance_metrics.get('recent_trades', [])
+        if len(recent_trades) >= 10:
+            recent_wins = sum(1 for pnl in recent_trades if pnl > 0.005)
+            recent_win_rate = recent_wins / len(recent_trades)
+            
+            # Recent momentum is strong - can be more aggressive
+            if recent_win_rate > 0.65:
+                momentum_adjustment = -0.08  # Lower threshold when hot
+            # Recent momentum is weak - be more conservative
+            elif recent_win_rate < 0.35:
+                momentum_adjustment = 0.12  # Higher threshold when cold
+            # Recent momentum is neutral
+            else:
+                momentum_adjustment = 0.0
+        else:
+            momentum_adjustment = 0.0
+        
+        # Adjust based on overall win rate (longer term trend)
+        if win_rate > 0.6:
+            # If winning more overall, can be slightly more aggressive
+            win_rate_adjustment = -0.03
+        elif win_rate < 0.4:
+            # If losing more overall, be more conservative
+            win_rate_adjustment = 0.08
+        else:
+            win_rate_adjustment = 0.0
+        
+        # Combine adjustments with recent momentum weighted more heavily
+        threshold = base_threshold + (momentum_adjustment * 0.6) + (win_rate_adjustment * 0.4)
+        
+        # Ensure threshold stays within bounds
+        threshold = max(0.52, min(threshold, 0.75))
+        
+        return threshold
+    
+    def get_kelly_fraction(self) -> float:
+        """
+        Calculate Kelly Criterion fraction for optimal position sizing
+        
+        Returns:
+            Kelly fraction (0.0-1.0), where 1.0 = 100% of capital
+            Returns 0 if insufficient data or negative expectancy
+        """
+        total_trades = self.performance_metrics.get('total_trades', 0)
+        
+        # Need at least 20 trades for reliable Kelly calculation
+        if total_trades < 20:
+            return 0.0
+        
+        win_rate = self.performance_metrics.get('win_rate', 0.0)
+        avg_profit = self.performance_metrics.get('avg_profit', 0.0)
+        avg_loss = self.performance_metrics.get('avg_loss', 0.0)
+        
+        # Ensure we have valid data
+        if avg_loss <= 0 or win_rate <= 0:
+            return 0.0
+        
+        # Kelly Criterion: f = (bp - q) / b
+        # where:
+        #   f = fraction of capital to bet
+        #   b = odds received on the bet (avg_profit / avg_loss)
+        #   p = win_rate
+        #   q = 1 - p (loss rate)
+        
+        b = avg_profit / avg_loss  # Win/loss ratio
+        p = win_rate
+        q = 1 - p
+        
+        kelly_fraction = (b * p - q) / b
+        
+        # Apply safety margin - use half-Kelly for conservative approach
+        # This reduces risk of ruin while maintaining good growth
+        safe_kelly = kelly_fraction * 0.5
+        
+        # Ensure fraction is positive and reasonable
+        safe_kelly = max(0.0, min(safe_kelly, 0.25))  # Cap at 25% of capital
+        
+        return safe_kelly
