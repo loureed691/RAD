@@ -260,6 +260,177 @@ def test_concurrent_access():
         traceback.print_exc()
         return False
 
+def test_position_reconciliation():
+    """Test position reconciliation with exchange"""
+    print("\nTesting position reconciliation...")
+    
+    try:
+        from position_manager import PositionManager, Position
+        
+        # Create mock client
+        mock_client = Mock()
+        pm = PositionManager(mock_client)
+        
+        # Test 1: No discrepancies
+        print("  Test 1: No discrepancies (empty exchange)...")
+        mock_client.get_open_positions = Mock(return_value=[])
+        discrepancies = pm.reconcile_positions()
+        assert discrepancies == 0, f"Expected 0 discrepancies, got {discrepancies}"
+        print(f"    ✓ No discrepancies found: {discrepancies}")
+        
+        # Test 2: Position on exchange but not tracked locally
+        print("  Test 2: Position on exchange but not tracked locally...")
+        mock_exchange_position = {
+            'symbol': 'BTC/USDT:USDT',
+            'contracts': 1.0,
+            'side': 'long',
+            'entryPrice': 50000.0,
+            'leverage': 10
+        }
+        mock_client.get_open_positions = Mock(return_value=[mock_exchange_position])
+        mock_client.get_ticker = Mock(return_value={'last': 51000.0})
+        
+        discrepancies = pm.reconcile_positions()
+        assert discrepancies == 1, f"Expected 1 discrepancy, got {discrepancies}"
+        
+        # Verify position was added
+        has_pos = pm.has_position('BTC/USDT:USDT')
+        assert has_pos == True, "Expected position to be added"
+        print(f"    ✓ Position reconciled and added: {discrepancies}")
+        
+        # Test 3: Position tracked locally but not on exchange
+        print("  Test 3: Position tracked locally but not on exchange...")
+        # Add a local position that doesn't exist on exchange
+        orphan_position = Position(
+            symbol='ETH/USDT:USDT',
+            side='long',
+            entry_price=3000.0,
+            amount=1.0,
+            leverage=10,
+            stop_loss=2850.0,
+            take_profit=3300.0
+        )
+        with pm._positions_lock:
+            pm.positions['ETH/USDT:USDT'] = orphan_position
+        
+        # Exchange only has BTC position
+        mock_client.get_open_positions = Mock(return_value=[mock_exchange_position])
+        
+        discrepancies = pm.reconcile_positions()
+        assert discrepancies == 1, f"Expected 1 discrepancy, got {discrepancies}"
+        
+        # Verify orphaned position was removed
+        has_pos = pm.has_position('ETH/USDT:USDT')
+        assert has_pos == False, "Expected orphaned position to be removed"
+        print(f"    ✓ Orphaned position removed: {discrepancies}")
+        
+        print("✓ All position reconciliation tests passed")
+        return True
+        
+    except AssertionError as e:
+        print(f"✗ Test failed: {e}")
+        return False
+    except Exception as e:
+        print(f"✗ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+def test_safe_update_targets():
+    """Test safe position target updates with validation"""
+    print("\nTesting safe position target updates...")
+    
+    try:
+        from position_manager import PositionManager, Position
+        
+        # Create mock client
+        mock_client = Mock()
+        pm = PositionManager(mock_client)
+        
+        # Add a long position
+        print("  Test 1: Long position target validation...")
+        long_position = Position(
+            symbol='BTC/USDT:USDT',
+            side='long',
+            entry_price=50000.0,
+            amount=1.0,
+            leverage=10,
+            stop_loss=47500.0,
+            take_profit=55000.0
+        )
+        with pm._positions_lock:
+            pm.positions['BTC/USDT:USDT'] = long_position
+        
+        # Valid stop loss update (below entry)
+        result = pm.safe_update_position_targets('BTC/USDT:USDT', new_stop_loss=48000.0)
+        assert result == True, "Expected valid stop loss update to succeed"
+        assert pm.positions['BTC/USDT:USDT'].stop_loss == 48000.0, "Stop loss not updated"
+        print(f"    ✓ Valid stop loss update accepted")
+        
+        # Invalid stop loss update (above entry for long)
+        result = pm.safe_update_position_targets('BTC/USDT:USDT', new_stop_loss=51000.0)
+        assert result == False, "Expected invalid stop loss update to fail"
+        assert pm.positions['BTC/USDT:USDT'].stop_loss == 48000.0, "Stop loss changed unexpectedly"
+        print(f"    ✓ Invalid stop loss (above entry) rejected")
+        
+        # Valid take profit update (above entry)
+        result = pm.safe_update_position_targets('BTC/USDT:USDT', new_take_profit=56000.0)
+        assert result == True, "Expected valid take profit update to succeed"
+        assert pm.positions['BTC/USDT:USDT'].take_profit == 56000.0, "Take profit not updated"
+        print(f"    ✓ Valid take profit update accepted")
+        
+        # Invalid take profit update (below entry for long)
+        result = pm.safe_update_position_targets('BTC/USDT:USDT', new_take_profit=49000.0)
+        assert result == False, "Expected invalid take profit update to fail"
+        assert pm.positions['BTC/USDT:USDT'].take_profit == 56000.0, "Take profit changed unexpectedly"
+        print(f"    ✓ Invalid take profit (below entry) rejected")
+        
+        # Add a short position
+        print("  Test 2: Short position target validation...")
+        short_position = Position(
+            symbol='ETH/USDT:USDT',
+            side='short',
+            entry_price=3000.0,
+            amount=1.0,
+            leverage=10,
+            stop_loss=3150.0,
+            take_profit=2700.0
+        )
+        with pm._positions_lock:
+            pm.positions['ETH/USDT:USDT'] = short_position
+        
+        # Valid stop loss update (above entry for short)
+        result = pm.safe_update_position_targets('ETH/USDT:USDT', new_stop_loss=3100.0)
+        assert result == True, "Expected valid stop loss update to succeed"
+        print(f"    ✓ Valid stop loss update for short accepted")
+        
+        # Invalid stop loss update (below entry for short)
+        result = pm.safe_update_position_targets('ETH/USDT:USDT', new_stop_loss=2900.0)
+        assert result == False, "Expected invalid stop loss update to fail"
+        print(f"    ✓ Invalid stop loss (below entry) rejected for short")
+        
+        # Valid take profit update (below entry for short)
+        result = pm.safe_update_position_targets('ETH/USDT:USDT', new_take_profit=2600.0)
+        assert result == True, "Expected valid take profit update to succeed"
+        print(f"    ✓ Valid take profit update for short accepted")
+        
+        # Invalid take profit update (above entry for short)
+        result = pm.safe_update_position_targets('ETH/USDT:USDT', new_take_profit=3100.0)
+        assert result == False, "Expected invalid take profit update to fail"
+        print(f"    ✓ Invalid take profit (above entry) rejected for short")
+        
+        print("✓ All safe update target tests passed")
+        return True
+        
+    except AssertionError as e:
+        print(f"✗ Test failed: {e}")
+        return False
+    except Exception as e:
+        print(f"✗ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 def main():
     """Run all unit tests"""
     print("="*70)
@@ -270,6 +441,8 @@ def main():
         'thread_safe_operations': test_thread_safe_operations(),
         'position_validation': test_position_validation(),
         'concurrent_access': test_concurrent_access(),
+        'position_reconciliation': test_position_reconciliation(),
+        'safe_update_targets': test_safe_update_targets(),
     }
     
     print("\n" + "="*70)
