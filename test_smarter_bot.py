@@ -79,16 +79,16 @@ def test_early_exit_intelligence():
     print("\n1. Testing rapid loss acceleration exit...")
     pos = Position('BTC/USDT:USDT', 'long', 50000, 1.0, 10, 48000, 52000)
     
-    # Simulate 15 minutes have passed
-    pos.entry_time = datetime.now() - timedelta(minutes=20)
+    # Simulate 30 minutes have passed (updated from 15 minutes)
+    pos.entry_time = datetime.now() - timedelta(minutes=35)
     
-    # Simulate rapid loss (-1.8%)
-    current_price = 49100  # -1.8% loss with 10x leverage
+    # Simulate rapid loss (-2.8% to exceed -2.5% threshold)
+    current_price = 48600  # -2.8% loss with 10x leverage
     current_pnl = pos.get_pnl(current_price)
     
-    # Simulate consecutive negative updates
-    pos.consecutive_negative_updates = 3
-    pos.max_adverse_excursion = -0.018
+    # Simulate consecutive negative updates (4 required now)
+    pos.consecutive_negative_updates = 4
+    pos.max_adverse_excursion = -0.028
     
     should_exit, reason = pos.should_early_exit(current_price, current_pnl)
     print(f"   Current P/L: {current_pnl:.2%}")
@@ -102,15 +102,15 @@ def test_early_exit_intelligence():
     print("\n2. Testing extended time underwater exit...")
     pos2 = Position('ETH/USDT:USDT', 'long', 3000, 1.0, 10, 2950, 3100)
     
-    # Simulate 2.5 hours have passed
-    pos2.entry_time = datetime.now() - timedelta(hours=2, minutes=30)
+    # Simulate 4.5 hours have passed (updated from 2.5 hours)
+    pos2.entry_time = datetime.now() - timedelta(hours=4, minutes=30)
     
-    # Still losing after 2.5 hours
-    current_price = 2970  # -1% loss
+    # Still losing after 4.5 hours (-1.8% to exceed -1.5% threshold)
+    current_price = 2945.5  # -1.8% loss
     current_pnl = pos2.get_pnl(current_price)
     
     should_exit, reason = pos2.should_early_exit(current_price, current_pnl)
-    print(f"   Time in trade: 2.5 hours")
+    print(f"   Time in trade: 4.5 hours")
     print(f"   Current P/L: {current_pnl:.2%}")
     print(f"   Should exit: {should_exit} (reason: {reason})")
     assert should_exit == True, "Should exit after extended time underwater"
@@ -121,9 +121,9 @@ def test_early_exit_intelligence():
     print("\n3. Testing max adverse excursion exit...")
     pos3 = Position('SOL/USDT:USDT', 'long', 100, 1.0, 10, 97, 105)
     
-    # Simulate high drawdown
-    pos3.max_adverse_excursion = -0.028  # -2.8% peak loss
-    current_price = 97.8  # -2.2% current loss
+    # Simulate high drawdown (-3.6% to exceed -3.5% threshold)
+    pos3.max_adverse_excursion = -0.036  # -3.6% peak loss
+    current_price = 97.25  # -2.75% current loss (exceeds -2.5% threshold)
     current_pnl = pos3.get_pnl(current_price)
     
     should_exit, reason = pos3.should_early_exit(current_price, current_pnl)
@@ -138,11 +138,11 @@ def test_early_exit_intelligence():
     print("\n4. Testing failed reversal exit...")
     pos4 = Position('BNB/USDT:USDT', 'long', 300, 1.0, 10, 295, 310)
     
-    # Was up at some point
-    pos4.max_favorable_excursion = 0.007  # Was up 0.7%
+    # Was up at some point (1.2% to exceed 1% threshold)
+    pos4.max_favorable_excursion = 0.012  # Was up 1.2%
     
-    # Now falling significantly
-    current_price = 295.5  # -1.5% loss
+    # Now falling significantly (-2.1% to exceed -2% threshold)
+    current_price = 293.7  # -2.1% loss
     current_pnl = pos4.get_pnl(current_price)
     
     should_exit, reason = pos4.should_early_exit(current_price, current_pnl)
@@ -165,6 +165,39 @@ def test_early_exit_intelligence():
     print(f"   Should exit: {should_exit}")
     assert should_exit == False, "Should not exit profitable position early"
     print("   ✓ No false exits on profitable positions")
+    
+    # Test 6: No premature exit - position should be allowed to recover
+    print("\n6. Testing no premature exits (conservative thresholds)...")
+    pos6 = Position('LINK/USDT:USDT', 'long', 15, 1.0, 10, 14.5, 16)
+    
+    # Position at 20 minutes with -1.8% loss - should NOT exit (needs 30 min + -2.5%)
+    pos6.entry_time = datetime.now() - timedelta(minutes=20)
+    current_price = 14.73  # -1.8% loss
+    current_pnl = pos6.get_pnl(current_price)
+    pos6.consecutive_negative_updates = 3
+    
+    should_exit, reason = pos6.should_early_exit(current_price, current_pnl)
+    print(f"   Time in trade: 20 minutes (less than 30 min threshold)")
+    print(f"   Current P/L: {current_pnl:.2%} (above -2.5% threshold)")
+    print(f"   Should exit: {should_exit}")
+    assert should_exit == False, "Should not exit before 30 minutes with only -1.8% loss"
+    print("   ✓ Position allowed to recover (not exited prematurely)")
+    
+    # Test 7: No premature exit - extended time but loss not severe enough
+    print("\n7. Testing no premature exit on extended time with minor loss...")
+    pos7 = Position('ADA/USDT:USDT', 'long', 0.5, 1.0, 10, 0.48, 0.52)
+    
+    # Position at 3 hours with -1.2% loss - should NOT exit (needs 4 hours + -1.5%)
+    pos7.entry_time = datetime.now() - timedelta(hours=3)
+    current_price = 0.494  # -1.2% loss
+    current_pnl = pos7.get_pnl(current_price)
+    
+    should_exit, reason = pos7.should_early_exit(current_price, current_pnl)
+    print(f"   Time in trade: 3 hours (less than 4 hour threshold)")
+    print(f"   Current P/L: {current_pnl:.2%} (above -1.5% threshold)")
+    print(f"   Should exit: {should_exit}")
+    assert should_exit == False, "Should not exit at 3 hours with only -1.2% loss"
+    print("   ✓ Position allowed more time to recover")
     
     print("\n✓ Early exit intelligence tests passed!")
     return True

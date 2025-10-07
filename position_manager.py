@@ -571,26 +571,30 @@ class Position:
         time_in_trade = (datetime.now() - self.entry_time).total_seconds() / 3600  # hours
         
         # 1. Rapid loss acceleration - exit if losing quickly
-        if time_in_trade >= 0.25:  # After 15 minutes
-            if current_pnl < -0.015:  # -1.5% loss
+        # Made more conservative: 30min (was 15min), -2.5% (was -1.5%), 4 updates (was 3)
+        if time_in_trade >= 0.5:  # After 30 minutes
+            if current_pnl < -0.025:  # -2.5% loss
                 # Check if loss is accelerating (consecutive negative updates)
-                if self.consecutive_negative_updates >= 3:
+                if self.consecutive_negative_updates >= 4:
                     return True, 'early_exit_rapid_loss'
         
         # 2. Extended time underwater - position not recovering
-        if time_in_trade >= 2.0:  # After 2 hours
-            if current_pnl < -0.01:  # Still -1% or worse
+        # Made more conservative: 4 hours (was 2 hours), -1.5% (was -1%)
+        if time_in_trade >= 4.0:  # After 4 hours
+            if current_pnl < -0.015:  # Still -1.5% or worse
                 return True, 'early_exit_extended_loss'
         
         # 3. Maximum adverse excursion threshold - cut losses before stop loss
-        if self.max_adverse_excursion < -0.025:  # -2.5% drawdown
-            if current_pnl < -0.02:  # Current loss > -2%
+        # Made more conservative: -3.5% drawdown (was -2.5%), -2.5% current (was -2%)
+        if self.max_adverse_excursion < -0.035:  # -3.5% drawdown
+            if current_pnl < -0.025:  # Current loss > -2.5%
                 # Exit early to preserve capital (before hitting wider stop loss)
                 return True, 'early_exit_mae_threshold'
         
         # 4. Failed reversal - got close to breakeven but falling again
-        if self.max_favorable_excursion > 0.005:  # Was up at least 0.5%
-            if current_pnl < -0.015:  # Now down -1.5% or worse
+        # Made more conservative: +1% favorable (was +0.5%), -2% loss (was -1.5%)
+        if self.max_favorable_excursion > 0.01:  # Was up at least 1%
+            if current_pnl < -0.02:  # Now down -2% or worse
                 return True, 'early_exit_failed_reversal'
         
         return False, ''

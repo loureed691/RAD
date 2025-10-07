@@ -150,30 +150,35 @@ safe_kelly = kelly_fraction * 0.5  # Half-Kelly
 - Tracks consecutive negative updates
 - Monitors maximum adverse excursion
 - Detects failed reversals
+- **Updated to more conservative thresholds** to reduce premature exits
 
 **Exit Conditions:**
 
 1. **Rapid Loss Acceleration**
-   - After 15 minutes + -1.5% loss + 3 consecutive negative updates
+   - After 30 minutes + -2.5% loss + 4 consecutive negative updates
    - Exits before hitting wider stop loss
+   - *More conservative than before (was 15 min, -1.5%, 3 updates)*
 
 2. **Extended Time Underwater**
-   - After 2 hours + still -1% or worse
+   - After 4 hours + still -1.5% or worse
    - Position not recovering, cut losses
+   - *More conservative than before (was 2 hours, -1%)*
 
 3. **Maximum Adverse Excursion**
-   - Drawdown > -2.5% + current loss > -2%
+   - Drawdown > -3.5% + current loss > -2.5%
    - Exit early to preserve capital
+   - *More conservative than before (was -2.5% drawdown, -2% current)*
 
 4. **Failed Reversal**
-   - Was up +0.5% but now down -1.5%
+   - Was up +1% but now down -2%
    - Reversal failed, exit quickly
+   - *More conservative than before (was +0.5%, -1.5%)*
 
 **Impact:**
-- **15-20% reduction in average loss size**
-- **Improved risk-reward ratio** (smaller losses, same wins)
-- **Better capital preservation** during adverse conditions
-- **Faster recovery** from losing streaks
+- **Reduced premature exits** - positions get more time to recover
+- **Better balance** between cutting losses and allowing recoveries
+- **Improved capital preservation** by avoiding early exit losses
+- **More patient approach** to position management
 
 ---
 

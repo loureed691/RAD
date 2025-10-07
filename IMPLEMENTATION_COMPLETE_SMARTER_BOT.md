@@ -36,12 +36,12 @@ The trading bot has been successfully upgraded with **5 major intelligence enhan
 - **Impact**: +8-12% long-term returns
 
 ### 5. Early Exit Intelligence
-- **4 exit conditions**:
-  1. Rapid loss acceleration (15 min, -1.5%, 3 consecutive drops)
-  2. Extended time underwater (2 hours, still -1%)
-  3. Max adverse excursion (-2.5% peak, -2% current)
-  4. Failed reversal (was +0.5%, now -1.5%)
-- **Impact**: 15-20% smaller average losses
+- **4 exit conditions** (updated to more conservative thresholds):
+  1. Rapid loss acceleration (30 min, -2.5%, 4 consecutive drops) *(was 15 min, -1.5%, 3)*
+  2. Extended time underwater (4 hours, still -1.5%) *(was 2 hours, -1%)*
+  3. Max adverse excursion (-3.5% peak, -2.5% current) *(was -2.5% peak, -2%)*
+  4. Failed reversal (was +1%, now -2%) *(was +0.5%, -1.5%)*
+- **Impact**: Reduced premature exits, better recovery opportunities
 
 ---
 
@@ -230,25 +230,33 @@ def should_early_exit(current_price, current_pnl):
     
     time_in_trade = (now - entry_time).hours
     
-    # 1. Rapid loss
-    if time_in_trade >= 0.25 and current_pnl < -0.015:
-        if consecutive_negative_updates >= 3:
+    # 1. Rapid loss (updated: more conservative)
+    if time_in_trade >= 0.5 and current_pnl < -0.025:
+        if consecutive_negative_updates >= 4:
             return True, 'early_exit_rapid_loss'
     
-    # 2. Extended underwater
-    if time_in_trade >= 2.0 and current_pnl < -0.01:
+    # 2. Extended underwater (updated: more conservative)
+    if time_in_trade >= 4.0 and current_pnl < -0.015:
         return True, 'early_exit_extended_loss'
     
-    # 3. Max adverse excursion
-    if max_adverse_excursion < -0.025 and current_pnl < -0.02:
+    # 3. Max adverse excursion (updated: more conservative)
+    if max_adverse_excursion < -0.035 and current_pnl < -0.025:
         return True, 'early_exit_mae_threshold'
     
-    # 4. Failed reversal
-    if max_favorable_excursion > 0.005 and current_pnl < -0.015:
+    # 4. Failed reversal (updated: more conservative)
+    if max_favorable_excursion > 0.01 and current_pnl < -0.02:
         return True, 'early_exit_failed_reversal'
     
     return False
 ```
+
+**Changes Made:**
+- Rapid loss: 30 min (was 15), -2.5% (was -1.5%), 4 updates (was 3)
+- Extended underwater: 4 hours (was 2), -1.5% (was -1%)
+- Max adverse excursion: -3.5% drawdown (was -2.5%), -2.5% current (was -2%)
+- Failed reversal: +1% favorable (was +0.5%), -2% loss (was -1.5%)
+
+These more conservative thresholds reduce premature exits and give positions more time to recover.
 
 ---
 
