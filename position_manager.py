@@ -86,6 +86,44 @@ class Position:
         self.last_pnl = 0.0  # Last recorded P/L
         self.last_pnl_time = datetime.now()  # Time of last P/L update
         self.profit_velocity = 0.0  # Rate of profit change (% per hour)
+        
+        # Breakeven and profit scaling
+        self.breakeven_moved = False
+        self.profit_acceleration = 0.0  # Rate of change of profit velocity
+        self.partial_exits_taken = 0  # Track partial profit taking
+    
+    def move_to_breakeven(self, current_price: float, buffer: float = 0.001) -> bool:
+        """
+        Move stop loss to breakeven (entry price) with small buffer
+        
+        Args:
+            current_price: Current market price
+            buffer: Small buffer above/below entry (default 0.1%)
+        
+        Returns:
+            True if moved, False otherwise
+        """
+        if self.breakeven_moved:
+            return False
+        
+        current_pnl = self.get_pnl(current_price)
+        
+        # Move to breakeven when profit > 2%
+        if current_pnl > 0.02:
+            if self.side == 'long':
+                new_stop = self.entry_price * (1 + buffer)
+                if new_stop > self.stop_loss:
+                    self.stop_loss = new_stop
+                    self.breakeven_moved = True
+                    return True
+            else:  # short
+                new_stop = self.entry_price * (1 - buffer)
+                if new_stop < self.stop_loss:
+                    self.stop_loss = new_stop
+                    self.breakeven_moved = True
+                    return True
+        
+        return False
     
     def update_trailing_stop(self, current_price: float, trailing_percentage: float, 
                             volatility: float = 0.03, momentum: float = 0.0):
@@ -209,12 +247,21 @@ class Position:
             # Overbought in short - still room to run
             tp_multiplier *= 1.1
         
-        # 5. Profit velocity - fast profit accumulation suggests strong move
-        if abs(self.profit_velocity) > 0.05:  # >5% per hour
-            tp_multiplier *= 1.2  # Extend target for fast-moving trades
-        elif abs(self.profit_velocity) < 0.01:  # <1% per hour
-            tp_multiplier *= 0.95  # Tighten for slow moves
+        # 5. Profit velocity and acceleration (ENHANCED)
+        if abs(self.profit_velocity) > 0.05:  # >5% per hour - fast move
+            tp_multiplier *= 1.2
+        elif abs(self.profit_velocity) < 0.01:  # <1% per hour - slow move
+            tp_multiplier *= 0.95
         
+        # NEW: Profit acceleration - detect if profit is accelerating
+        if time_delta > 0.1:  # At least 6 minutes between updates
+            old_velocity = (self.last_pnl - 0) / max(time_delta, 0.1)
+            self.profit_acceleration = (self.profit_velocity - old_velocity) / time_delta
+            
+            # If profit is accelerating rapidly, extend TP more
+            if self.profit_acceleration > 0.02:  # Rapid acceleration
+                tp_multiplier *= 1.15
+                
         # 6. Time-based adjustment - be more conservative on aging positions
         position_age_hours = (now - self.entry_time).total_seconds() / 3600
         if position_age_hours > 48:  # > 2 days old
