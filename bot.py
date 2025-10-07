@@ -252,40 +252,16 @@ class TradingBot:
         )
         leverage = min(leverage, Config.LEVERAGE)
         
-        # Adaptive position sizing using Kelly Criterion if we have performance history
-        metrics = self.ml_model.get_performance_metrics()
+        # Get Kelly Criterion fraction from ML model (uses performance history)
+        kelly_fraction = self.ml_model.get_kelly_fraction()
         
         # Check drawdown and adjust risk
         risk_adjustment = self.risk_manager.update_drawdown(available_balance)
         
-        if metrics.get('total_trades', 0) >= 20:  # Need at least 20 trades for Kelly
-            win_rate = metrics.get('win_rate', 0.5)
-            avg_profit = abs(metrics.get('avg_profit', 0.02))
-            
-            # Use actual tracked average loss if available, otherwise estimate
-            avg_loss = metrics.get('avg_loss', 0)
-            # Bug fix: Use threshold comparison for float values instead of == 0
-            if avg_loss <= 0.0001 or metrics.get('losses', 0) < 5:
-                # FIX BUG 4: Not enough loss data - use conservative estimate based on volatility
-                # rather than avg_profit * 1.5 which may not reflect actual risk
-                # Use max of: current stop loss %, or 2x avg_profit (conservative)
-                avg_loss = max(stop_loss_percentage, avg_profit * 2.0)
-            
-            optimal_risk = self.risk_manager.calculate_kelly_criterion(
-                win_rate, avg_profit, avg_loss
-            )
-            # Apply drawdown protection
-            risk_per_trade = optimal_risk * risk_adjustment
-            self.logger.info(f"🎯 Using Kelly-optimized risk: {optimal_risk:.2%} × {risk_adjustment:.0%} = {risk_per_trade:.2%} (win rate: {win_rate:.2%}, avg profit: {avg_profit:.2%}, avg loss: {avg_loss:.2%})")
-        else:
-            # Apply drawdown protection to default risk
-            risk_per_trade = self.risk_manager.risk_per_trade * risk_adjustment
-            if risk_adjustment < 1.0:
-                self.logger.info(f"Using default risk with drawdown protection: {self.risk_manager.risk_per_trade:.2%} × {risk_adjustment:.0%} = {risk_per_trade:.2%}")
-        
-        # Calculate position size with optimized risk
+        # Calculate position size with Kelly Criterion if available
         position_size = self.risk_manager.calculate_position_size(
-            available_balance, entry_price, stop_loss_price, leverage, risk_per_trade
+            available_balance, entry_price, stop_loss_price, leverage, 
+            kelly_fraction=kelly_fraction * risk_adjustment if kelly_fraction > 0 else None
         )
         
         # Open position
