@@ -44,6 +44,13 @@ def test_close_position_failure_handling():
             # Initialize client
             client = KuCoinClient('test_key', 'test_secret', 'test_pass')
             
+            # Common mock setup for ticker data
+            mock_exchange.fetch_ticker.return_value = {
+                'last': 50000.0,
+                'bid': 49900.0,
+                'ask': 50100.0
+            }
+            
             # Test Case 1: Order creation returns None (failure)
             print("\n  Test 1: Market order returns None (API error)")
             mock_exchange.fetch_positions.return_value = [
@@ -66,19 +73,30 @@ def test_close_position_failure_handling():
             
             # Test Case 2: Order creation succeeds
             print("\n  Test 2: Market order succeeds")
-            mock_exchange.create_order.return_value = {
+            # Mock all required methods for successful order creation
+            order_dict = {
                 'id': '12345',
                 'symbol': 'BTC/USDT:USDT',
-                'status': 'closed'
+                'status': 'closed',
+                'average': 50000.0,
+                'price': 50000.0,
+                'filled': 10.0,
+                'cost': 500000.0,
+                'timestamp': 1234567890000
             }
+            mock_exchange.create_order.return_value = order_dict
+            mock_exchange.fetch_order.return_value = order_dict
             
-            result = client.close_position('BTC/USDT:USDT')
-            
-            if result == True:
-                print("    ✓ PASS: close_position correctly returned True")
-            else:
-                print(f"    ✗ FAIL: close_position returned {result}, expected True")
-                return False
+            # Mock the helper methods that create_market_order depends on
+            with patch.object(client, 'validate_and_cap_amount', return_value=10.0):
+                with patch.object(client, 'check_available_margin', return_value=(True, 10000.0, 'OK')):
+                    result = client.close_position('BTC/USDT:USDT')
+                    
+                    if result == True:
+                        print("    ✓ PASS: close_position correctly returned True")
+                    else:
+                        print(f"    ✗ FAIL: close_position returned {result}, expected True")
+                        return False
             
             # Test Case 3: No position found for symbol
             print("\n  Test 3: No position found for symbol")
