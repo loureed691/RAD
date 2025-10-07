@@ -311,15 +311,25 @@ class Position:
                 # For LONG: TP is above current price, so check if price is getting close
                 if current_price < self.take_profit:
                     # Price hasn't reached TP yet
-                    # Calculate how close: if price is within 10% of the distance to TP, don't extend further
-                    distance_to_tp = self.take_profit - current_price
-                    progress_pct = (current_price - self.entry_price) / (self.take_profit - self.entry_price) if self.take_profit > self.entry_price else 0
+                    # Calculate distances to TP before and after the change
+                    distance_to_current_tp = self.take_profit - current_price
+                    distance_to_new_tp = new_take_profit - current_price
                     
-                    if progress_pct < 0.75:  # Less than 75% of way to TP - allow extension
+                    # Calculate how far price has progressed toward the INITIAL TP
+                    # This determines if price is "approaching" the target or still far away
+                    if current_price > self.entry_price and self.initial_take_profit > self.entry_price:
+                        progress_to_initial_tp = (current_price - self.entry_price) / (self.initial_take_profit - self.entry_price)
+                    else:
+                        progress_to_initial_tp = 0
+                    
+                    # CRITICAL FIX: Always prevent TP from moving further away from current price
+                    # Only allow TP changes that bring TP closer or keep distance the same
+                    # This prevents the "TP keeps moving away" issue
+                    if distance_to_new_tp <= distance_to_current_tp:
+                        # New TP is closer or same distance - allow it
                         self.take_profit = new_take_profit
                     else:
-                        # Close to TP (75%+) - don't allow extension to prevent moving TP away
-                        # This is the critical fix for "bot doesn't sell" issue
+                        # New TP would be further away - reject the change
                         pass  # Keep TP at current value
                 else:
                     # Price at or past TP - only allow if new TP brings it closer
@@ -335,15 +345,25 @@ class Position:
                 # For SHORT: TP is below current price, so check if price is getting close
                 if current_price > self.take_profit:
                     # Price hasn't reached TP yet
-                    # Calculate how close: if price is within 10% of the distance to TP, don't extend further
-                    distance_to_tp = current_price - self.take_profit
-                    progress_pct = (self.entry_price - current_price) / (self.entry_price - self.take_profit) if self.entry_price > self.take_profit else 0
+                    # Calculate distances to TP before and after the change
+                    distance_to_current_tp = current_price - self.take_profit
+                    distance_to_new_tp = current_price - new_take_profit
                     
-                    if progress_pct < 0.75:  # Less than 75% of way to TP - allow extension
+                    # Calculate how far price has progressed toward the INITIAL TP
+                    # This determines if price is "approaching" the target or still far away
+                    if current_price < self.entry_price and self.entry_price > self.initial_take_profit:
+                        progress_to_initial_tp = (self.entry_price - current_price) / (self.entry_price - self.initial_take_profit)
+                    else:
+                        progress_to_initial_tp = 0
+                    
+                    # CRITICAL FIX: Always prevent TP from moving further away from current price
+                    # Only allow TP changes that bring TP closer or keep distance the same
+                    # This prevents the "TP keeps moving away" issue
+                    if distance_to_new_tp <= distance_to_current_tp:
+                        # New TP is closer or same distance - allow it
                         self.take_profit = new_take_profit
                     else:
-                        # Close to TP (75%+) - don't allow extension to prevent moving TP away
-                        # This is the critical fix for "bot doesn't sell" issue
+                        # New TP would be further away - reject the change
                         pass  # Keep TP at current value
                 else:
                     # Price at or past TP - only allow if new TP brings it closer
