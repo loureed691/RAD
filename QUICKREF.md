@@ -288,20 +288,62 @@ MIN_PROFIT_THRESHOLD=0.01
 
 ## Emergency Stop
 
-### Graceful Shutdown
+### Keyboard Shutdown (Recommended)
+The bot implements comprehensive keyboard interrupt handling for safe shutdown:
+
 ```bash
-# Press Ctrl+C
-# Bot will log shutdown and optionally close positions
+# Press Ctrl+C once
+# Bot will:
+# 1. Detect SIGINT signal (Ctrl+C)
+# 2. Log shutdown initiation with clear messages
+# 3. Stop the trading cycle gracefully
+# 4. Complete any ongoing operations
+# 5. Save ML model data
+# 6. Optionally close positions (if CLOSE_POSITIONS_ON_SHUTDOWN=True)
+# 7. Exit cleanly
 ```
 
-### Force Stop
+**What happens:**
+- ✅ Trading cycle stops after current iteration
+- ✅ ML model saves training data automatically
+- ✅ All logs are flushed properly
+- ✅ Positions remain open (unless configured otherwise)
+- ✅ No data loss or corruption
+
+**Configuration:**
+```env
+# Add to .env to close all positions on shutdown
+CLOSE_POSITIONS_ON_SHUTDOWN=True
+```
+
+### Signal-based Shutdown
+The bot handles multiple shutdown signals:
+
+```bash
+# SIGINT (Ctrl+C) - User interrupt
+kill -SIGINT <PID>
+
+# SIGTERM (Graceful termination)
+kill -SIGTERM <PID>
+```
+
+Both signals trigger the same graceful shutdown process.
+
+### Force Stop (Not Recommended)
+Only use if bot becomes unresponsive:
+
 ```bash
 # Find process
 ps aux | grep bot.py
 
-# Kill process
+# Force kill (WARNING: May leave positions open)
 kill -9 <PID>
 ```
+
+⚠️ **Warning**: Force kill bypasses shutdown logic and may:
+- Leave positions unmonitored
+- Lose unsaved ML training data
+- Not close positions even if configured
 
 ### Close All Positions
 ```python

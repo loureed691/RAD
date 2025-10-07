@@ -121,7 +121,15 @@ class TradingBot:
     
     def signal_handler(self, sig, frame):
         """Handle shutdown signals gracefully"""
-        self.logger.info("🛑 Shutdown signal received, closing positions...")
+        signal_name = 'SIGINT (Ctrl+C)' if sig == signal.SIGINT else f'SIGTERM ({sig})'
+        self.logger.info("=" * 60)
+        self.logger.info(f"🛑 Shutdown signal received: {signal_name}")
+        self.logger.info("=" * 60)
+        self.logger.info("⏳ Gracefully stopping bot...")
+        self.logger.info("   - Stopping trading cycle")
+        self.logger.info("   - Will complete current operations")
+        self.logger.info("   - Then proceed to shutdown")
+        self.logger.info("=" * 60)
         self.running = False
     
     def execute_trade(self, opportunity: dict) -> bool:
@@ -418,7 +426,11 @@ class TradingBot:
                     time.sleep(60)  # Wait a bit longer on error
         
         except KeyboardInterrupt:
-            self.logger.info("⌨️  Received keyboard interrupt")
+            self.logger.info("=" * 60)
+            self.logger.info("⌨️  Keyboard Interrupt (Ctrl+C) received")
+            self.logger.info("=" * 60)
+            self.logger.info("⏳ Initiating graceful shutdown...")
+            self.logger.info("=" * 60)
         
         finally:
             self.shutdown()
