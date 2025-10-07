@@ -99,7 +99,7 @@ class MLModel:
         sma_50 = indicators.get('sma_50', close)
         
         # Calculate trend acceleration (change in momentum)
-        prev_momentum = indicators.get('momentum_prev', momentum)
+        prev_momentum = indicators.get('momentum_prev', None)
         momentum_acceleration = momentum - prev_momentum if prev_momentum is not None else 0
         
         # Calculate sentiment score from price action
