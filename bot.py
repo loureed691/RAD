@@ -15,6 +15,7 @@ from risk_manager import RiskManager
 from ml_model import MLModel
 from indicators import Indicators
 from advanced_analytics import AdvancedAnalytics
+from health_monitor import HealthMonitor, ConfigValidator
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -103,6 +104,14 @@ class TradingBot:
         
         # Advanced analytics module
         self.analytics = AdvancedAnalytics()
+        
+        # Health monitoring
+        self.health_monitor = HealthMonitor()
+        
+        # Validate configuration
+        config_issues = ConfigValidator.validate_trading_config(Config)
+        if config_issues:
+            self.logger.info(ConfigValidator.get_config_summary(Config))
         
         # State
         self.running = False
@@ -289,7 +298,8 @@ class TradingBot:
         """Run one complete trading cycle"""
         self.logger.info("🔄 Starting trading cycle...")
         
-        # Periodically sync existing positions from exchange (every 10 cycles)
+        try:
+            # Periodically sync existing positions from exchange (every 10 cycles)
         # This ensures we catch any positions opened manually or by other means
         if not hasattr(self, '_cycle_count'):
             self._cycle_count = 0
@@ -351,6 +361,21 @@ class TradingBot:
         time_since_report = (datetime.now() - self.last_analytics_report).total_seconds()
         if time_since_report > 3600:  # 1 hour
             self.logger.info(self.analytics.get_performance_summary())
+            
+            # Also report API performance metrics
+            api_metrics = self.client.get_performance_metrics()
+            if api_metrics:
+                self.logger.info("=" * 60)
+                self.logger.info("📊 API PERFORMANCE METRICS")
+                self.logger.info("=" * 60)
+                for line in api_metrics.split('\n'):
+                    if line.strip():
+                        self.logger.info(line)
+                self.logger.info("=" * 60)
+            
+            # Report health status
+            self.logger.info(self.health_monitor.get_health_summary())
+            
             self.last_analytics_report = datetime.now()
         
         # Log performance metrics
@@ -386,6 +411,7 @@ class TradingBot:
                 success = self.execute_trade(opportunity)
                 if success:
                     self.logger.info(f"✅ Trade executed for {opportunity.get('symbol', 'UNKNOWN')}")
+                    self.health_monitor.record_trade()
             
             except Exception as e:
                 self.logger.error(f"Error processing opportunity: {e}", exc_info=True)
@@ -400,6 +426,15 @@ class TradingBot:
             self.last_retrain_time = datetime.now()
         
         self.last_scan_time = datetime.now()
+        
+        # Record successful cycle
+        self.health_monitor.record_successful_cycle()
+        
+    except Exception as e:
+        self.logger.error(f"Error in trading cycle: {e}", exc_info=True)
+        self.health_monitor.record_failed_cycle()
+        self.health_monitor.record_error(str(e))
+        raise
     
     def run(self):
         """Main bot loop"""

@@ -5,6 +5,7 @@ import ccxt
 import time
 from typing import List, Dict, Optional
 from logger import Logger
+from resilience import retry_with_backoff, CircuitBreaker, PerformanceMonitor
 
 class KuCoinClient:
     """Wrapper for KuCoin Futures API using ccxt"""
@@ -13,6 +14,10 @@ class KuCoinClient:
         """Initialize KuCoin client"""
         self.logger = Logger.get_logger()
         self.orders_logger = Logger.get_orders_logger()
+        
+        # Initialize resilience components
+        self.circuit_breaker = CircuitBreaker(failure_threshold=5, timeout=60)
+        self.performance_monitor = PerformanceMonitor()
         
         try:
             self.exchange = ccxt.kucoinfutures({
@@ -90,47 +95,100 @@ class KuCoinClient:
             self.logger.error(f"Error fetching active futures: {e}")
             return []
     
+    @retry_with_backoff(max_retries=3, initial_delay=1.0)
     def get_ticker(self, symbol: str) -> Optional[Dict]:
-        """Get ticker information for a symbol"""
+        """Get ticker information for a symbol with retry logic"""
+        start_time = time.time()
+        success = False
+        
         try:
-            ticker = self.exchange.fetch_ticker(symbol)
-            return ticker
+            success, ticker = self.circuit_breaker.call(
+                self.exchange.fetch_ticker, symbol
+            )
+            
+            if success:
+                self.performance_monitor.record(
+                    'get_ticker', time.time() - start_time, True
+                )
+                return ticker
+            else:
+                self.logger.error(f"Circuit breaker prevented ticker fetch for {symbol}")
+                return None
+                
         except Exception as e:
+            self.performance_monitor.record(
+                'get_ticker', time.time() - start_time, False
+            )
             self.logger.error(f"Error fetching ticker for {symbol}: {e}")
             return None
     
+    @retry_with_backoff(max_retries=3, initial_delay=1.0)
     def get_ohlcv(self, symbol: str, timeframe: str = '1h', limit: int = 100) -> List:
-        """Get OHLCV data for a symbol with retry logic"""
-        max_retries = 3
-        retry_delay = 1
+        """Get OHLCV data for a symbol with retry logic and circuit breaker"""
+        start_time = time.time()
         
-        for attempt in range(max_retries):
-            try:
-                ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+        try:
+            success, ohlcv = self.circuit_breaker.call(
+                self.exchange.fetch_ohlcv, symbol, timeframe, limit=limit
+            )
+            
+            if success:
                 if not ohlcv:
                     self.logger.warning(f"Empty OHLCV data returned for {symbol}")
+                    self.performance_monitor.record(
+                        'get_ohlcv', time.time() - start_time, False
+                    )
                     return []
                 
                 self.logger.debug(f"Fetched {len(ohlcv)} candles for {symbol}")
+                self.performance_monitor.record(
+                    'get_ohlcv', time.time() - start_time, True
+                )
                 return ohlcv
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    self.logger.warning(f"Error fetching OHLCV for {symbol} (attempt {attempt+1}/{max_retries}): {e}")
-                    time.sleep(retry_delay * (attempt + 1))
-                else:
-                    self.logger.error(f"Failed to fetch OHLCV for {symbol} after {max_retries} attempts: {e}")
-                    return []
-        
-        return []
-    
-    def get_balance(self) -> Dict:
-        """Get account balance"""
-        try:
-            balance = self.exchange.fetch_balance()
-            return balance
+            else:
+                self.logger.error(f"Circuit breaker prevented OHLCV fetch for {symbol}")
+                self.performance_monitor.record(
+                    'get_ohlcv', time.time() - start_time, False
+                )
+                return []
+                
         except Exception as e:
+            self.performance_monitor.record(
+                'get_ohlcv', time.time() - start_time, False
+            )
+            self.logger.error(f"Failed to fetch OHLCV for {symbol}: {e}")
+            return []
+    
+    @retry_with_backoff(max_retries=2, initial_delay=2.0)
+    def get_balance(self) -> Dict:
+        """Get account balance with retry logic"""
+        start_time = time.time()
+        
+        try:
+            success, balance = self.circuit_breaker.call(self.exchange.fetch_balance)
+            
+            if success:
+                self.performance_monitor.record(
+                    'get_balance', time.time() - start_time, True
+                )
+                return balance
+            else:
+                self.logger.error("Circuit breaker prevented balance fetch")
+                self.performance_monitor.record(
+                    'get_balance', time.time() - start_time, False
+                )
+                return {}
+                
+        except Exception as e:
+            self.performance_monitor.record(
+                'get_balance', time.time() - start_time, False
+            )
             self.logger.error(f"Error fetching balance: {e}")
             return {}
+    
+    def get_performance_metrics(self) -> str:
+        """Get API performance metrics summary"""
+        return self.performance_monitor.get_summary()
     
     def get_market_limits(self, symbol: str) -> Optional[Dict]:
         """Get market limits for a symbol (min/max order size)"""
