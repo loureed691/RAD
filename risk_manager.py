@@ -275,7 +275,7 @@ class RiskManager:
         Returns:
             Maximum leverage to use (3-20x)
         """
-        # 1. Base leverage from volatility regime classification
+        # 1. Enhanced base leverage from volatility regime classification
         if volatility > 0.10:
             base_leverage = 3  # Extreme volatility - minimal leverage
             volatility_regime = 'extreme'
@@ -298,12 +298,15 @@ class RiskManager:
             base_leverage = 16  # Very low volatility
             volatility_regime = 'very_low'
         
-        # 2. Confidence adjustment (±3x)
-        if confidence >= 0.80:
+        # 2. Enhanced confidence adjustment (±4x instead of ±3x)
+        if confidence >= 0.85:
             # Exceptionally high confidence
+            confidence_adj = 4
+        elif confidence >= 0.80:
+            # Very high confidence
             confidence_adj = 3
         elif confidence >= 0.75:
-            # Very high confidence
+            # High confidence
             confidence_adj = 2
         elif confidence >= 0.65:
             # Good confidence
@@ -312,8 +315,8 @@ class RiskManager:
             # Acceptable confidence
             confidence_adj = 0
         else:
-            # Lower confidence - reduce leverage
-            confidence_adj = -2
+            # Lower confidence - reduce leverage more aggressively
+            confidence_adj = -3
         
         # 3. Momentum adjustment (±2x)
         momentum_adj = 0
@@ -333,10 +336,10 @@ class RiskManager:
         elif trend_strength < 0.3:  # Weak/no trend
             trend_adj = -1
         
-        # 5. Market regime adjustment (±2x)
+        # 5. Enhanced market regime adjustment (±3x instead of ±2x)
         regime_adj = 0
         if market_regime == 'trending':
-            regime_adj = 2  # Can be more aggressive in trends
+            regime_adj = 3  # Can be more aggressive in trends
         elif market_regime == 'ranging':
             regime_adj = -2  # More conservative in ranges
         
@@ -353,18 +356,20 @@ class RiskManager:
         elif self.loss_streak >= 2:
             streak_adj = -2
         
-        # 7. Recent performance adjustment (±2x)
+        # 7. Enhanced recent performance adjustment (±3x instead of ±2x)
         recent_adj = 0
         recent_win_rate = self.get_recent_win_rate()
         if len(self.recent_trades) >= 5:  # Need minimum data
-            if recent_win_rate >= 0.70:
-                recent_adj = 2  # Excellent recent performance
+            if recent_win_rate >= 0.75:
+                recent_adj = 3  # Excellent recent performance
+            elif recent_win_rate >= 0.70:
+                recent_adj = 2
             elif recent_win_rate >= 0.60:
                 recent_adj = 1  # Good recent performance
             elif recent_win_rate <= 0.30:
-                recent_adj = -2  # Poor recent performance
+                recent_adj = -3  # Poor recent performance
             elif recent_win_rate <= 0.40:
-                recent_adj = -1  # Below average performance
+                recent_adj = -2  # Below average performance
         
         # 8. Drawdown adjustment (overrides other factors)
         drawdown_adj = 0
@@ -375,8 +380,7 @@ class RiskManager:
         elif self.current_drawdown > 0.10:
             drawdown_adj = -3  # Light drawdown protection
         
-        # Calculate final leverage
-        # FIX BUG 10: Prevent excessive negative adjustments from creating nonsensical values
+        # Calculate final leverage with improved bounds management
         # Cap individual adjustment categories to prevent runaway negative leverage
         total_adj = confidence_adj + momentum_adj + trend_adj + regime_adj + streak_adj + recent_adj
         
@@ -391,8 +395,8 @@ class RiskManager:
         # Apply hard limits (3x minimum, 20x maximum)
         final_leverage = max(3, min(final_leverage, 20))
         
-        # Log reasoning for transparency
-        if confidence_adj != 0 or streak_adj != 0 or drawdown_adj != 0:
+        # Log reasoning for transparency (only when adjustments are significant)
+        if abs(confidence_adj) > 1 or abs(streak_adj) > 1 or abs(drawdown_adj) > 0:
             self.logger.debug(
                 f"Leverage calculation: base={base_leverage}x ({volatility_regime} vol), "
                 f"conf={confidence_adj:+d}, mom={momentum_adj:+d}, trend={trend_adj:+d}, "
@@ -465,7 +469,7 @@ class RiskManager:
     def calculate_kelly_criterion(self, win_rate: float, avg_win: float, 
                                   avg_loss: float, use_fractional: bool = True) -> float:
         """
-        Calculate optimal position size using Kelly Criterion with adaptive fractional adjustment
+        Calculate optimal position size using Kelly Criterion with enhanced adaptive fractional adjustment
         
         Args:
             win_rate: Historical win rate (0-1)
@@ -487,7 +491,7 @@ class RiskManager:
         
         kelly_fraction = (b * p - q) / b
         
-        # Adaptive fractional Kelly based on performance confidence
+        # Enhanced adaptive fractional Kelly based on performance confidence
         if use_fractional:
             # Start with half-Kelly as baseline (0.5)
             fraction = 0.5
@@ -499,37 +503,48 @@ class RiskManager:
                 # If recent performance matches historical, can be more aggressive
                 performance_consistency = 1.0 - abs(recent_win_rate - win_rate)
                 
-                if performance_consistency > 0.85:
+                if performance_consistency > 0.90:
+                    # Exceptional consistency - can use 65% Kelly
+                    fraction = 0.65
+                elif performance_consistency > 0.85:
                     # Very consistent performance - can use 60% Kelly
                     fraction = 0.6
                 elif performance_consistency > 0.70:
                     # Good consistency - use 55% Kelly
                     fraction = 0.55
                 elif performance_consistency < 0.50:
-                    # Inconsistent performance - more conservative (40% Kelly)
-                    fraction = 0.4
+                    # Inconsistent performance - more conservative (35% Kelly)
+                    fraction = 0.35
                 elif performance_consistency < 0.60:
                     # Below average consistency - 45% Kelly
                     fraction = 0.45
             
+            # Additional adjustment for win rate quality
+            if win_rate >= 0.65:
+                # High win rate - can be slightly more aggressive
+                fraction = min(fraction * 1.1, 0.7)  # Max 10% increase, capped at 70%
+            elif win_rate <= 0.45:
+                # Low win rate - be more conservative
+                fraction = max(fraction * 0.85, 0.3)  # 15% reduction, min 30%
+            
             # Further reduce during losing streaks
             if self.loss_streak >= 3:
-                fraction *= 0.7  # 30% reduction during 3+ loss streak
+                fraction *= 0.65  # 35% reduction during 3+ loss streak (was 30%)
             elif self.loss_streak >= 2:
                 fraction *= 0.85  # 15% reduction during 2+ loss streak
             
-            # Can increase slightly during win streaks (but capped)
+            # Can increase slightly during win streaks (but capped more conservatively)
             if self.win_streak >= 5:
-                fraction = min(fraction * 1.1, 0.65)  # Max 10% increase, capped at 65%
+                fraction = min(fraction * 1.15, 0.7)  # Max 15% increase, capped at 70%
             elif self.win_streak >= 3:
-                fraction = min(fraction * 1.05, 0.65)  # Max 5% increase
+                fraction = min(fraction * 1.08, 0.7)  # Max 8% increase
             
             conservative_kelly = kelly_fraction * fraction
         else:
             # Standard half-Kelly
             conservative_kelly = kelly_fraction * 0.5
         
-        # Cap between 0.5% and 3.5% of portfolio
+        # Enhanced cap with better bounds: between 0.5% and 3.5% of portfolio
         optimal_risk = max(0.005, min(conservative_kelly, 0.035))
         
         return optimal_risk

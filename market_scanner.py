@@ -258,7 +258,7 @@ class MarketScanner:
     
     def _filter_high_priority_pairs(self, symbols: List[str], futures: List[Dict]) -> List[str]:
         """
-        Filter to high-priority trading pairs based on volume and liquidity
+        Filter to high-priority trading pairs based on volume and liquidity with enhanced logic
         
         Returns:
             List of filtered symbols
@@ -269,45 +269,68 @@ class MarketScanner:
         # Prioritize perpetual swaps and high-volume pairs
         priority_symbols = []
         
+        # Major coins that should always be included (if they're perpetual swaps)
+        major_coins = ['BTC', 'ETH', 'SOL', 'BNB', 'ADA', 'XRP', 'DOGE', 'MATIC', 'AVAX', 'DOT']
+        
         for symbol in symbols:
             future_info = symbol_map.get(symbol, {})
             
             # Filter by volume if available (min $1M daily volume)
             volume_24h = future_info.get('quoteVolume', 0)
-            if volume_24h > 0 and volume_24h < 1000000:
+            is_low_volume = volume_24h > 0 and volume_24h < 1000000
+            
+            # Check if it's a major coin
+            is_major = any(major in symbol for major in major_coins)
+            
+            # Check if it's a perpetual swap
+            is_swap = future_info.get('swap', False)
+            
+            # Skip low volume non-major coins
+            if is_low_volume and not is_major:
                 self.logger.debug(f"Skipping {symbol} due to low volume: ${volume_24h:.0f}")
                 continue
             
-            # Always include major perpetual swaps (BTC, ETH, etc.)
-            # Check if it's a swap AND contains a major coin name
-            if any(major in symbol for major in ['BTC', 'ETH', 'SOL', 'BNB', 'ADA', 'XRP', 'DOGE', 'MATIC']):
-                # Only include if it's a perpetual swap, not a dated future
-                if future_info.get('swap', False):
-                    priority_symbols.append(symbol)
-                else:
-                    self.logger.debug(f"Skipping {symbol}: major coin but not a perpetual swap")
-            # Include other perpetual swaps (typically higher volume)
-            elif future_info.get('swap', False):
+            # Always include major perpetual swaps
+            if is_major and is_swap:
                 priority_symbols.append(symbol)
+            # Include other high-volume perpetual swaps
+            elif is_swap and not is_low_volume:
+                priority_symbols.append(symbol)
+            # Major coins even if not perpetual swap (but warn)
+            elif is_major:
+                self.logger.debug(f"Skipping {symbol}: major coin but not a perpetual swap")
         
-        # If we filtered too aggressively, include all swaps (but still respect volume filter)
-        # Only fall back if we got very few results (< 5) and there are many pairs available
+        # Enhanced fallback logic
+        # If we filtered too aggressively, progressively relax constraints
         if len(priority_symbols) < 5 and len(symbols) > 10:
-            self.logger.warning(f"Only found {len(priority_symbols)} priority pairs from {len(symbols)} total, using all perpetual swaps")
-            # Include all perpetual swaps regardless of major coin status, but still respect volume filter
+            self.logger.warning(f"Only found {len(priority_symbols)} priority pairs, relaxing volume filter")
             priority_symbols = []
+            
+            # Use a lower volume threshold (500k instead of 1M)
             for symbol in symbols:
                 future_info = symbol_map.get(symbol, {})
                 volume_24h = future_info.get('quoteVolume', 0)
+                is_major = any(major in symbol for major in major_coins)
+                is_swap = future_info.get('swap', False)
                 
-                # Still apply volume filter
-                if volume_24h > 0 and volume_24h < 1000000:
+                # Relaxed volume filter: 500k threshold
+                if volume_24h > 0 and volume_24h < 500000 and not is_major:
                     continue
-                    
+                
                 # Include all perpetual swaps
+                if is_swap:
+                    priority_symbols.append(symbol)
+        
+        # If still not enough, include all swaps regardless of volume (last resort)
+        if len(priority_symbols) < 5 and len(symbols) > 10:
+            self.logger.warning(f"Still only {len(priority_symbols)} pairs, removing volume filter entirely")
+            priority_symbols = []
+            for symbol in symbols:
+                future_info = symbol_map.get(symbol, {})
                 if future_info.get('swap', False):
                     priority_symbols.append(symbol)
         
+        self.logger.info(f"Filtered to {len(priority_symbols)} priority pairs from {len(symbols)} total")
         return priority_symbols
     
     def get_best_pairs(self, n: int = 3) -> List[Dict]:

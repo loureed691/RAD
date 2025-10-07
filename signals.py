@@ -18,6 +18,46 @@ class SignalGenerator:
         self.adaptive_threshold = 0.55
         self.pattern_recognizer = PatternRecognition()
     
+    def detect_support_resistance(self, df: pd.DataFrame, current_price: float) -> Dict:
+        """
+        Detect key support and resistance levels
+        
+        Returns:
+            Dict with support/resistance info
+        """
+        if df.empty or len(df) < 20:
+            return {'support': None, 'resistance': None, 'distance_to_support': 0, 'distance_to_resistance': 0}
+        
+        try:
+            # Use recent price action (last 50 periods)
+            recent_df = df.tail(50)
+            
+            # Find local highs and lows
+            highs = recent_df['high'].values
+            lows = recent_df['low'].values
+            
+            # Resistance: recent highest high
+            resistance = np.max(highs)
+            
+            # Support: recent lowest low
+            support = np.min(lows)
+            
+            # Calculate distances (as percentage)
+            distance_to_resistance = (resistance - current_price) / current_price if current_price > 0 else 0
+            distance_to_support = (current_price - support) / current_price if current_price > 0 else 0
+            
+            return {
+                'support': support,
+                'resistance': resistance,
+                'distance_to_support': distance_to_support,
+                'distance_to_resistance': distance_to_resistance,
+                'near_support': distance_to_support < 0.02,  # Within 2% of support
+                'near_resistance': distance_to_resistance < 0.02  # Within 2% of resistance
+            }
+        except Exception as e:
+            self.logger.debug(f"Error detecting support/resistance: {e}")
+            return {'support': None, 'resistance': None, 'distance_to_support': 0, 'distance_to_resistance': 0}
+    
     def detect_market_regime(self, df: pd.DataFrame) -> str:
         """
         Detect market regime to adapt strategy
@@ -212,14 +252,31 @@ class SignalGenerator:
             elif sell_signals > buy_signals:
                 sell_signals += 1.0
         
-        # 7. Momentum (weighted by regime)
+        # 7. Enhanced Momentum Analysis (weighted by regime)
         momentum_threshold = 0.015 if self.market_regime == 'ranging' else 0.02
-        if indicators['momentum'] > momentum_threshold:
-            buy_signals += trend_weight
-            reasons['momentum'] = 'strong positive'
-        elif indicators['momentum'] < -momentum_threshold:
-            sell_signals += trend_weight
-            reasons['momentum'] = 'strong negative'
+        momentum = indicators['momentum']
+        roc = indicators.get('roc', 0)
+        
+        # Combine momentum and ROC for stronger signal
+        momentum_strength = (abs(momentum) + abs(roc) / 100) / 2
+        
+        if momentum > momentum_threshold:
+            # Scale signal strength by momentum magnitude
+            momentum_signal_strength = min(momentum_strength / momentum_threshold, 2.0) * trend_weight
+            buy_signals += momentum_signal_strength
+            reasons['momentum'] = f'strong positive ({momentum:.2%})'
+        elif momentum < -momentum_threshold:
+            momentum_signal_strength = min(momentum_strength / momentum_threshold, 2.0) * trend_weight
+            sell_signals += momentum_signal_strength
+            reasons['momentum'] = f'strong negative ({momentum:.2%})'
+        elif momentum > 0.005:
+            # Weak positive momentum
+            buy_signals += trend_weight * 0.3
+            reasons['momentum'] = f'weak positive ({momentum:.2%})'
+        elif momentum < -0.005:
+            # Weak negative momentum
+            sell_signals += trend_weight * 0.3
+            reasons['momentum'] = f'weak negative ({momentum:.2%})'
         
         # 8. Advanced Pattern Recognition (NEW)
         pattern_signal, pattern_confidence, pattern_name = self.pattern_recognizer.get_pattern_signal(df)
@@ -233,6 +290,18 @@ class SignalGenerator:
                 sell_signals += pattern_weight
                 reasons['pattern'] = f'{pattern_name} (bearish)'
                 self.logger.info(f"🔍 Bearish pattern detected: {pattern_name} (confidence: {pattern_confidence:.2f})")
+        
+        # 9. Support/Resistance Analysis (NEW)
+        close = indicators['close']
+        sr_levels = self.detect_support_resistance(df, close)
+        if sr_levels.get('near_support', False):
+            # Near support is a potential buy opportunity
+            buy_signals += 1.5
+            reasons['support_resistance'] = f'near support ({sr_levels["distance_to_support"]:.1%})'
+        elif sr_levels.get('near_resistance', False):
+            # Near resistance is a potential sell opportunity
+            sell_signals += 1.5
+            reasons['support_resistance'] = f'near resistance ({sr_levels["distance_to_resistance"]:.1%})'
         
         total_signals = buy_signals + sell_signals
         
@@ -330,11 +399,13 @@ class SignalGenerator:
         # Bonus for strong trends (higher weight)
         momentum = abs(indicators.get('momentum', 0))
         if momentum > 0.04:
-            score += 20
+            score += 25  # Increased from 20
         elif momentum > 0.03:
-            score += 15
+            score += 18  # Increased from 15
         elif momentum > 0.02:
-            score += 10
+            score += 12  # Increased from 10
+        elif momentum > 0.01:
+            score += 5  # Added gradation
         
         # Bonus for high volume (confirmation)
         volume_ratio = indicators.get('volume_ratio', 0)
@@ -348,29 +419,52 @@ class SignalGenerator:
         # Bonus for volatility (opportunity) but penalize extreme volatility
         bb_width = indicators.get('bb_width', 0)
         if 0.03 < bb_width < 0.08:
-            score += 10  # Sweet spot
+            score += 12  # Sweet spot - increased from 10
         elif bb_width > 0.10:
-            score -= 5  # Too volatile
+            score -= 8  # Too volatile - increased penalty from -5
         elif bb_width > 0.05:
-            score += 5
+            score += 6  # Increased from 5
+        elif bb_width < 0.01:
+            score -= 3  # Too low volatility - new penalty
         
         # Bonus for extreme RSI (mean reversion opportunity)
         rsi = indicators.get('rsi', 50)
         if rsi < 25 or rsi > 75:
-            score += 10
+            score += 12  # Increased from 10
         elif rsi < 30 or rsi > 70:
-            score += 5
+            score += 6  # Increased from 5
         
         # Bonus for trending markets
         if self.market_regime == 'trending':
-            score += 10
+            score += 12  # Increased from 10
+        elif self.market_regime == 'ranging':
+            score += 5  # Small bonus for range trading opportunities
         
         # Risk-adjusted scoring: penalize high volatility relative to momentum
         if momentum > 0:
             risk_reward_ratio = momentum / max(bb_width, 0.01)
-            if risk_reward_ratio > 1.0:
-                score += 10  # Good risk/reward
+            if risk_reward_ratio > 1.5:
+                score += 15  # Excellent risk/reward - increased from 10
+            elif risk_reward_ratio > 1.0:
+                score += 8  # Good risk/reward - increased from 10
             elif risk_reward_ratio < 0.5:
-                score -= 5  # Poor risk/reward
+                score -= 8  # Poor risk/reward - increased penalty from -5
+        
+        # NEW: Bonus for support/resistance proximity
+        close = indicators.get('close', 0)
+        if close > 0:
+            sr_levels = self.detect_support_resistance(df, close)
+            if sr_levels.get('near_support', False) and signal == 'BUY':
+                score += 10  # Bouncing off support
+            elif sr_levels.get('near_resistance', False) and signal == 'SELL':
+                score += 10  # Rejecting at resistance
+        
+        # NEW: Bonus for multi-timeframe alignment (if available in reasons)
+        if reasons.get('mtf_boost'):
+            score += 8  # Multi-timeframe confirmation
+        
+        # NEW: Penalty for conflicting signals
+        if reasons.get('mtf_conflict'):
+            score -= 5  # Multi-timeframe conflict
         
         return score
