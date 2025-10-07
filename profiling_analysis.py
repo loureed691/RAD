@@ -122,7 +122,7 @@ def analyze_risk_calculations_performance():
         rm.calculate_position_size,
         balance=10000,
         entry_price=100.0,
-        stop_loss=95.0,
+        stop_loss_price=95.0,
         leverage=10,
         risk_per_trade=0.02
     )
@@ -290,9 +290,11 @@ def check_error_handling():
             content = f.read()
             lines = content.split('\n')
             
-            try_count = content.count('try:')
-            except_count = content.count('except ')
-            bare_except = content.count('except:')
+            # Count only actual try: and except statements (not in strings/comments)
+            import re
+            try_count = len(re.findall(r'^\s*try:\s*$', content, re.MULTILINE))
+            except_count = len(re.findall(r'^\s*except\s+', content, re.MULTILINE))
+            bare_except = len(re.findall(r'^\s*except:\s*$', content, re.MULTILINE))
             
             print(f"  Try blocks: {try_count}")
             print(f"  Except blocks: {except_count}")
