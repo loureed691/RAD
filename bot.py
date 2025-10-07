@@ -285,25 +285,8 @@ class TradingBot:
         
         return success
     
-    def run_cycle(self):
-        """Run one complete trading cycle"""
-        self.logger.info("🔄 Starting trading cycle...")
-        
-        # Periodically sync existing positions from exchange (every 10 cycles)
-        # This ensures we catch any positions opened manually or by other means
-        if not hasattr(self, '_cycle_count'):
-            self._cycle_count = 0
-        self._cycle_count += 1
-        
-        if self._cycle_count % 10 == 0:
-            self.logger.debug("Periodic sync of existing positions...")
-            self.position_manager.sync_existing_positions()
-        
-        # Update ML model's adaptive threshold in signal generator
-        adaptive_threshold = self.ml_model.get_adaptive_confidence_threshold()
-        self.scanner.signal_generator.set_adaptive_threshold(adaptive_threshold)
-        self.logger.debug(f"Using adaptive confidence threshold: {adaptive_threshold:.2f}")
-        
+    def update_open_positions(self):
+        """Update existing open positions - called frequently for live monitoring"""
         # Update existing positions
         for symbol, pnl, position in self.position_manager.update_positions():
             try:
@@ -340,27 +323,10 @@ class TradingBot:
             
             except Exception as e:
                 self.logger.error(f"Error recording closed position {symbol}: {e}", exc_info=True)
-        
-        # Record current equity for analytics
-        balance = self.client.get_balance()
-        if balance and 'free' in balance:
-            available_balance = float(balance.get('free', {}).get('USDT', 0))
-            self.analytics.record_equity(available_balance)
-        
-        # Periodic analytics report (every hour)
-        time_since_report = (datetime.now() - self.last_analytics_report).total_seconds()
-        if time_since_report > 3600:  # 1 hour
-            self.logger.info(self.analytics.get_performance_summary())
-            self.last_analytics_report = datetime.now()
-        
-        # Log performance metrics
-        metrics = self.ml_model.get_performance_metrics()
-        if metrics.get('total_trades', 0) > 0:
-            self.logger.info(
-                f"Performance - Win Rate: {metrics.get('win_rate', 0):.2%}, "
-                f"Avg P/L: {metrics.get('avg_profit', 0):.2%}, "
-                f"Total Trades: {metrics.get('total_trades', 0)}"
-            )
+    
+    def scan_for_opportunities(self):
+        """Scan market for new trading opportunities - called periodically"""
+        self.logger.info("🔍 Scanning market for opportunities...")
         
         # Scan market for opportunities
         opportunities = self.scanner.get_best_pairs(n=5)
@@ -390,6 +356,52 @@ class TradingBot:
             except Exception as e:
                 self.logger.error(f"Error processing opportunity: {e}", exc_info=True)
                 continue
+    
+    def run_cycle(self):
+        """Run one complete trading cycle"""
+        self.logger.info("🔄 Starting trading cycle...")
+        
+        # Periodically sync existing positions from exchange (every 10 cycles)
+        # This ensures we catch any positions opened manually or by other means
+        if not hasattr(self, '_cycle_count'):
+            self._cycle_count = 0
+        self._cycle_count += 1
+        
+        if self._cycle_count % 10 == 0:
+            self.logger.debug("Periodic sync of existing positions...")
+            self.position_manager.sync_existing_positions()
+        
+        # Update ML model's adaptive threshold in signal generator
+        adaptive_threshold = self.ml_model.get_adaptive_confidence_threshold()
+        self.scanner.signal_generator.set_adaptive_threshold(adaptive_threshold)
+        self.logger.debug(f"Using adaptive confidence threshold: {adaptive_threshold:.2f}")
+        
+        # Update existing positions
+        self.update_open_positions()
+        
+        # Record current equity for analytics
+        balance = self.client.get_balance()
+        if balance and 'free' in balance:
+            available_balance = float(balance.get('free', {}).get('USDT', 0))
+            self.analytics.record_equity(available_balance)
+        
+        # Periodic analytics report (every hour)
+        time_since_report = (datetime.now() - self.last_analytics_report).total_seconds()
+        if time_since_report > 3600:  # 1 hour
+            self.logger.info(self.analytics.get_performance_summary())
+            self.last_analytics_report = datetime.now()
+        
+        # Log performance metrics
+        metrics = self.ml_model.get_performance_metrics()
+        if metrics.get('total_trades', 0) > 0:
+            self.logger.info(
+                f"Performance - Win Rate: {metrics.get('win_rate', 0):.2%}, "
+                f"Avg P/L: {metrics.get('avg_profit', 0):.2%}, "
+                f"Total Trades: {metrics.get('total_trades', 0)}"
+            )
+        
+        # Scan for new opportunities
+        self.scan_for_opportunities()
         
         # Check if we should retrain the ML model
         time_since_retrain = (datetime.now() - self.last_retrain_time).total_seconds()
@@ -402,28 +414,48 @@ class TradingBot:
         self.last_scan_time = datetime.now()
     
     def run(self):
-        """Main bot loop"""
+        """Main bot loop with continuous position monitoring"""
         self.running = True
         self.logger.info("=" * 60)
         self.logger.info("🚀 BOT STARTED SUCCESSFULLY!")
         self.logger.info("=" * 60)
-        self.logger.info(f"⏱️  Check interval: {Config.CHECK_INTERVAL}s")
+        self.logger.info(f"⏱️  Opportunity scan interval: {Config.CHECK_INTERVAL}s")
+        self.logger.info(f"⚡ Position update interval: {Config.POSITION_UPDATE_INTERVAL}s (LIVE MONITORING)")
         self.logger.info(f"📊 Max positions: {Config.MAX_OPEN_POSITIONS}")
         self.logger.info(f"💪 Leverage: {Config.LEVERAGE}x")
         self.logger.info("=" * 60)
         
+        # Initialize timing
+        last_full_cycle = datetime.now()
+        
         try:
             while self.running:
                 try:
-                    self.run_cycle()
+                    # Always update open positions (live monitoring)
+                    if self.position_manager.get_open_positions_count() > 0:
+                        self.update_open_positions()
                     
-                    # Wait before next cycle
-                    self.logger.info(f"⏸️  Waiting {Config.CHECK_INTERVAL}s before next cycle...")
-                    time.sleep(Config.CHECK_INTERVAL)
+                    # Check if it's time for a full cycle (opportunity scan)
+                    time_since_last_cycle = (datetime.now() - last_full_cycle).total_seconds()
+                    
+                    if time_since_last_cycle >= Config.CHECK_INTERVAL:
+                        # Run full trading cycle (includes opportunity scanning)
+                        self.run_cycle()
+                        last_full_cycle = datetime.now()
+                    else:
+                        # Just sleep for position update interval
+                        remaining_time = Config.CHECK_INTERVAL - time_since_last_cycle
+                        sleep_time = min(Config.POSITION_UPDATE_INTERVAL, remaining_time)
+                        
+                        # Log less frequently to avoid spam
+                        if self.position_manager.get_open_positions_count() > 0:
+                            self.logger.debug(f"💓 Monitoring {self.position_manager.get_open_positions_count()} position(s)... (next scan in {int(remaining_time)}s)")
+                        
+                        time.sleep(sleep_time)
                     
                 except Exception as e:
-                    self.logger.error(f"❌ Error in trading cycle: {e}", exc_info=True)
-                    time.sleep(60)  # Wait a bit longer on error
+                    self.logger.error(f"❌ Error in trading loop: {e}", exc_info=True)
+                    time.sleep(10)  # Short wait on error, then continue monitoring
         
         except KeyboardInterrupt:
             self.logger.info("=" * 60)
