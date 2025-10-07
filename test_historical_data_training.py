@@ -186,16 +186,22 @@ def test_list_based_historical_data():
         
         print("\n1. Creating list-based OHLCV data...")
         # Create OHLCV data as list (as returned by exchange APIs)
-        num_candles = 150
-        start_time = int((datetime.now() - timedelta(days=20)).timestamp() * 1000)
+        num_candles = 200  # Increased for more samples
+        start_time = int((datetime.now() - timedelta(days=25)).timestamp() * 1000)
+        
+        # Set random seed for reproducibility
+        np.random.seed(42)
         
         ohlcv_list = []
         base_price = 40000
         for i in range(num_candles):
             timestamp = start_time + i * 3600000
-            close = base_price + i * 10 + np.random.normal(0, 50)
-            high = close + abs(np.random.normal(0, 30))
-            low = close - abs(np.random.normal(0, 30))
+            # Create more diverse price movements
+            trend = i * 15  # Stronger trend
+            volatility = np.random.normal(0, 100)  # More volatility
+            close = base_price + trend + volatility
+            high = close + abs(np.random.normal(0, 50))
+            low = close - abs(np.random.normal(0, 50))
             open_price = (high + low) / 2
             volume = np.random.uniform(800, 1200)
             
