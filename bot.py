@@ -298,32 +298,36 @@ class TradingBot:
         
         # Update existing positions
         for symbol, pnl, position in self.position_manager.update_positions():
-            profit_icon = "📈" if pnl > 0 else "📉"
-            self.logger.info(f"{profit_icon} Position closed: {symbol}, P/L: {pnl:.2%}")
+            try:
+                profit_icon = "📈" if pnl > 0 else "📉"
+                self.logger.info(f"{profit_icon} Position closed: {symbol}, P/L: {pnl:.2%}")
+                
+                # Record trade for analytics
+                trade_duration = (datetime.now() - position.entry_time).total_seconds() / 60
+                self.analytics.record_trade({
+                    'symbol': symbol,
+                    'side': position.side,
+                    'entry_price': position.entry_price,
+                    'exit_price': position.entry_price * (1 + pnl / position.leverage) if position.side == 'long' else position.entry_price * (1 - pnl / position.leverage),
+                    'pnl': pnl,
+                    'pnl_pct': pnl,
+                    'duration': trade_duration,
+                    'leverage': position.leverage
+                })
+                
+                # Record outcome for ML model
+                ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
+                df = Indicators.calculate_all(ohlcv)
+                indicators = Indicators.get_latest_indicators(df)
+                
+                signal = 'BUY' if position.side == 'long' else 'SELL'
+                self.ml_model.record_outcome(indicators, signal, pnl)
+                
+                # Record outcome for risk manager (for streak tracking)
+                self.risk_manager.record_trade_outcome(pnl)
             
-            # Record trade for analytics
-            trade_duration = (datetime.now() - position.entry_time).total_seconds() / 60
-            self.analytics.record_trade({
-                'symbol': symbol,
-                'side': position.side,
-                'entry_price': position.entry_price,
-                'exit_price': position.entry_price * (1 + pnl / position.leverage) if position.side == 'long' else position.entry_price * (1 - pnl / position.leverage),
-                'pnl': pnl,
-                'pnl_pct': pnl,
-                'duration': trade_duration,
-                'leverage': position.leverage
-            })
-            
-            # Record outcome for ML model
-            ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
-            df = Indicators.calculate_all(ohlcv)
-            indicators = Indicators.get_latest_indicators(df)
-            
-            signal = 'BUY' if position.side == 'long' else 'SELL'
-            self.ml_model.record_outcome(indicators, signal, pnl)
-            
-            # Record outcome for risk manager (for streak tracking)
-            self.risk_manager.record_trade_outcome(pnl)
+            except Exception as e:
+                self.logger.error(f"Error recording closed position {symbol}: {e}", exc_info=True)
         
         # Record current equity for analytics
         balance = self.client.get_balance()
@@ -351,19 +355,29 @@ class TradingBot:
         
         # Try to execute trades for top opportunities
         for opportunity in opportunities:
-            if self.position_manager.get_open_positions_count() >= Config.MAX_OPEN_POSITIONS:
-                self.logger.info("Maximum positions reached")
-                break
+            try:
+                if self.position_manager.get_open_positions_count() >= Config.MAX_OPEN_POSITIONS:
+                    self.logger.info("Maximum positions reached")
+                    break
+                
+                # ENHANCEMENT: Validate opportunity dict before using
+                if not isinstance(opportunity, dict) or 'symbol' not in opportunity:
+                    self.logger.warning(f"Invalid opportunity data: {opportunity}")
+                    continue
+                
+                self.logger.info(
+                    f"🔎 Evaluating opportunity: {opportunity.get('symbol', 'UNKNOWN')} - "
+                    f"Score: {opportunity.get('score', 0):.1f}, Signal: {opportunity.get('signal', 'UNKNOWN')}, "
+                    f"Confidence: {opportunity.get('confidence', 0):.2f}"
+                )
+                
+                success = self.execute_trade(opportunity)
+                if success:
+                    self.logger.info(f"✅ Trade executed for {opportunity.get('symbol', 'UNKNOWN')}")
             
-            self.logger.info(
-                f"🔎 Evaluating opportunity: {opportunity['symbol']} - "
-                f"Score: {opportunity['score']:.1f}, Signal: {opportunity['signal']}, "
-                f"Confidence: {opportunity['confidence']:.2f}"
-            )
-            
-            success = self.execute_trade(opportunity)
-            if success:
-                self.logger.info(f"✅ Trade executed for {opportunity['symbol']}")
+            except Exception as e:
+                self.logger.error(f"Error processing opportunity: {e}", exc_info=True)
+                continue
         
         # Check if we should retrain the ML model
         time_since_retrain = (datetime.now() - self.last_retrain_time).total_seconds()
@@ -414,9 +428,12 @@ class TradingBot:
         # Close all positions if configured to do so
         if getattr(Config, "CLOSE_POSITIONS_ON_SHUTDOWN", False):
             for symbol in list(self.position_manager.positions.keys()):
-                pnl = self.position_manager.close_position(symbol, 'shutdown')
-                if pnl is None:
-                    self.logger.warning(f"⚠️  Failed to close position {symbol} during shutdown - may still be open on exchange")
+                try:
+                    pnl = self.position_manager.close_position(symbol, 'shutdown')
+                    if pnl is None:
+                        self.logger.warning(f"⚠️  Failed to close position {symbol} during shutdown - may still be open on exchange")
+                except Exception as e:
+                    self.logger.error(f"Error closing position {symbol} during shutdown: {e}")
         
         self.logger.info("=" * 60)
         self.logger.info("✅ BOT SHUTDOWN COMPLETE")
