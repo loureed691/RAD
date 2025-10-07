@@ -717,12 +717,42 @@ class KuCoinClient:
                     contracts = float(pos['contracts'])
                     side = 'sell' if pos['side'] == 'long' else 'buy'
                     
+                    # Extract leverage from position data (multi-source)
+                    # 1. Try CCXT unified 'leverage' field
+                    leverage = pos.get('leverage')
+                    if leverage is not None:
+                        try:
+                            leverage = int(leverage)
+                        except (ValueError, TypeError):
+                            self.logger.warning(
+                                f"Invalid leverage value '{leverage}' for {symbol}, defaulting to 10x"
+                            )
+                            leverage = 10
+                    else:
+                        # 2. Try KuCoin-specific 'realLeverage' in raw info
+                        info = pos.get('info', {})
+                        real_leverage = info.get('realLeverage')
+                        if real_leverage is not None:
+                            try:
+                                leverage = int(real_leverage)
+                            except (ValueError, TypeError):
+                                self.logger.warning(
+                                    f"Invalid realLeverage value '{real_leverage}' for {symbol}, defaulting to 10x"
+                                )
+                                leverage = 10
+                        else:
+                            # 3. Default to 10x with warning
+                            leverage = 10
+                            self.logger.warning(
+                                f"Leverage not found for {symbol} when closing, defaulting to 10x"
+                            )
+                    
                     if use_limit:
                         # Get current market price
                         ticker = self.get_ticker(symbol)
                         if not ticker:
                             self.logger.error(f"Could not get ticker for {symbol}, falling back to market order")
-                            order = self.create_market_order(symbol, side, abs(contracts))
+                            order = self.create_market_order(symbol, side, abs(contracts), leverage)
                         else:
                             current_price = ticker['last']
                             # Set limit price with slippage tolerance
@@ -732,14 +762,14 @@ class KuCoinClient:
                                 limit_price = current_price * (1 + slippage_tolerance)
                             
                             order = self.create_limit_order(
-                                symbol, side, abs(contracts), limit_price, 
+                                symbol, side, abs(contracts), limit_price, leverage,
                                 reduce_only=True
                             )
                     else:
-                        order = self.create_market_order(symbol, side, abs(contracts))
+                        order = self.create_market_order(symbol, side, abs(contracts), leverage)
                     
                     if order:
-                        self.logger.info(f"Closed position for {symbol}")
+                        self.logger.info(f"Closed position for {symbol} with {leverage}x leverage")
                         return True
                     else:
                         self.logger.error(f"Failed to create close order for {symbol}")

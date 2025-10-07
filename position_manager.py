@@ -1163,9 +1163,9 @@ class PositionManager:
                 self.logger.warning(f"Invalid price for {symbol}: {current_price}")
                 return None
             
-            # Close partial position
+            # Close partial position with correct leverage
             side = 'sell' if position.side == 'long' else 'buy'
-            order = self.client.create_market_order(symbol, side, amount_to_close)
+            order = self.client.create_market_order(symbol, side, amount_to_close, position.leverage)
             
             if not order:
                 return None
