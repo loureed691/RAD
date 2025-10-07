@@ -37,7 +37,8 @@ def test_portfolio_heat():
     ]
     heat1 = rm.get_portfolio_heat(positions1)
     print(f"   Position: BTC long, entry $50,000, SL $48,000")
-    print(f"   Risk per position: {(50000-48000)/50000*100:.1f}% = ${(50000-48000)/50000 * 0.1 * 50000:.2f}")
+    risk_pct = (50000 - 48000) / 50000 * 100
+    print(f"   Risk per position: {risk_pct:.1f}% = ${(50000-48000)/50000 * 0.1 * 50000:.2f}")
     print(f"   Portfolio Heat: ${heat1:.2f}")
     assert heat1 > 0, "Should have positive heat"
     print("   ✓ Single position heat calculated")
