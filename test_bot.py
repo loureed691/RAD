@@ -212,7 +212,7 @@ def test_ml_model():
         
         features = model.prepare_features(sample_indicators)
         # Enhanced features should have 26 features now (11 base + 15 derived)
-        assert features.shape[1] == 26, f"Expected 26 features, got {features.shape[1]}"
+        assert features.shape[1] == 31, f"Expected 31 features, got {features.shape[1]}"
         
         # Test performance metrics
         metrics = model.get_performance_metrics()

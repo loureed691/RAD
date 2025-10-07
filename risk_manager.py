@@ -149,22 +149,30 @@ class RiskManager:
     
     def calculate_position_size(self, balance: float, entry_price: float, 
                                stop_loss_price: float, leverage: int, 
-                               risk_per_trade: float = None) -> float:
+                               risk_per_trade: float = None, kelly_fraction: float = None) -> float:
         """
-        Calculate safe position size based on risk management
+        Calculate safe position size based on risk management with optional Kelly Criterion
         
         Args:
             balance: Account balance in USDT
             entry_price: Entry price for the trade
             stop_loss_price: Stop loss price
             leverage: Leverage to use
-            risk_per_trade: Optional override for risk per trade (from Kelly Criterion)
+            risk_per_trade: Optional override for risk per trade
+            kelly_fraction: Optional Kelly Criterion fraction for optimal sizing
         
         Returns:
             Position size in contracts
         """
-        # Use provided risk or default
-        risk = risk_per_trade if risk_per_trade is not None else self.risk_per_trade
+        # Use Kelly Criterion if provided and valid, otherwise use standard risk
+        if kelly_fraction is not None and kelly_fraction > 0:
+            # Kelly suggests optimal fraction of capital to risk
+            # Apply it as risk per trade with safety bounds
+            risk = min(kelly_fraction, self.risk_per_trade * 1.5)  # Cap at 1.5x standard risk
+            self.logger.debug(f"Using Kelly-optimized risk: {risk:.2%} (Kelly: {kelly_fraction:.2%})")
+        else:
+            # Use provided risk or default
+            risk = risk_per_trade if risk_per_trade is not None else self.risk_per_trade
         
         # Calculate risk amount
         risk_amount = balance * risk
