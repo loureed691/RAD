@@ -108,6 +108,11 @@ class AdvancedAnalytics:
         # Calculate return
         initial_balance = balances[0]
         final_balance = balances[-1]
+        
+        # Defensive: Handle zero initial balance
+        if initial_balance == 0:
+            return 0.0
+        
         total_return = (final_balance - initial_balance) / initial_balance
         
         # Calculate max drawdown
@@ -117,9 +122,11 @@ class AdvancedAnalytics:
         for balance in balances:
             if balance > peak:
                 peak = balance
-            dd = (peak - balance) / peak
-            if dd > max_dd:
-                max_dd = dd
+            # Defensive: Handle zero peak to avoid division by zero
+            if peak > 0:
+                dd = (peak - balance) / peak
+                if dd > max_dd:
+                    max_dd = dd
         
         if max_dd == 0:
             return float('inf')
@@ -274,7 +281,11 @@ class AdvancedAnalytics:
         for balance in balances:
             if balance > peak:
                 peak = balance
-            dd_pct = ((peak - balance) / peak) * 100
+            # Defensive: Handle zero peak to avoid division by zero
+            if peak > 0:
+                dd_pct = ((peak - balance) / peak) * 100
+            else:
+                dd_pct = 0.0
             drawdowns.append(dd_pct)
         
         # Ulcer Index is RMS of drawdowns
