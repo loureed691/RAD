@@ -380,165 +380,165 @@ class TradingBot:
         
         try:
             # Periodically sync existing positions from exchange (every 10 cycles)
-        # This ensures we catch any positions opened manually or by other means
-        if not hasattr(self, '_cycle_count'):
-            self._cycle_count = 0
-        self._cycle_count += 1
-        
-        if self._cycle_count % 10 == 0:
-            self.logger.debug("Periodic sync of existing positions...")
-            self.position_manager.sync_existing_positions()
-        
-        # Update ML model's adaptive threshold in signal generator
-        adaptive_threshold = self.ml_model.get_adaptive_confidence_threshold()
-        self.scanner.signal_generator.set_adaptive_threshold(adaptive_threshold)
-        self.logger.debug(f"Using adaptive confidence threshold: {adaptive_threshold:.2f}")
-        
-        # Update existing positions
-        for symbol, pnl, position in self.position_manager.update_positions():
-            try:
-                profit_icon = "📈" if pnl > 0 else "📉"
-                self.logger.info(f"{profit_icon} Position closed: {symbol}, P/L: {pnl:.2%}")
+            # This ensures we catch any positions opened manually or by other means
+            if not hasattr(self, '_cycle_count'):
+                self._cycle_count = 0
+            self._cycle_count += 1
+            
+            if self._cycle_count % 10 == 0:
+                self.logger.debug("Periodic sync of existing positions...")
+                self.position_manager.sync_existing_positions()
+            
+            # Update ML model's adaptive threshold in signal generator
+            adaptive_threshold = self.ml_model.get_adaptive_confidence_threshold()
+            self.scanner.signal_generator.set_adaptive_threshold(adaptive_threshold)
+            self.logger.debug(f"Using adaptive confidence threshold: {adaptive_threshold:.2f}")
+            
+            # Update existing positions
+            for symbol, pnl, position in self.position_manager.update_positions():
+                try:
+                    profit_icon = "📈" if pnl > 0 else "📉"
+                    self.logger.info(f"{profit_icon} Position closed: {symbol}, P/L: {pnl:.2%}")
+                    
+                    # Record trade for analytics
+                    trade_duration = (datetime.now() - position.entry_time).total_seconds() / 60
+                    
+                    # DEFENSIVE: Ensure leverage is not zero (should never happen, but be safe)
+                    leverage = position.leverage if position.leverage > 0 else 1
+                    
+                    self.analytics.record_trade({
+                        'symbol': symbol,
+                        'side': position.side,
+                        'entry_price': position.entry_price,
+                        'exit_price': position.entry_price * (1 + pnl / leverage) if position.side == 'long' else position.entry_price * (1 - pnl / leverage),
+                        'pnl': pnl,
+                        'pnl_pct': pnl,
+                        'duration': trade_duration,
+                        'leverage': position.leverage
+                    })
+                    
+                    # Record outcome for ML model
+                    ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
+                    df = Indicators.calculate_all(ohlcv)
+                    indicators = Indicators.get_latest_indicators(df)
+                    
+                    signal = 'BUY' if position.side == 'long' else 'SELL'
+                    self.ml_model.record_outcome(indicators, signal, pnl)
+                    
+                    # Record outcome for risk manager (for streak tracking)
+                    self.risk_manager.record_trade_outcome(pnl)
                 
-                # Record trade for analytics
-                trade_duration = (datetime.now() - position.entry_time).total_seconds() / 60
+                except Exception as e:
+                    self.logger.error(f"Error recording closed position {symbol}: {e}", exc_info=True)
+            
+            # Record current equity for analytics
+            balance = self.client.get_balance()
+            if balance and 'free' in balance:
+                available_balance = float(balance.get('free', {}).get('USDT', 0))
+                self.analytics.record_equity(available_balance)
+            
+            # Periodic analytics report (every hour)
+            time_since_report = (datetime.now() - self.last_analytics_report).total_seconds()
+            if time_since_report > 3600:  # 1 hour
+                self.logger.info(self.analytics.get_performance_summary())
                 
-                # DEFENSIVE: Ensure leverage is not zero (should never happen, but be safe)
-                leverage = position.leverage if position.leverage > 0 else 1
+                # Also report API performance metrics
+                api_metrics = self.client.get_performance_metrics()
+                if api_metrics:
+                    self.logger.info("=" * 60)
+                    self.logger.info("📊 API PERFORMANCE METRICS")
+                    self.logger.info("=" * 60)
+                    for line in api_metrics.split('\n'):
+                        if line.strip():
+                            self.logger.info(line)
+                    self.logger.info("=" * 60)
                 
-                self.analytics.record_trade({
-                    'symbol': symbol,
-                    'side': position.side,
-                    'entry_price': position.entry_price,
-                    'exit_price': position.entry_price * (1 + pnl / leverage) if position.side == 'long' else position.entry_price * (1 - pnl / leverage),
-                    'pnl': pnl,
-                    'pnl_pct': pnl,
-                    'duration': trade_duration,
-                    'leverage': position.leverage
-                })
+                # Report health status
+                self.logger.info(self.health_monitor.get_health_summary())
                 
-                # Record outcome for ML model
-                ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
-                df = Indicators.calculate_all(ohlcv)
-                indicators = Indicators.get_latest_indicators(df)
-                
-                signal = 'BUY' if position.side == 'long' else 'SELL'
-                self.ml_model.record_outcome(indicators, signal, pnl)
-                
-                # Record outcome for risk manager (for streak tracking)
-                self.risk_manager.record_trade_outcome(pnl)
+                self.last_analytics_report = datetime.now()
             
-            except Exception as e:
-                self.logger.error(f"Error recording closed position {symbol}: {e}", exc_info=True)
-        
-        # Record current equity for analytics
-        balance = self.client.get_balance()
-        if balance and 'free' in balance:
-            available_balance = float(balance.get('free', {}).get('USDT', 0))
-            self.analytics.record_equity(available_balance)
-        
-        # Periodic analytics report (every hour)
-        time_since_report = (datetime.now() - self.last_analytics_report).total_seconds()
-        if time_since_report > 3600:  # 1 hour
-            self.logger.info(self.analytics.get_performance_summary())
-            
-            # Also report API performance metrics
-            api_metrics = self.client.get_performance_metrics()
-            if api_metrics:
-                self.logger.info("=" * 60)
-                self.logger.info("📊 API PERFORMANCE METRICS")
-                self.logger.info("=" * 60)
-                for line in api_metrics.split('\n'):
-                    if line.strip():
-                        self.logger.info(line)
-                self.logger.info("=" * 60)
-            
-            # Report health status
-            self.logger.info(self.health_monitor.get_health_summary())
-            
-            self.last_analytics_report = datetime.now()
-        
-        # Log performance metrics
-        metrics = self.ml_model.get_performance_metrics()
-        if metrics.get('total_trades', 0) > 0:
-            self.logger.info(
-                f"Performance - Win Rate: {metrics.get('win_rate', 0):.2%}, "
-                f"Avg P/L: {metrics.get('avg_profit', 0):.2%}, "
-                f"Total Trades: {metrics.get('total_trades', 0)}"
-            )
-        
-        # Scan market for opportunities
-        opportunities = self.scanner.get_best_pairs(n=5)
-        
-        # Rank and filter opportunities
-        if opportunities:
-            # Get current position symbols for diversification
-            open_position_symbols = list(self.position_manager.positions.keys())
-            
-            # Rank opportunities considering diversification
-            ranked_opportunities = self.opportunity_ranker.rank_opportunities(
-                opportunities, open_position_symbols
-            )
-            
-            # Filter to avoid too many correlated trades
-            filtered_opportunities = self.opportunity_ranker.filter_correlated_opportunities(
-                ranked_opportunities, max_similar=2
-            )
-            
-            # Take top opportunities after ranking and filtering
-            opportunities = filtered_opportunities[:5]
-            
-            if len(filtered_opportunities) < len(ranked_opportunities):
+            # Log performance metrics
+            metrics = self.ml_model.get_performance_metrics()
+            if metrics.get('total_trades', 0) > 0:
                 self.logger.info(
-                    f"Filtered {len(ranked_opportunities)} opportunities to "
-                    f"{len(filtered_opportunities)} after correlation check"
+                    f"Performance - Win Rate: {metrics.get('win_rate', 0):.2%}, "
+                    f"Avg P/L: {metrics.get('avg_profit', 0):.2%}, "
+                    f"Total Trades: {metrics.get('total_trades', 0)}"
                 )
-        
-        # Try to execute trades for top opportunities
-        for opportunity in opportunities:
-            try:
-                if self.position_manager.get_open_positions_count() >= Config.MAX_OPEN_POSITIONS:
-                    self.logger.info("Maximum positions reached")
-                    break
+            
+            # Scan market for opportunities
+            opportunities = self.scanner.get_best_pairs(n=5)
+            
+            # Rank and filter opportunities
+            if opportunities:
+                # Get current position symbols for diversification
+                open_position_symbols = list(self.position_manager.positions.keys())
                 
-                # ENHANCEMENT: Validate opportunity dict before using
-                if not isinstance(opportunity, dict) or 'symbol' not in opportunity:
-                    self.logger.warning(f"Invalid opportunity data: {opportunity}")
+                # Rank opportunities considering diversification
+                ranked_opportunities = self.opportunity_ranker.rank_opportunities(
+                    opportunities, open_position_symbols
+                )
+                
+                # Filter to avoid too many correlated trades
+                filtered_opportunities = self.opportunity_ranker.filter_correlated_opportunities(
+                    ranked_opportunities, max_similar=2
+                )
+                
+                # Take top opportunities after ranking and filtering
+                opportunities = filtered_opportunities[:5]
+                
+                if len(filtered_opportunities) < len(ranked_opportunities):
+                    self.logger.info(
+                        f"Filtered {len(ranked_opportunities)} opportunities to "
+                        f"{len(filtered_opportunities)} after correlation check"
+                    )
+            
+            # Try to execute trades for top opportunities
+            for opportunity in opportunities:
+                try:
+                    if self.position_manager.get_open_positions_count() >= Config.MAX_OPEN_POSITIONS:
+                        self.logger.info("Maximum positions reached")
+                        break
+                    
+                    # ENHANCEMENT: Validate opportunity dict before using
+                    if not isinstance(opportunity, dict) or 'symbol' not in opportunity:
+                        self.logger.warning(f"Invalid opportunity data: {opportunity}")
+                        continue
+                    
+                    self.logger.info(
+                        f"🔎 Evaluating opportunity: {opportunity.get('symbol', 'UNKNOWN')} - "
+                        f"Score: {opportunity.get('score', 0):.1f}, Signal: {opportunity.get('signal', 'UNKNOWN')}, "
+                        f"Confidence: {opportunity.get('confidence', 0):.2f}"
+                    )
+                    
+                    success = self.execute_trade(opportunity)
+                    if success:
+                        self.logger.info(f"✅ Trade executed for {opportunity.get('symbol', 'UNKNOWN')}")
+                        self.health_monitor.record_trade()
+                
+                except Exception as e:
+                    self.logger.error(f"Error processing opportunity: {e}", exc_info=True)
                     continue
-                
-                self.logger.info(
-                    f"🔎 Evaluating opportunity: {opportunity.get('symbol', 'UNKNOWN')} - "
-                    f"Score: {opportunity.get('score', 0):.1f}, Signal: {opportunity.get('signal', 'UNKNOWN')}, "
-                    f"Confidence: {opportunity.get('confidence', 0):.2f}"
-                )
-                
-                success = self.execute_trade(opportunity)
-                if success:
-                    self.logger.info(f"✅ Trade executed for {opportunity.get('symbol', 'UNKNOWN')}")
-                    self.health_monitor.record_trade()
             
-            except Exception as e:
-                self.logger.error(f"Error processing opportunity: {e}", exc_info=True)
-                continue
-        
-        # Check if we should retrain the ML model
-        time_since_retrain = (datetime.now() - self.last_retrain_time).total_seconds()
-        if time_since_retrain > Config.RETRAIN_INTERVAL:
-            self.logger.info("🤖 Retraining ML model...")
-            if self.ml_model.train():
-                self.logger.info("ML model retrained successfully")
-            self.last_retrain_time = datetime.now()
-        
-        self.last_scan_time = datetime.now()
-        
-        # Record successful cycle
-        self.health_monitor.record_successful_cycle()
-        
-    except Exception as e:
-        self.logger.error(f"Error in trading cycle: {e}", exc_info=True)
-        self.health_monitor.record_failed_cycle()
-        self.health_monitor.record_error(str(e))
-        raise
+            # Check if we should retrain the ML model
+            time_since_retrain = (datetime.now() - self.last_retrain_time).total_seconds()
+            if time_since_retrain > Config.RETRAIN_INTERVAL:
+                self.logger.info("🤖 Retraining ML model...")
+                if self.ml_model.train():
+                    self.logger.info("ML model retrained successfully")
+                self.last_retrain_time = datetime.now()
+            
+            self.last_scan_time = datetime.now()
+            
+            # Record successful cycle
+            self.health_monitor.record_successful_cycle()
+            
+        except Exception as e:
+            self.logger.error(f"Error in trading cycle: {e}", exc_info=True)
+            self.health_monitor.record_failed_cycle()
+            self.health_monitor.record_error(str(e))
+            raise
     
     def run(self):
         """Main bot loop"""
