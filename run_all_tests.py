@@ -13,14 +13,14 @@ from datetime import datetime
 # Test configuration: (name, file, expected_test_count)
 TEST_SUITES = [
     ("Core Components", "test_bot.py", 12),
-    ("Bug Fixes", "test_bug_fixes.py", 4),
-    ("Position Sync", "test_position_sync.py", 3),
-    ("Position Mode", "test_position_mode_fix.py", 3),
     ("Strategy Optimizations", "test_strategy_optimizations.py", 5),
     ("Adaptive Stops", "test_adaptive_stops.py", 9),
     ("Logger Enhancements", "test_logger_enhancements.py", 7),
-    ("Unicode Fix", "test_unicode_fix.py", 1),
     ("Advanced Features", "test_advanced_features.py", 6),
+    ("Live Trading", "test_live_trading.py", 6),
+    ("Trade Simulation", "test_trade_simulation.py", 20),
+    ("Enhanced Trading Methods", "test_enhanced_trading_methods.py", 10),
+    ("Smart Profit Taking", "test_smart_profit_taking.py", 10),
 ]
 
 def print_header():

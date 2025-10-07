@@ -26,6 +26,7 @@ class TestLiveTrading(unittest.TestCase):
         # Position update interval should be frequent for live monitoring (5-10 seconds)
         self.assertLessEqual(Config.POSITION_UPDATE_INTERVAL, 10)
         
+    @patch('bot.Config.validate')  # Mock config validation
     @patch('bot.KuCoinClient')
     @patch('bot.MarketScanner')
     @patch('bot.PositionManager')
@@ -35,9 +36,12 @@ class TestLiveTrading(unittest.TestCase):
     @patch('bot.Logger')
     def test_bot_initialization_with_live_trading(self, mock_logger, mock_analytics, 
                                                    mock_ml, mock_risk, mock_position, 
-                                                   mock_scanner, mock_client):
+                                                   mock_scanner, mock_client, mock_validate):
         """Test that bot initializes correctly with live trading parameters"""
         from bot import TradingBot
+        
+        # Mock config validation to pass
+        mock_validate.return_value = None
         
         # Setup mocks
         mock_logger.setup.return_value = Mock()
