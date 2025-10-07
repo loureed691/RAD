@@ -236,8 +236,12 @@ class MLModel:
             y = np.array([d['label'] for d in self.training_data])
             
             # Split data
+            # Only use stratification if we have enough samples of each class
+            unique_classes, class_counts = np.unique(y, return_counts=True)
+            use_stratify = len(unique_classes) > 1 and all(count >= 2 for count in class_counts)
+            
             X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=42, stratify=y if len(np.unique(y)) > 1 else None
+                X, y, test_size=0.2, random_state=42, stratify=y if use_stratify else None
             )
             
             # Scale features
@@ -312,3 +316,153 @@ class MLModel:
             return min(0.75, base_threshold + 0.1)
         
         return base_threshold
+    
+    def train_with_historical_data(self, historical_data: pd.DataFrame, signal_generator=None, min_samples: int = 100):
+        """
+        Train the model with historical OHLCV data
+        
+        Args:
+            historical_data: DataFrame with OHLCV data (columns: timestamp, open, high, low, close, volume)
+            signal_generator: Optional SignalGenerator instance to generate labels. If None, uses simple price-based labels
+            min_samples: Minimum number of samples required for training
+            
+        Returns:
+            bool: True if training was successful, False otherwise
+        """
+        try:
+            from indicators import Indicators
+            
+            self.logger.info(f"Processing {len(historical_data)} candles of historical data for training...")
+            
+            # Ensure we have enough data
+            if len(historical_data) < 100:
+                self.logger.warning(f"Not enough historical data ({len(historical_data)} candles), need at least 100")
+                return False
+            
+            # Convert to proper format if needed
+            if isinstance(historical_data, list):
+                historical_data = pd.DataFrame(
+                    historical_data,
+                    columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']
+                )
+            
+            # Calculate all indicators for the historical data
+            df = Indicators.calculate_all(historical_data)
+            if df.empty or len(df) < 50:
+                self.logger.error("Failed to calculate indicators from historical data")
+                return False
+            
+            self.logger.info(f"Calculated indicators for {len(df)} candles")
+            
+            # Generate training samples from historical data
+            training_samples = []
+            
+            # Use a rolling window approach to create samples
+            for i in range(50, len(df) - 1):  # Start at 50 to have enough history, leave 1 for future
+                current_row = df.iloc[i]
+                future_row = df.iloc[i + 1]
+                
+                # Prepare indicators for this point in time
+                indicators = {
+                    'rsi': current_row.get('rsi', 50),
+                    'macd': current_row.get('macd', 0),
+                    'macd_signal': current_row.get('macd_signal', 0),
+                    'macd_diff': current_row.get('macd_diff', 0),
+                    'stoch_k': current_row.get('stoch_k', 50),
+                    'stoch_d': current_row.get('stoch_d', 50),
+                    'bb_width': current_row.get('bb_width', 0),
+                    'volume_ratio': current_row.get('volume_ratio', 1),
+                    'momentum': current_row.get('momentum', 0),
+                    'roc': current_row.get('roc', 0),
+                    'atr': current_row.get('atr', 0),
+                    'close': current_row.get('close', 0),
+                    'bb_high': current_row.get('bb_high', current_row.get('close', 0)),
+                    'bb_low': current_row.get('bb_low', current_row.get('close', 0)),
+                    'bb_mid': current_row.get('bb_mid', current_row.get('close', 0)),
+                    'ema_12': current_row.get('ema_12', current_row.get('close', 0)),
+                    'ema_26': current_row.get('ema_26', current_row.get('close', 0)),
+                }
+                
+                # Calculate profit/loss based on next candle
+                current_price = current_row.get('close', 0)
+                future_price = future_row.get('close', 0)
+                
+                if current_price <= 0 or future_price <= 0:
+                    continue
+                
+                price_change = (future_price - current_price) / current_price
+                
+                # Determine label based on price movement
+                # Label 1 = BUY (price went up), Label 2 = SELL (price went down), Label 0 = HOLD (neutral)
+                if price_change > 0.005:  # Price increased >0.5%
+                    label = 1  # BUY would have been profitable
+                elif price_change < -0.005:  # Price decreased >0.5%
+                    label = 2  # SELL would have been profitable
+                else:
+                    label = 0  # HOLD (neutral movement)
+                
+                # Prepare features
+                features = self.prepare_features(indicators).flatten().tolist()
+                
+                training_samples.append({
+                    'features': features,
+                    'label': label,
+                    'timestamp': current_row.get('timestamp', ''),
+                    'profit_loss': price_change
+                })
+            
+            self.logger.info(f"Generated {len(training_samples)} training samples from historical data")
+            
+            if len(training_samples) < min_samples:
+                self.logger.warning(f"Not enough training samples generated ({len(training_samples)}/{min_samples})")
+                return False
+            
+            # Add to training data (respecting the 10k limit)
+            self.training_data.extend(training_samples)
+            if len(self.training_data) > 10000:
+                self.training_data = self.training_data[-10000:]
+            
+            self.logger.info(f"Total training data now: {len(self.training_data)} samples")
+            
+            # Train the model with the accumulated data
+            return self.train(min_samples=min_samples)
+            
+        except Exception as e:
+            self.logger.error(f"Error training with historical data: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def load_historical_data_from_csv(self, csv_path: str) -> pd.DataFrame:
+        """
+        Load historical OHLCV data from a CSV file
+        
+        Args:
+            csv_path: Path to the CSV file containing historical data
+            
+        Returns:
+            DataFrame with historical data or empty DataFrame on error
+        """
+        try:
+            self.logger.info(f"Loading historical data from {csv_path}...")
+            
+            # Try to read the CSV
+            df = pd.read_csv(csv_path)
+            
+            # Verify required columns exist
+            required_columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            
+            # Check if columns exist (case-insensitive)
+            df.columns = [col.lower() for col in df.columns]
+            
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                self.logger.error(f"CSV missing required columns: {missing_columns}")
+                return pd.DataFrame()
+            
+            self.logger.info(f"Loaded {len(df)} candles from CSV")
+            return df
+            
+        except Exception as e:
+            self.logger.error(f"Error loading historical data from CSV: {e}")
+            return pd.DataFrame()
