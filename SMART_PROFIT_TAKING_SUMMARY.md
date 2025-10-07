@@ -171,7 +171,7 @@ Added intelligent checks in priority order:
 1. ✅ **ROI-Based Profit Taking** (5 scenarios)
    - 5% ROI with far TP
    - 8% ROI with far TP
-   - 12% ROI (unconditional)
+   - 12% ROI (not unconditional)
    - 15% ROI with far TP
    - 20% ROI (exceptional, unconditional)
 
