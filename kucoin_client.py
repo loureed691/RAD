@@ -348,11 +348,25 @@ class KuCoinClient:
             Tuple of (adjusted_amount, adjusted_leverage)
         """
         try:
+            # Check for zero or near-zero margin early to prevent division by zero
+            if available_margin <= 0.01:
+                self.logger.error(
+                    f"Cannot adjust position: available margin ${available_margin:.4f} is too low "
+                    f"(minimum required: $0.01)"
+                )
+                # Return minimal viable values that will fail viability check
+                return 0.0, 1
+            
             # Get contract size for accurate calculations
             markets = self.exchange.load_markets()
             contract_size = 1
             if symbol in markets:
                 contract_size = markets[symbol].get('contractSize', 1)
+            
+            # Check for zero price to prevent division by zero
+            if price <= 0:
+                self.logger.error(f"Cannot adjust position: invalid price {price}")
+                return 0.0, 1
             
             # Reserve 10% of available margin for safety and fees
             usable_margin = available_margin * 0.90
@@ -397,7 +411,7 @@ class KuCoinClient:
     
     def create_market_order(self, symbol: str, side: str, amount: float, 
                            leverage: int = 10, max_slippage: float = 0.01,
-                           validate_depth: bool = True) -> Optional[Dict]:
+                           validate_depth: bool = True, reduce_only: bool = False) -> Optional[Dict]:
         """Create a market order with leverage and slippage protection
         
         Args:
@@ -407,6 +421,7 @@ class KuCoinClient:
             leverage: Leverage to use
             max_slippage: Maximum acceptable slippage (default 1%)
             validate_depth: Check order book depth before large orders
+            reduce_only: If True, order only reduces position (for closing positions)
         
         Returns:
             Order dict if successful, None otherwise
@@ -424,35 +439,37 @@ class KuCoinClient:
             # Validate and cap amount to exchange limits
             validated_amount = self.validate_and_cap_amount(symbol, amount)
             
-            # Check if we have enough margin for this position (error 330008 prevention)
-            has_margin, available_margin, margin_reason = self.check_available_margin(
-                symbol, validated_amount, reference_price, leverage
-            )
+            # Skip margin check for reduce_only orders as they close positions
+            if not reduce_only:
+                # Check if we have enough margin for this position (error 330008 prevention)
+                has_margin, available_margin, margin_reason = self.check_available_margin(
+                    symbol, validated_amount, reference_price, leverage
+                )
             
-            if not has_margin:
-                self.logger.warning(f"Margin check failed: {margin_reason}")
-                # Try to adjust position to fit available margin
-                adjusted_amount, adjusted_leverage = self.adjust_position_for_margin(
-                    symbol, validated_amount, reference_price, leverage, available_margin
-                )
-                
-                # Check if adjusted position is viable (meets exchange minimums and meaningful size)
-                is_viable, viability_reason = self.is_position_viable(
-                    symbol, adjusted_amount, reference_price, adjusted_leverage
-                )
-                if not is_viable:
-                    self.logger.error(
-                        f"Cannot open position: adjusted position not viable - {viability_reason} "
-                        f"(adjusted: {adjusted_amount:.4f}, desired: {validated_amount:.4f})"
+                if not has_margin:
+                    self.logger.warning(f"Margin check failed: {margin_reason}")
+                    # Try to adjust position to fit available margin
+                    adjusted_amount, adjusted_leverage = self.adjust_position_for_margin(
+                        symbol, validated_amount, reference_price, leverage, available_margin
                     )
-                    return None
-                
-                # Use adjusted values
-                validated_amount = adjusted_amount
-                leverage = adjusted_leverage
-                self.logger.info(
-                    f"Adjusted position to fit margin: {adjusted_amount:.4f} contracts at {adjusted_leverage}x leverage"
-                )
+                    
+                    # Check if adjusted position is viable (meets exchange minimums and meaningful size)
+                    is_viable, viability_reason = self.is_position_viable(
+                        symbol, adjusted_amount, reference_price, adjusted_leverage
+                    )
+                    if not is_viable:
+                        self.logger.error(
+                            f"Cannot open position: adjusted position not viable - {viability_reason} "
+                            f"(adjusted: {adjusted_amount:.4f}, desired: {validated_amount:.4f})"
+                        )
+                        return None
+                    
+                    # Use adjusted values
+                    validated_amount = adjusted_amount
+                    leverage = adjusted_leverage
+                    self.logger.info(
+                        f"Adjusted position to fit margin: {adjusted_amount:.4f} contracts at {adjusted_leverage}x leverage"
+                    )
             
             # For large orders, check order book depth
             if validate_depth and validated_amount > 100:  # Threshold for "large" order
@@ -752,7 +769,7 @@ class KuCoinClient:
                         ticker = self.get_ticker(symbol)
                         if not ticker:
                             self.logger.error(f"Could not get ticker for {symbol}, falling back to market order")
-                            order = self.create_market_order(symbol, side, abs(contracts), leverage)
+                            order = self.create_market_order(symbol, side, abs(contracts), leverage, reduce_only=True)
                         else:
                             current_price = ticker['last']
                             # Set limit price with slippage tolerance
@@ -766,7 +783,7 @@ class KuCoinClient:
                                 reduce_only=True
                             )
                     else:
-                        order = self.create_market_order(symbol, side, abs(contracts), leverage)
+                        order = self.create_market_order(symbol, side, abs(contracts), leverage, reduce_only=True)
                     
                     if order:
                         self.logger.info(f"Closed position for {symbol} with {leverage}x leverage")
