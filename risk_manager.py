@@ -78,6 +78,136 @@ class RiskManager:
         wins = sum(1 for pnl in self.recent_trades if pnl > 0)
         return wins / len(self.recent_trades)
     
+    def get_portfolio_heat(self, open_positions: List) -> float:
+        """
+        Calculate portfolio heat (total risk exposure)
+        
+        Args:
+            open_positions: List of open Position objects
+        
+        Returns:
+            Portfolio heat as percentage of total capital at risk
+        """
+        if not open_positions:
+            return 0.0
+        
+        total_risk = 0.0
+        for pos in open_positions:
+            # Risk per position = distance to stop loss * position value
+            if pos.side == 'long':
+                risk_distance = (pos.entry_price - pos.stop_loss) / pos.entry_price
+            else:
+                risk_distance = (pos.stop_loss - pos.entry_price) / pos.entry_price
+            
+            position_value = pos.amount * pos.entry_price
+            position_risk = position_value * abs(risk_distance)
+            total_risk += position_risk
+        
+        return total_risk
+    
+    def check_correlation_risk(self, symbol: str, open_positions: List) -> Tuple[bool, str]:
+        """
+        Check if adding this symbol would create too much correlation risk
+        
+        Args:
+            symbol: Symbol to check (e.g., 'BTC/USDT:USDT')
+            open_positions: List of open Position objects
+        
+        Returns:
+            Tuple of (is_safe, reason)
+        """
+        # Extract base asset from symbol
+        base_asset = symbol.split('/')[0].replace('USDT', '').replace('USD', '')
+        
+        # Find which group this asset belongs to
+        asset_group = None
+        for group, assets in self.correlation_groups.items():
+            if any(a in base_asset for a in assets):
+                asset_group = group
+                break
+        
+        if not asset_group:
+            # Unknown asset, allow but with caution
+            return True, "unknown_group"
+        
+        # Count positions in same group
+        same_group_count = 0
+        for pos in open_positions:
+            pos_base = pos.symbol.split('/')[0].replace('USDT', '').replace('USD', '')
+            for asset in self.correlation_groups.get(asset_group, []):
+                if asset in pos_base:
+                    same_group_count += 1
+                    break
+        
+        # Allow max 2 positions from same correlation group
+        if same_group_count >= 2:
+            return False, f"too_many_in_{asset_group}_group"
+        
+        return True, "ok"
+    
+    def adjust_risk_for_conditions(self, base_risk: float, market_volatility: float = 0.03,
+                                   win_rate: float = 0.5) -> float:
+        """
+        Dynamically adjust risk based on market conditions and performance
+        
+        Args:
+            base_risk: Base risk percentage (e.g., 0.02 for 2%)
+            market_volatility: Current market volatility (e.g., ATR or BB width)
+            win_rate: Recent win rate (0 to 1)
+        
+        Returns:
+            Adjusted risk percentage
+        """
+        adjusted_risk = base_risk
+        
+        # 1. Adjust for win/loss streaks
+        if self.win_streak >= 3:
+            # On a hot streak - increase risk slightly
+            adjusted_risk *= 1.2
+            self.logger.debug(f"Win streak adjustment: +20% (streak: {self.win_streak})")
+        elif self.loss_streak >= 3:
+            # On a cold streak - reduce risk significantly
+            adjusted_risk *= 0.5
+            self.logger.debug(f"Loss streak adjustment: -50% (streak: {self.loss_streak})")
+        
+        # 2. Adjust for recent performance
+        if win_rate > 0.65:
+            # High win rate - can afford slightly more risk
+            adjusted_risk *= 1.15
+            self.logger.debug(f"Win rate adjustment: +15% (rate: {win_rate:.1%})")
+        elif win_rate < 0.35:
+            # Low win rate - reduce risk
+            adjusted_risk *= 0.7
+            self.logger.debug(f"Win rate adjustment: -30% (rate: {win_rate:.1%})")
+        
+        # 3. Adjust for market volatility
+        if market_volatility > 0.06:
+            # High volatility - reduce risk
+            adjusted_risk *= 0.75
+            self.logger.debug(f"Volatility adjustment: -25% (vol: {market_volatility:.1%})")
+        elif market_volatility < 0.02:
+            # Low volatility - can take slightly more risk
+            adjusted_risk *= 1.1
+            self.logger.debug(f"Volatility adjustment: +10% (vol: {market_volatility:.1%})")
+        
+        # 4. Adjust for drawdown
+        if self.current_drawdown > 0.20:
+            # Severe drawdown - cut risk in half
+            adjusted_risk *= 0.5
+            self.logger.warning(f"Drawdown protection: -50% (DD: {self.current_drawdown:.1%})")
+        elif self.current_drawdown > 0.15:
+            # Moderate drawdown - reduce risk
+            adjusted_risk *= 0.75
+            self.logger.info(f"Drawdown protection: -25% (DD: {self.current_drawdown:.1%})")
+        
+        # Cap adjusted risk at reasonable bounds (0.5% to 4%)
+        adjusted_risk = max(0.005, min(adjusted_risk, 0.04))
+        
+        if adjusted_risk != base_risk:
+            self.logger.info(f"Risk adjusted: {base_risk:.2%} → {adjusted_risk:.2%}")
+        
+        return adjusted_risk
+    
     def analyze_order_book_imbalance(self, orderbook: Dict) -> Dict:
         """
         Analyze order book for bid/ask imbalance to optimize entry timing

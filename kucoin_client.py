@@ -197,6 +197,75 @@ class KuCoinClient:
         
         return amount
     
+    def _predict_slippage(self, order_size: float, levels: List, reference_price: float) -> float:
+        """
+        Predict slippage for an order based on order book depth
+        
+        Args:
+            order_size: Size of the order in contracts
+            levels: Order book levels (list of [price, amount])
+            reference_price: Current market price
+        
+        Returns:
+            Predicted slippage as percentage
+        """
+        if not levels or order_size <= 0:
+            return 0.0
+        
+        try:
+            cumulative_amount = 0.0
+            weighted_price = 0.0
+            
+            for price, amount in levels:
+                price_float = float(price)
+                amount_float = float(amount)
+                
+                # Calculate how much of this level we'd consume
+                remaining = order_size - cumulative_amount
+                consumed = min(remaining, amount_float)
+                
+                # Add to weighted average
+                weighted_price += price_float * consumed
+                cumulative_amount += consumed
+                
+                if cumulative_amount >= order_size:
+                    break
+            
+            if cumulative_amount > 0:
+                avg_fill_price = weighted_price / cumulative_amount
+                slippage = abs(avg_fill_price - reference_price) / reference_price
+                return slippage
+            
+        except Exception as e:
+            self.logger.debug(f"Error predicting slippage: {e}")
+        
+        return 0.0
+    
+    def _calculate_spread(self, order_book: Dict) -> float:
+        """
+        Calculate bid-ask spread as percentage
+        
+        Args:
+            order_book: Order book with bids and asks
+        
+        Returns:
+            Spread as percentage
+        """
+        try:
+            if not order_book or not order_book.get('bids') or not order_book.get('asks'):
+                return 0.0
+            
+            best_bid = float(order_book['bids'][0][0])
+            best_ask = float(order_book['asks'][0][0])
+            
+            if best_bid > 0:
+                spread = (best_ask - best_bid) / best_bid
+                return spread
+        except Exception as e:
+            self.logger.debug(f"Error calculating spread: {e}")
+        
+        return 0.0
+    
     def calculate_required_margin(self, symbol: str, amount: float, 
                                   price: float, leverage: int) -> float:
         """Calculate margin required to open a position
@@ -471,17 +540,44 @@ class KuCoinClient:
                         f"Adjusted position to fit margin: {adjusted_amount:.4f} contracts at {adjusted_leverage}x leverage"
                     )
             
-            # For large orders, check order book depth
+            # For large orders, check order book depth and predict slippage
             if validate_depth and validated_amount > 100:  # Threshold for "large" order
                 order_book = self.get_order_book(symbol, limit=20)
                 if order_book:
                     levels = order_book['bids'] if side == 'sell' else order_book['asks']
                     total_liquidity = sum(level[1] for level in levels)
                     
+                    # Predict slippage based on order book
+                    predicted_slippage = self._predict_slippage(
+                        validated_amount, levels, reference_price
+                    )
+                    
+                    if predicted_slippage > max_slippage:
+                        self.logger.warning(
+                            f"High predicted slippage for {symbol}: {predicted_slippage:.2%} "
+                            f"(max: {max_slippage:.2%}). Consider reducing size or using limit order."
+                        )
+                        # Optionally reduce order size to fit liquidity
+                        safe_amount = min(validated_amount, total_liquidity * 0.5)
+                        if safe_amount < validated_amount * 0.7:
+                            self.logger.warning(
+                                f"Reducing order size from {validated_amount:.4f} to {safe_amount:.4f} "
+                                f"to limit slippage"
+                            )
+                            validated_amount = safe_amount
+                    
                     if total_liquidity < validated_amount * 1.5:
                         self.logger.warning(
                             f"Low liquidity for {symbol}: order size {validated_amount} vs "
                             f"book depth {total_liquidity:.2f}. Potential high slippage."
+                        )
+                    
+                    # Check spread for timing
+                    spread = self._calculate_spread(order_book)
+                    if spread > 0.005:  # >0.5% spread
+                        self.logger.warning(
+                            f"Wide spread detected for {symbol}: {spread:.2%}. "
+                            f"Consider waiting for tighter spread."
                         )
             
             # Skip leverage/margin mode setting for reduce_only orders (closing positions)
