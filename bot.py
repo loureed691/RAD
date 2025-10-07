@@ -16,6 +16,7 @@ from ml_model import MLModel
 from indicators import Indicators
 from advanced_analytics import AdvancedAnalytics
 from health_monitor import HealthMonitor, ConfigValidator
+from signal_validator import SignalValidator, TradingOpportunityRanker
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -108,6 +109,10 @@ class TradingBot:
         # Health monitoring
         self.health_monitor = HealthMonitor()
         
+        # Signal validation and ranking
+        self.signal_validator = SignalValidator()
+        self.opportunity_ranker = TradingOpportunityRanker()
+        
         # Validate configuration
         config_issues = ConfigValidator.validate_trading_config(Config)
         if config_issues:
@@ -147,10 +152,67 @@ class TradingBot:
         symbol = opportunity.get('symbol')
         signal = opportunity.get('signal')
         confidence = opportunity.get('confidence')
+        reasons = opportunity.get('reasons', {})
         
         if not symbol or not signal or confidence is None:
             self.logger.error(f"Invalid opportunity data: {opportunity}")
             return False
+        
+        # Get indicators for validation
+        ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
+        if not ohlcv:
+            self.logger.warning(f"Could not fetch OHLCV for {symbol}")
+            return False
+        
+        df = Indicators.calculate_all(ohlcv)
+        indicators = Indicators.get_latest_indicators(df)
+        
+        if not indicators:
+            self.logger.warning(f"Could not calculate indicators for {symbol}")
+            return False
+        
+        # Validate signal quality
+        is_valid, validation_reason = self.signal_validator.validate_signal_quality(
+            signal, confidence, indicators, reasons
+        )
+        
+        if not is_valid:
+            self.logger.info(f"Signal validation failed for {symbol}: {validation_reason}")
+            return False
+        
+        # Calculate signal strength
+        signal_strength = self.signal_validator.calculate_signal_strength(
+            confidence, indicators, reasons
+        )
+        
+        self.logger.info(f"Signal strength for {symbol}: {signal_strength:.1f}/100")
+        
+        # Only trade if signal strength is good enough
+        if signal_strength < 60:
+            self.logger.info(f"Signal strength too low for {symbol}: {signal_strength:.1f}/100")
+            return False
+        
+        # Check market conditions
+        market_regime = self.scanner.signal_generator.detect_market_regime(df)
+        should_trade, market_reason = self.signal_validator.filter_by_market_conditions(
+            signal, indicators, market_regime
+        )
+        
+        if not should_trade:
+            self.logger.info(f"Market conditions unfavorable for {symbol}: {market_reason}")
+            return False
+        
+        # Get suggested adjustments
+        adjustments = self.signal_validator.suggest_adjustments(
+            signal, confidence, indicators, reasons
+        )
+        
+        self.logger.debug(
+            f"Trade adjustments for {symbol}: "
+            f"leverage={adjustments['leverage']:.2f}x, "
+            f"position_size={adjustments['position_size']:.2f}x, "
+            f"stop_loss={adjustments['stop_loss']:.2f}x"
+        )
         
         # Check if we already have a position for this symbol
         if self.position_manager.has_position(symbol):
@@ -240,6 +302,9 @@ class TradingBot:
         # Calculate stop loss
         stop_loss_percentage = self.risk_manager.calculate_stop_loss_percentage(volatility)
         
+        # Apply stop loss adjustment
+        stop_loss_percentage *= adjustments.get('stop_loss', 1.0)
+        
         if signal == 'BUY':
             stop_loss_price = entry_price * (1 - stop_loss_percentage)
         else:
@@ -250,6 +315,12 @@ class TradingBot:
             volatility, confidence, momentum, trend_strength, market_regime
         )
         leverage = min(leverage, Config.LEVERAGE)
+        
+        # Apply adjustment from signal validator
+        leverage = int(leverage * adjustments.get('leverage', 1.0))
+        leverage = max(1, min(leverage, Config.LEVERAGE))  # Ensure within bounds
+        
+        self.logger.debug(f"Adjusted leverage for {symbol}: {leverage}x")
         
         # Adaptive position sizing using Kelly Criterion if we have performance history
         metrics = self.ml_model.get_performance_metrics()
@@ -285,6 +356,15 @@ class TradingBot:
         # Calculate position size with optimized risk
         position_size = self.risk_manager.calculate_position_size(
             available_balance, entry_price, stop_loss_price, leverage, risk_per_trade
+        )
+        
+        # Apply position size adjustment
+        position_size *= adjustments.get('position_size', 1.0)
+        
+        self.logger.info(
+            f"Final trade parameters for {symbol}: "
+            f"size=${position_size:.2f}, leverage={leverage}x, "
+            f"stop_loss={stop_loss_percentage:.2%}"
         )
         
         # Open position
@@ -389,6 +469,30 @@ class TradingBot:
         
         # Scan market for opportunities
         opportunities = self.scanner.get_best_pairs(n=5)
+        
+        # Rank and filter opportunities
+        if opportunities:
+            # Get current position symbols for diversification
+            open_position_symbols = list(self.position_manager.positions.keys())
+            
+            # Rank opportunities considering diversification
+            ranked_opportunities = self.opportunity_ranker.rank_opportunities(
+                opportunities, open_position_symbols
+            )
+            
+            # Filter to avoid too many correlated trades
+            filtered_opportunities = self.opportunity_ranker.filter_correlated_opportunities(
+                ranked_opportunities, max_similar=2
+            )
+            
+            # Take top opportunities after ranking and filtering
+            opportunities = filtered_opportunities[:5]
+            
+            if len(filtered_opportunities) < len(ranked_opportunities):
+                self.logger.info(
+                    f"Filtered {len(ranked_opportunities)} opportunities to "
+                    f"{len(filtered_opportunities)} after correlation check"
+                )
         
         # Try to execute trades for top opportunities
         for opportunity in opportunities:
