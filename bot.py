@@ -68,9 +68,10 @@ class TradingBot:
         
         # Get balance and auto-configure trading parameters if not set in .env
         balance = self.client.get_balance()
-        available_balance = float(balance.get('free', {}).get('USDT', 0))
         
-        if available_balance > 0:
+        # Check if balance fetch was successful by checking for expected structure
+        if balance and 'free' in balance:
+            available_balance = float(balance.get('free', {}).get('USDT', 0))
             self.logger.info(f"💰 Available balance: ${available_balance:.2f} USDT")
             Config.auto_configure_from_balance(available_balance)
         else:
@@ -141,6 +142,12 @@ class TradingBot:
         
         # Get current balance
         balance = self.client.get_balance()
+        
+        # Check if balance fetch was successful
+        if not balance or 'free' not in balance:
+            self.logger.error("Failed to fetch balance from exchange")
+            return False
+        
         available_balance = float(balance.get('free', {}).get('USDT', 0))
         
         if available_balance <= 0:
@@ -320,8 +327,9 @@ class TradingBot:
         
         # Record current equity for analytics
         balance = self.client.get_balance()
-        available_balance = float(balance.get('free', {}).get('USDT', 0))
-        self.analytics.record_equity(available_balance)
+        if balance and 'free' in balance:
+            available_balance = float(balance.get('free', {}).get('USDT', 0))
+            self.analytics.record_equity(available_balance)
         
         # Periodic analytics report (every hour)
         time_since_report = (datetime.now() - self.last_analytics_report).total_seconds()
