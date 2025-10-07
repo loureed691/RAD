@@ -67,36 +67,9 @@ def test_roi_based_profit_taking():
     assert reason2 == 'take_profit_8pct', f"Expected 'take_profit_8pct', got '{reason2}'"
     print("   ✓ Position closes at 8% ROI with far TP")
     
-    # Test 12% ROI profit taking (unconditional)
-    print("\n3. Testing 12% ROI (always closes)...")
-    position3 = Position(
-        symbol='SOL-USDT',
-        side='long',
-        entry_price=100.0,
-        amount=10.0,
-        leverage=10,
-        stop_loss=95.0,
-        take_profit=101.5  # Very close TP
-    )
-    
-    # Price at 101.2 gives 12% ROI with 10x leverage
-    current_price3 = 101.2
-    should_close3, reason3 = position3.should_close(current_price3)
-    pnl3 = position3.get_pnl(current_price3)
-    
-    print(f"   Entry: ${position3.entry_price:,.0f}")
-    print(f"   Current: ${current_price3:,.0f}")
-    print(f"   Take Profit: ${position3.take_profit:,.2f}")
-    print(f"   Current PNL: {pnl3:.2%}")
-    print(f"   Should Close: {should_close3}")
-    print(f"   Reason: {reason3}")
-    assert should_close3, "Should ALWAYS close at 12% ROI"
-    assert reason3 == 'take_profit_12pct', f"Expected 'take_profit_12pct', got '{reason3}'"
-    print("   ✓ Position closes at 12% ROI (unconditional)")
-    
     # Test 15% ROI profit taking
-    print("\n4. Testing 15% ROI with far TP...")
-    position4 = Position(
+    print("\n3. Testing 15% ROI with far TP...")
+    position3 = Position(
         symbol='ADA-USDT',
         side='short',
         entry_price=0.50,
@@ -107,23 +80,23 @@ def test_roi_based_profit_taking():
     )
     
     # Price at 0.4925 gives 15% ROI with 10x leverage (short)
-    current_price4 = 0.4925
-    should_close4, reason4 = position4.should_close(current_price4)
-    pnl4 = position4.get_pnl(current_price4)
+    current_price3 = 0.4925
+    should_close3, reason3 = position3.should_close(current_price3)
+    pnl3 = position3.get_pnl(current_price3)
     
-    print(f"   Entry: ${position4.entry_price:.4f}")
-    print(f"   Current: ${current_price4:.4f}")
-    print(f"   Take Profit: ${position4.take_profit:.2f}")
-    print(f"   Current PNL: {pnl4:.2%}")
-    print(f"   Should Close: {should_close4}")
-    print(f"   Reason: {reason4}")
-    assert should_close4, "Should close at 15% ROI when TP is far"
-    assert reason4 == 'take_profit_15pct_far_tp', f"Expected 'take_profit_15pct_far_tp', got '{reason4}'"
+    print(f"   Entry: ${position3.entry_price:.4f}")
+    print(f"   Current: ${current_price3:.4f}")
+    print(f"   Take Profit: ${position3.take_profit:.2f}")
+    print(f"   Current PNL: {pnl3:.2%}")
+    print(f"   Should Close: {should_close3}")
+    print(f"   Reason: {reason3}")
+    assert should_close3, "Should close at 15% ROI when TP is far"
+    assert reason3 == 'take_profit_15pct_far_tp', f"Expected 'take_profit_15pct_far_tp', got '{reason3}'"
     print("   ✓ Short position closes at 15% ROI with far TP")
     
     # Test 20% ROI (exceptional profit - unconditional)
-    print("\n5. Testing 20% ROI (exceptional - always closes)...")
-    position5 = Position(
+    print("\n4. Testing 20% ROI (exceptional - always closes)...")
+    position4 = Position(
         symbol='BNB-USDT',
         side='long',
         entry_price=400.0,
@@ -134,18 +107,18 @@ def test_roi_based_profit_taking():
     )
     
     # Price at 408 gives 20% ROI with 10x leverage
-    current_price5 = 408.0
-    should_close5, reason5 = position5.should_close(current_price5)
-    pnl5 = position5.get_pnl(current_price5)
+    current_price4 = 408.0
+    should_close4, reason4 = position4.should_close(current_price4)
+    pnl4 = position4.get_pnl(current_price4)
     
-    print(f"   Entry: ${position5.entry_price:,.0f}")
-    print(f"   Current: ${current_price5:,.0f}")
-    print(f"   Take Profit: ${position5.take_profit:,.2f}")
-    print(f"   Current PNL: {pnl5:.2%}")
-    print(f"   Should Close: {should_close5}")
-    print(f"   Reason: {reason5}")
-    assert should_close5, "Should ALWAYS close at 20% ROI (exceptional)"
-    assert reason5 == 'take_profit_20pct_exceptional', f"Expected 'take_profit_20pct_exceptional', got '{reason5}'"
+    print(f"   Entry: ${position4.entry_price:,.0f}")
+    print(f"   Current: ${current_price4:,.0f}")
+    print(f"   Take Profit: ${position4.take_profit:,.2f}")
+    print(f"   Current PNL: {pnl4:.2%}")
+    print(f"   Should Close: {should_close4}")
+    print(f"   Reason: {reason4}")
+    assert should_close4, "Should ALWAYS close at 20% ROI (exceptional)"
+    assert reason4 == 'take_profit_20pct_exceptional', f"Expected 'take_profit_20pct_exceptional', got '{reason4}'"
     print("   ✓ Position closes at 20% ROI (exceptional, unconditional)")
     
     print("\n✓ All ROI-based profit taking tests passed!")
@@ -465,8 +438,8 @@ def test_short_position_profit_taking():
     print("Testing Short Position Profit Taking")
     print("="*80)
     
-    # Test short at 12% ROI
-    print("\n1. Testing short position at 12% ROI...")
+    # Test short at 10% ROI with far TP
+    print("\n1. Testing short position at 10% ROI with far TP...")
     position = Position(
         symbol='BTC-USDT',
         side='short',
@@ -474,11 +447,11 @@ def test_short_position_profit_taking():
         amount=1.0,
         leverage=10,
         stop_loss=52500.0,
-        take_profit=44000.0
+        take_profit=44000.0  # Far TP
     )
     
-    # Price at 49400 gives 12% ROI for short
-    current_price = 49400.0
+    # Price at 49500 gives 10% ROI for short
+    current_price = 49500.0
     should_close, reason = position.should_close(current_price)
     pnl = position.get_pnl(current_price)
     
@@ -488,9 +461,9 @@ def test_short_position_profit_taking():
     print(f"   Current PNL: {pnl:.2%}")
     print(f"   Should Close: {should_close}")
     print(f"   Reason: {reason}")
-    assert should_close, "Short should close at 12% ROI"
-    assert reason == 'take_profit_12pct', f"Expected 'take_profit_12pct', got '{reason}'"
-    print("   ✓ Short position closes at 12% ROI")
+    assert should_close, "Short should close at 10% ROI with far TP"
+    assert reason == 'take_profit_10pct', f"Expected 'take_profit_10pct', got '{reason}'"
+    print("   ✓ Short position closes at 10% ROI with far TP")
     
     # Test short momentum loss
     print("\n2. Testing short position momentum loss...")

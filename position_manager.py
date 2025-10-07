@@ -506,10 +506,6 @@ class Position:
                 if drawdown_pct >= 0.299 and 0.03 <= current_pnl < 0.15:
                     return True, 'take_profit_momentum_loss'
             
-            # 12% ROI - always take profit (as per documentation)
-            if current_pnl >= 0.12:
-                return True, 'take_profit_12pct'
-            
             # 10% ROI - take profit if TP is >2% away
             if current_pnl >= 0.10:
                 if distance_to_tp > 0.02:
