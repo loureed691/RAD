@@ -153,6 +153,38 @@ class MarketScanner:
                 self.cache[cache_key] = (result, time.time())
             return result
     
+    def _filter_high_priority_pairs(self, symbols: List[str], futures_data: List[Dict]) -> List[str]:
+        """
+        Smart filtering to prioritize high-quality pairs
+        
+        Args:
+            symbols: List of all symbols
+            futures_data: List of futures contract data with volume info
+        
+        Returns:
+            Filtered list of high-priority symbols
+        """
+        # Create a mapping of symbol to volume data
+        volume_map = {}
+        for f in futures_data:
+            symbol = f.get('symbol')
+            volume_24h = float(f.get('turnoverOf24h', 0))  # 24h volume in USDT
+            volume_map[symbol] = volume_24h
+        
+        # Filter by minimum volume (liquidity)
+        min_volume = 1_000_000  # $1M daily volume minimum
+        high_volume_pairs = [s for s in symbols if volume_map.get(s, 0) >= min_volume]
+        
+        # Sort by volume descending
+        high_volume_pairs.sort(key=lambda s: volume_map.get(s, 0), reverse=True)
+        
+        # Take top 100 by volume (or all if less than 100)
+        priority_pairs = high_volume_pairs[:100]
+        
+        self.logger.info(f"Filtered {len(priority_pairs)} high-volume pairs (>{min_volume/1e6:.1f}M daily volume)")
+        
+        return priority_pairs
+    
     def scan_all_pairs(self, max_workers: int = 10, use_cache: bool = True) -> List[Dict]:
         """
         Scan all available trading pairs in parallel with smart filtering

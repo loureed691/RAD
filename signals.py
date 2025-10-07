@@ -20,10 +20,10 @@ class SignalGenerator:
     
     def detect_support_resistance(self, df: pd.DataFrame, current_price: float) -> Dict:
         """
-        Detect key support and resistance levels
+        Detect key support and resistance levels with enhanced algorithm
         
         Returns:
-            Dict with support/resistance info
+            Dict with support/resistance info including strength scores
         """
         if df.empty or len(df) < 20:
             return {'support': None, 'resistance': None, 'distance_to_support': 0, 'distance_to_resistance': 0}
@@ -35,6 +35,7 @@ class SignalGenerator:
             # Find local highs and lows
             highs = recent_df['high'].values
             lows = recent_df['low'].values
+            closes = recent_df['close'].values
             
             # Resistance: recent highest high
             resistance = np.max(highs)
@@ -42,21 +43,125 @@ class SignalGenerator:
             # Support: recent lowest low
             support = np.min(lows)
             
+            # Calculate strength scores based on touch count
+            support_touches = np.sum(np.abs(lows - support) / support < 0.01)
+            resistance_touches = np.sum(np.abs(highs - resistance) / resistance < 0.01)
+            
             # Calculate distances (as percentage)
             distance_to_resistance = (resistance - current_price) / current_price if current_price > 0 else 0
             distance_to_support = (current_price - support) / current_price if current_price > 0 else 0
+            
+            # Enhanced proximity detection with strength consideration
+            near_support = distance_to_support < 0.02 or (distance_to_support < 0.03 and support_touches >= 2)
+            near_resistance = distance_to_resistance < 0.02 or (distance_to_resistance < 0.03 and resistance_touches >= 2)
             
             return {
                 'support': support,
                 'resistance': resistance,
                 'distance_to_support': distance_to_support,
                 'distance_to_resistance': distance_to_resistance,
-                'near_support': distance_to_support < 0.02,  # Within 2% of support
-                'near_resistance': distance_to_resistance < 0.02  # Within 2% of resistance
+                'near_support': near_support,
+                'near_resistance': near_resistance,
+                'support_strength': min(support_touches / 5.0, 1.0),  # Normalize to 0-1
+                'resistance_strength': min(resistance_touches / 5.0, 1.0)
             }
         except Exception as e:
             self.logger.debug(f"Error detecting support/resistance: {e}")
             return {'support': None, 'resistance': None, 'distance_to_support': 0, 'distance_to_resistance': 0}
+    
+    def detect_divergence(self, df: pd.DataFrame) -> Dict:
+        """
+        Detect bullish/bearish divergences between price and indicators
+        
+        Returns:
+            Dict with divergence signals
+        """
+        if df.empty or len(df) < 20:
+            return {'rsi_divergence': None, 'macd_divergence': None, 'strength': 0.0}
+        
+        try:
+            # Look at last 20 periods
+            recent_df = df.tail(20)
+            
+            # Get price and indicator trends
+            price_trend = recent_df['close'].iloc[-1] - recent_df['close'].iloc[0]
+            rsi_trend = recent_df['rsi'].iloc[-1] - recent_df['rsi'].iloc[0]
+            macd_trend = recent_df['macd'].iloc[-1] - recent_df['macd'].iloc[0]
+            
+            divergence = {
+                'rsi_divergence': None,
+                'macd_divergence': None,
+                'strength': 0.0
+            }
+            
+            # Bullish divergence: price down, indicator up
+            if price_trend < 0 and rsi_trend > 5:
+                divergence['rsi_divergence'] = 'bullish'
+                divergence['strength'] += 0.5
+            # Bearish divergence: price up, indicator down
+            elif price_trend > 0 and rsi_trend < -5:
+                divergence['rsi_divergence'] = 'bearish'
+                divergence['strength'] += 0.5
+            
+            # MACD divergence
+            if price_trend < 0 and macd_trend > 0:
+                divergence['macd_divergence'] = 'bullish'
+                divergence['strength'] += 0.5
+            elif price_trend > 0 and macd_trend < 0:
+                divergence['macd_divergence'] = 'bearish'
+                divergence['strength'] += 0.5
+            
+            return divergence
+            
+        except Exception as e:
+            self.logger.debug(f"Error detecting divergence: {e}")
+            return {'rsi_divergence': None, 'macd_divergence': None, 'strength': 0.0}
+    
+    def calculate_confluence_score(self, indicators: Dict, signal: str) -> float:
+        """
+        Calculate confluence score - how many signals align
+        
+        Returns:
+            Score from 0.0 to 1.0 indicating signal strength
+        """
+        if signal not in ['BUY', 'SELL']:
+            return 0.0
+        
+        aligned_signals = 0
+        total_signals = 0
+        
+        # Check trend alignment
+        total_signals += 1
+        if signal == 'BUY' and indicators.get('ema_12', 0) > indicators.get('ema_26', 0):
+            aligned_signals += 1
+        elif signal == 'SELL' and indicators.get('ema_12', 0) < indicators.get('ema_26', 0):
+            aligned_signals += 1
+        
+        # Check momentum
+        total_signals += 1
+        momentum = indicators.get('momentum', 0)
+        if (signal == 'BUY' and momentum > 0) or (signal == 'SELL' and momentum < 0):
+            aligned_signals += 1
+        
+        # Check RSI
+        total_signals += 1
+        rsi = indicators.get('rsi', 50)
+        if (signal == 'BUY' and rsi < 50) or (signal == 'SELL' and rsi > 50):
+            aligned_signals += 1
+        
+        # Check MACD
+        total_signals += 1
+        if signal == 'BUY' and indicators.get('macd', 0) > indicators.get('macd_signal', 0):
+            aligned_signals += 1
+        elif signal == 'SELL' and indicators.get('macd', 0) < indicators.get('macd_signal', 0):
+            aligned_signals += 1
+        
+        # Check volume confirmation
+        total_signals += 1
+        if indicators.get('volume_ratio', 0) > 1.2:
+            aligned_signals += 1
+        
+        return aligned_signals / total_signals if total_signals > 0 else 0.0
     
     def detect_market_regime(self, df: pd.DataFrame) -> str:
         """
@@ -179,6 +284,9 @@ class SignalGenerator:
         # Detect market regime for adaptive strategy
         self.market_regime = self.detect_market_regime(df)
         
+        # Detect divergences for additional signal strength
+        divergence = self.detect_divergence(df)
+        
         buy_signals = 0.0
         sell_signals = 0.0
         reasons = {}
@@ -291,17 +399,31 @@ class SignalGenerator:
                 reasons['pattern'] = f'{pattern_name} (bearish)'
                 self.logger.info(f"🔍 Bearish pattern detected: {pattern_name} (confidence: {pattern_confidence:.2f})")
         
-        # 9. Support/Resistance Analysis (NEW)
+        # 9. Support/Resistance Analysis (ENHANCED)
         close = indicators['close']
         sr_levels = self.detect_support_resistance(df, close)
         if sr_levels.get('near_support', False):
-            # Near support is a potential buy opportunity
-            buy_signals += 1.5
-            reasons['support_resistance'] = f'near support ({sr_levels["distance_to_support"]:.1%})'
+            # Near support is a potential buy opportunity - weight by strength
+            support_weight = 1.5 * (1 + sr_levels.get('support_strength', 0))
+            buy_signals += support_weight
+            reasons['support_resistance'] = f'near support ({sr_levels["distance_to_support"]:.1%}, strength: {sr_levels.get("support_strength", 0):.1f})'
         elif sr_levels.get('near_resistance', False):
-            # Near resistance is a potential sell opportunity
-            sell_signals += 1.5
-            reasons['support_resistance'] = f'near resistance ({sr_levels["distance_to_resistance"]:.1%})'
+            # Near resistance is a potential sell opportunity - weight by strength
+            resistance_weight = 1.5 * (1 + sr_levels.get('resistance_strength', 0))
+            sell_signals += resistance_weight
+            reasons['support_resistance'] = f'near resistance ({sr_levels["distance_to_resistance"]:.1%}, strength: {sr_levels.get("resistance_strength", 0):.1f})'
+        
+        # 10. Divergence Detection (NEW)
+        if divergence['strength'] > 0:
+            divergence_weight = divergence['strength'] * 2.0
+            if divergence.get('rsi_divergence') == 'bullish' or divergence.get('macd_divergence') == 'bullish':
+                buy_signals += divergence_weight
+                reasons['divergence'] = 'bullish divergence detected'
+                self.logger.info(f"🔍 Bullish divergence detected (strength: {divergence['strength']:.1f})")
+            elif divergence.get('rsi_divergence') == 'bearish' or divergence.get('macd_divergence') == 'bearish':
+                sell_signals += divergence_weight
+                reasons['divergence'] = 'bearish divergence detected'
+                self.logger.info(f"🔍 Bearish divergence detected (strength: {divergence['strength']:.1f})")
         
         total_signals = buy_signals + sell_signals
         
@@ -335,6 +457,19 @@ class SignalGenerator:
         if confidence < min_confidence:
             signal = 'HOLD'
             reasons['confidence'] = f'too low ({confidence:.2f} < {min_confidence:.2f})'
+        
+        # Apply confluence scoring boost (NEW)
+        if signal != 'HOLD':
+            confluence_score = self.calculate_confluence_score(indicators, signal)
+            if confluence_score > 0.7:
+                # Strong confluence - boost confidence
+                confidence *= (1.0 + (confluence_score - 0.7) * 0.5)  # Up to 15% boost
+                confidence = min(confidence, 0.99)
+                reasons['confluence'] = f'strong ({confluence_score:.1%})'
+            elif confluence_score < 0.4:
+                # Weak confluence - reduce confidence
+                confidence *= 0.85
+                reasons['confluence'] = f'weak ({confluence_score:.1%})'
         
         # Apply multi-timeframe confidence boost
         if signal != 'HOLD' and mtf_analysis['trend_alignment'] != 'neutral':
