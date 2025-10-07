@@ -112,6 +112,11 @@ class RiskManager:
             # Calculate spread
             best_bid = float(bids[0][0])
             best_ask = float(asks[0][0])
+            
+            # BUG FIX: Prevent division by zero if best_bid is 0
+            if best_bid == 0:
+                return {'imbalance': 0.0, 'signal': 'neutral', 'confidence': 0.0}
+            
             spread_pct = (best_ask - best_bid) / best_bid
             
             # Determine signal strength
