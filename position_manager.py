@@ -1451,7 +1451,7 @@ class PositionManager:
             # Check if we're closing the entire position
             if amount_to_close >= position.amount:
                 # Release lock before calling close_position (it will acquire its own lock)
-                pass
+                return  # Will handle closing outside the lock
         
         # If closing entire position, use close_position method
         if amount_to_close >= position.amount:
