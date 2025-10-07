@@ -2,7 +2,31 @@
 
 A production-grade, fully automated, **self-learning and hyper-intelligent** KuCoin Futures trading bot with dynamic 3-15x leverage capability. This bot is designed to be hands-off and resilient, automatically discovering the best trading pairs and executing trades based on advanced technical indicators, multi-timeframe analysis, and institutional-grade machine learning.
 
-## 🎯 Auto-Configuration (NEW!) ⭐
+## 🎓 ML Model Training with Historical Data (NEW!) ⭐⭐
+
+**Train your ML model with historical data before live trading!** The bot now supports training with historical market data:
+
+- **Fetch Historical Data** - Automatically download candle data from KuCoin exchange
+- **CSV Support** - Load and train from your own historical data files
+- **Multiple Pairs** - Train on multiple trading pairs for better generalization
+- **26 Advanced Features** - Learns from RSI, MACD, volume patterns, and more
+- **Persistent Learning** - Trained model continues learning during live trading
+
+Quick start:
+```bash
+# Fetch 30 days of BTC data
+python fetch_historical_data.py "BTC/USDT:USDT" "1h" 30
+
+# Train the model
+python train_with_historical_data.py
+
+# Start trading with trained model
+python start.py
+```
+
+👉 **See [HISTORICAL_DATA_TRAINING.md](HISTORICAL_DATA_TRAINING.md) for complete guide** or [HISTORICAL_TRAINING_QUICKREF.md](HISTORICAL_TRAINING_QUICKREF.md) for quick reference
+
+## 🎯 Auto-Configuration ⭐
 
 **No more manual configuration!** The bot now automatically configures optimal trading parameters based on your account balance:
 
