@@ -512,10 +512,11 @@ class PositionManager:
                 if not symbol:
                     continue
                 
-                # Skip if we already have this position tracked
-                if symbol in self.positions:
-                    self.logger.debug(f"Position {symbol} already tracked, skipping sync")
-                    continue
+                # Thread-safe check if position is already tracked
+                with self._positions_lock:
+                    if symbol in self.positions:
+                        self.logger.debug(f"Position {symbol} already tracked, skipping sync")
+                        continue
                 
                 # Extract position details
                 contracts = float(pos.get('contracts', 0))
@@ -598,7 +599,10 @@ class PositionManager:
                 elif side == 'short' and current_price < entry_price:
                     position.lowest_price = current_price
                 
-                self.positions[symbol] = position
+                # Thread-safe position addition
+                with self._positions_lock:
+                    self.positions[symbol] = position
+                
                 synced_count += 1
                 
                 self.logger.info(
@@ -644,6 +648,15 @@ class PositionManager:
             True if position opened successfully, False otherwise
         """
         try:
+            # Validate position parameters
+            is_valid, error_msg = self.validate_position_parameters(
+                symbol, amount, leverage, stop_loss_percentage
+            )
+            if not is_valid:
+                self.logger.error(f"Invalid position parameters: {error_msg}")
+                self.position_logger.error(f"  ✗ Invalid parameters: {error_msg}")
+                return False
+            
             # Log position opening attempt
             self.position_logger.info(f"=" * 80)
             self.position_logger.info(f"OPENING POSITION: {symbol}")
@@ -773,7 +786,9 @@ class PositionManager:
                 take_profit=take_profit
             )
             
-            self.positions[symbol] = position
+            # Thread-safe position addition
+            with self._positions_lock:
+                self.positions[symbol] = position
             
             position_value = amount * fill_price
             self.position_logger.info(f"  Position Value: ${format_price(position_value)}")
@@ -798,10 +813,11 @@ class PositionManager:
     def close_position(self, symbol: str, reason: str = 'manual') -> Optional[float]:
         """Close a position and return P/L"""
         try:
-            if symbol not in self.positions:
-                return None
-            
-            position = self.positions[symbol]
+            # Thread-safe position check and retrieval
+            with self._positions_lock:
+                if symbol not in self.positions:
+                    return None
+                position = self.positions[symbol]
             
             self.position_logger.info(f"\n{'='*80}")
             self.position_logger.info(f"CLOSING POSITION: {symbol}")
@@ -880,8 +896,9 @@ class PositionManager:
             self.position_logger.info(f"✓ Position closed successfully at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             self.position_logger.info(f"{'='*80}\n")
             
-            # Remove from positions
-            del self.positions[symbol]
+            # Thread-safe position removal
+            with self._positions_lock:
+                del self.positions[symbol]
             
             return pnl
             
@@ -893,14 +910,24 @@ class PositionManager:
     
     def update_positions(self):
         """Update all positions and manage trailing stops with adaptive parameters"""
-        if self.positions:
+        # Get a thread-safe snapshot of positions to iterate over
+        with self._positions_lock:
+            positions_snapshot = list(self.positions.keys())
+            position_count = len(self.positions)
+        
+        if position_count > 0:
             self.position_logger.info(f"\n{'='*80}")
-            self.position_logger.info(f"UPDATING {len(self.positions)} OPEN POSITION(S) - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            self.position_logger.info(f"UPDATING {position_count} OPEN POSITION(S) - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             self.position_logger.info(f"{'='*80}")
         
-        for symbol in list(self.positions.keys()):
+        for symbol in positions_snapshot:
             try:
-                position = self.positions[symbol]
+                # Thread-safe access to position
+                with self._positions_lock:
+                    if symbol not in self.positions:
+                        # Position was closed by another thread
+                        continue
+                    position = self.positions[symbol]
                 
                 self.position_logger.info(f"\n--- Position: {symbol} ({position.side.upper()}) ---")
                 self.position_logger.debug(f"  Entry Price: {format_price(position.entry_price)}")
@@ -1071,16 +1098,281 @@ class PositionManager:
                     self.logger.error(f"Fallback update also failed for {symbol}: {fallback_error}")
                     self.position_logger.error(f"  ✗ Fallback update failed: {fallback_error}")
         
-        if self.positions:
+        # Thread-safe check for remaining positions
+        with self._positions_lock:
+            remaining_positions = len(self.positions)
+        
+        if remaining_positions > 0:
             self.position_logger.info(f"{'='*80}\n")
     
     def get_open_positions_count(self) -> int:
-        """Get number of open positions"""
-        return len(self.positions)
+        """Get number of open positions (thread-safe)"""
+        with self._positions_lock:
+            return len(self.positions)
+    
+    def get_position(self, symbol: str) -> Optional[Position]:
+        """Get a copy of position data for a symbol (thread-safe)
+        
+        Args:
+            symbol: Trading pair symbol
+            
+        Returns:
+            Position object if found, None otherwise
+        """
+        with self._positions_lock:
+            if symbol in self.positions:
+                # Return a reference to the position
+                # Note: The caller should not modify this directly
+                return self.positions[symbol]
+            return None
+    
+    def get_all_positions(self) -> Dict[str, Position]:
+        """Get a snapshot of all positions (thread-safe)
+        
+        Returns:
+            Dictionary of symbol -> Position
+        """
+        with self._positions_lock:
+            # Return a shallow copy of the positions dict
+            return dict(self.positions)
+    
+    def validate_position_parameters(self, symbol: str, amount: float, 
+                                    leverage: int, stop_loss_percentage: float) -> tuple[bool, str]:
+        """Validate position parameters before opening
+        
+        Args:
+            symbol: Trading pair symbol
+            amount: Position size in contracts
+            leverage: Leverage to use
+            stop_loss_percentage: Stop loss distance as percentage
+            
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        # Validate amount
+        if amount <= 0:
+            return False, f"Invalid amount: {amount} (must be positive)"
+        
+        # Validate leverage
+        if leverage < 1 or leverage > 125:
+            return False, f"Invalid leverage: {leverage}x (must be between 1 and 125)"
+        
+        # Validate stop loss percentage
+        if stop_loss_percentage <= 0 or stop_loss_percentage >= 1:
+            return False, f"Invalid stop loss percentage: {stop_loss_percentage} (must be between 0 and 1)"
+        
+        # Check if position already exists
+        with self._positions_lock:
+            if symbol in self.positions:
+                return False, f"Position for {symbol} already exists"
+        
+        return True, "Valid parameters"
+    
+    def reconcile_positions(self) -> int:
+        """Reconcile tracked positions with exchange positions
+        
+        This method checks for discrepancies between locally tracked positions
+        and positions on the exchange, helping recover from errors or crashes.
+        
+        Returns:
+            Number of discrepancies found and reconciled
+        """
+        try:
+            self.logger.info("Starting position reconciliation with exchange...")
+            
+            # Get positions from exchange
+            exchange_positions = self.client.get_open_positions()
+            exchange_symbols = {pos.get('symbol') for pos in exchange_positions if pos.get('symbol')}
+            
+            # Get locally tracked positions
+            with self._positions_lock:
+                local_symbols = set(self.positions.keys())
+            
+            # Find discrepancies
+            only_on_exchange = exchange_symbols - local_symbols
+            only_local = local_symbols - exchange_symbols
+            
+            discrepancies = 0
+            
+            # Handle positions only on exchange (not tracked locally)
+            if only_on_exchange:
+                self.logger.warning(
+                    f"Found {len(only_on_exchange)} positions on exchange not tracked locally: {only_on_exchange}"
+                )
+                # Sync these positions
+                for symbol in only_on_exchange:
+                    try:
+                        # Find the position details
+                        for pos in exchange_positions:
+                            if pos.get('symbol') == symbol:
+                                contracts = float(pos.get('contracts', 0))
+                                if contracts == 0:
+                                    continue
+                                
+                                side = pos.get('side', 'long')
+                                entry_price = float(pos.get('entryPrice', 0))
+                                
+                                # Get leverage
+                                leverage = pos.get('leverage', 10)
+                                if leverage is None:
+                                    leverage = 10
+                                else:
+                                    try:
+                                        leverage = int(leverage)
+                                    except (ValueError, TypeError):
+                                        leverage = 10
+                                
+                                # Get current price for stop loss calculation
+                                ticker = self.client.get_ticker(symbol)
+                                if not ticker:
+                                    continue
+                                
+                                current_price = ticker.get('last')
+                                if not current_price or current_price <= 0:
+                                    continue
+                                
+                                # Calculate stop loss and take profit
+                                stop_loss_pct = 0.05
+                                if side == 'long':
+                                    stop_loss = current_price * (1 - stop_loss_pct)
+                                    take_profit = current_price * (1 + stop_loss_pct * 2)
+                                else:
+                                    stop_loss = current_price * (1 + stop_loss_pct)
+                                    take_profit = current_price * (1 - stop_loss_pct * 2)
+                                
+                                # Create position object
+                                position = Position(
+                                    symbol=symbol,
+                                    side=side,
+                                    entry_price=entry_price,
+                                    amount=abs(contracts),
+                                    leverage=leverage,
+                                    stop_loss=stop_loss,
+                                    take_profit=take_profit
+                                )
+                                
+                                # Add to tracked positions
+                                with self._positions_lock:
+                                    self.positions[symbol] = position
+                                
+                                self.logger.info(
+                                    f"Reconciled position: {symbol} {side} @ {entry_price:.2f}, "
+                                    f"Contracts: {abs(contracts):.4f}, Leverage: {leverage}x"
+                                )
+                                discrepancies += 1
+                                break
+                    except Exception as e:
+                        self.logger.error(f"Error reconciling position {symbol}: {e}")
+            
+            # Handle positions only tracked locally (not on exchange)
+            if only_local:
+                self.logger.warning(
+                    f"Found {len(only_local)} positions tracked locally but not on exchange: {only_local}"
+                )
+                # These might have been closed externally, remove from tracking
+                with self._positions_lock:
+                    for symbol in only_local:
+                        if symbol in self.positions:
+                            self.logger.warning(f"Removing orphaned position: {symbol}")
+                            del self.positions[symbol]
+                            discrepancies += 1
+            
+            if discrepancies == 0:
+                self.logger.info("Position reconciliation complete: all positions in sync")
+            else:
+                self.logger.info(
+                    f"Position reconciliation complete: {discrepancies} discrepancies resolved"
+                )
+            
+            return discrepancies
+            
+        except Exception as e:
+            self.logger.error(f"Error during position reconciliation: {e}", exc_info=True)
+            return 0
+    
+    def safe_update_position_targets(self, symbol: str, new_stop_loss: Optional[float] = None,
+                                    new_take_profit: Optional[float] = None,
+                                    reason: str = 'manual') -> bool:
+        """Safely update position targets with validation and logging
+        
+        Args:
+            symbol: Trading pair symbol
+            new_stop_loss: New stop loss price (optional)
+            new_take_profit: New take profit price (optional)
+            reason: Reason for the update
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        with self._positions_lock:
+            if symbol not in self.positions:
+                self.logger.error(f"Cannot update targets: position {symbol} not found")
+                return False
+            
+            position = self.positions[symbol]
+            
+            try:
+                # Validate new stop loss
+                if new_stop_loss is not None:
+                    # For long positions, stop loss should be below entry
+                    # For short positions, stop loss should be above entry
+                    if position.side == 'long' and new_stop_loss >= position.entry_price:
+                        self.logger.warning(
+                            f"Invalid stop loss for long position {symbol}: "
+                            f"{new_stop_loss} >= entry {position.entry_price}"
+                        )
+                        return False
+                    elif position.side == 'short' and new_stop_loss <= position.entry_price:
+                        self.logger.warning(
+                            f"Invalid stop loss for short position {symbol}: "
+                            f"{new_stop_loss} <= entry {position.entry_price}"
+                        )
+                        return False
+                
+                # Validate new take profit
+                if new_take_profit is not None:
+                    # For long positions, take profit should be above entry
+                    # For short positions, take profit should be below entry
+                    if position.side == 'long' and new_take_profit <= position.entry_price:
+                        self.logger.warning(
+                            f"Invalid take profit for long position {symbol}: "
+                            f"{new_take_profit} <= entry {position.entry_price}"
+                        )
+                        return False
+                    elif position.side == 'short' and new_take_profit >= position.entry_price:
+                        self.logger.warning(
+                            f"Invalid take profit for short position {symbol}: "
+                            f"{new_take_profit} >= entry {position.entry_price}"
+                        )
+                        return False
+                
+                # Apply updates
+                if new_stop_loss is not None:
+                    old_sl = position.stop_loss
+                    position.stop_loss = new_stop_loss
+                    self.logger.info(
+                        f"Updated stop loss for {symbol}: {format_price(old_sl)} -> "
+                        f"{format_price(new_stop_loss)} (reason: {reason})"
+                    )
+                
+                if new_take_profit is not None:
+                    old_tp = position.take_profit
+                    position.take_profit = new_take_profit
+                    self.logger.info(
+                        f"Updated take profit for {symbol}: {format_price(old_tp)} -> "
+                        f"{format_price(new_take_profit)} (reason: {reason})"
+                    )
+                
+                return True
+                
+            except Exception as e:
+                self.logger.error(f"Error updating position targets for {symbol}: {e}")
+                return False
     
     def has_position(self, symbol: str) -> bool:
-        """Check if a position is open for a symbol"""
-        return symbol in self.positions
+        """Check if a position is open for a symbol (thread-safe)"""
+        with self._positions_lock:
+            return symbol in self.positions
     
     def scale_in_position(self, symbol: str, additional_amount: float, 
                          current_price: float) -> bool:
@@ -1094,13 +1386,14 @@ class PositionManager:
         Returns:
             True if successful, False otherwise
         """
-        if symbol not in self.positions:
-            self.logger.error(f"No position found for {symbol} to scale into")
-            return False
-        
-        try:
+        # Thread-safe position check
+        with self._positions_lock:
+            if symbol not in self.positions:
+                self.logger.error(f"No position found for {symbol} to scale into")
+                return False
             position = self.positions[symbol]
             
+        try:
             # Execute the additional order
             side = 'buy' if position.side == 'long' else 'sell'
             order = self.client.create_market_order(
@@ -1110,13 +1403,20 @@ class PositionManager:
             if not order:
                 return False
             
-            # Update position with new average entry price
-            total_old = position.amount * position.entry_price
-            total_new = additional_amount * current_price
-            total_amount = position.amount + additional_amount
-            
-            position.entry_price = (total_old + total_new) / total_amount
-            position.amount = total_amount
+            # Thread-safe position update
+            with self._positions_lock:
+                # Re-check position still exists
+                if symbol not in self.positions:
+                    self.logger.warning(f"Position {symbol} was closed during scale-in")
+                    return False
+                
+                # Update position with new average entry price
+                total_old = position.amount * position.entry_price
+                total_new = additional_amount * current_price
+                total_amount = position.amount + additional_amount
+                
+                position.entry_price = (total_old + total_new) / total_amount
+                position.amount = total_amount
             
             self.logger.info(
                 f"Scaled into {symbol}: added {additional_amount} contracts, "
@@ -1141,17 +1441,23 @@ class PositionManager:
         Returns:
             P/L percentage for the closed portion, or None if failed
         """
-        if symbol not in self.positions:
-            self.logger.error(f"No position found for {symbol} to scale out of")
-            return None
-        
-        try:
+        # Thread-safe position check
+        with self._positions_lock:
+            if symbol not in self.positions:
+                self.logger.error(f"No position found for {symbol} to scale out of")
+                return None
             position = self.positions[symbol]
             
+            # Check if we're closing the entire position
             if amount_to_close >= position.amount:
-                # Closing entire position
-                return self.close_position(symbol, reason)
-            
+                # Release lock before calling close_position (it will acquire its own lock)
+                return  # Will handle closing outside the lock
+        
+        # If closing entire position, use close_position method
+        if amount_to_close >= position.amount:
+            return self.close_position(symbol, reason)
+        
+        try:
             # Get current price
             ticker = self.client.get_ticker(symbol)
             if not ticker:
@@ -1173,8 +1479,15 @@ class PositionManager:
             # Calculate P/L for closed portion
             pnl = position.get_pnl(current_price)
             
-            # Update position amount
-            position.amount -= amount_to_close
+            # Thread-safe position update
+            with self._positions_lock:
+                # Re-check position still exists
+                if symbol not in self.positions:
+                    self.logger.warning(f"Position {symbol} was closed during scale-out")
+                    return None
+                
+                # Update position amount
+                position.amount -= amount_to_close
             
             self.logger.info(
                 f"Scaled out of {symbol}: closed {amount_to_close} contracts "
@@ -1199,29 +1512,31 @@ class PositionManager:
         Returns:
             True if successful, False otherwise
         """
-        if symbol not in self.positions:
-            self.logger.error(f"No position found for {symbol} to modify")
-            return False
-        
-        try:
-            position = self.positions[symbol]
+        # Thread-safe position check and modification
+        with self._positions_lock:
+            if symbol not in self.positions:
+                self.logger.error(f"No position found for {symbol} to modify")
+                return False
             
-            if new_stop_loss is not None:
-                old_sl = position.stop_loss
-                position.stop_loss = new_stop_loss
-                self.logger.info(
-                    f"Modified stop loss for {symbol}: {old_sl:.2f} -> {new_stop_loss:.2f}"
-                )
-            
-            if new_take_profit is not None:
-                old_tp = position.take_profit
-                position.take_profit = new_take_profit
-                self.logger.info(
-                    f"Modified take profit for {symbol}: {old_tp:.2f} -> {new_take_profit:.2f}"
-                )
-            
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Error modifying position targets for {symbol}: {e}")
-            return False
+            try:
+                position = self.positions[symbol]
+                
+                if new_stop_loss is not None:
+                    old_sl = position.stop_loss
+                    position.stop_loss = new_stop_loss
+                    self.logger.info(
+                        f"Modified stop loss for {symbol}: {old_sl:.2f} -> {new_stop_loss:.2f}"
+                    )
+                
+                if new_take_profit is not None:
+                    old_tp = position.take_profit
+                    position.take_profit = new_take_profit
+                    self.logger.info(
+                        f"Modified take profit for {symbol}: {old_tp:.2f} -> {new_take_profit:.2f}"
+                    )
+                
+                return True
+                
+            except Exception as e:
+                self.logger.error(f"Error modifying position targets for {symbol}: {e}")
+                return False
