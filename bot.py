@@ -4,6 +4,7 @@ Main trading bot orchestrator
 import time
 import signal
 import sys
+import threading
 import pandas as pd
 from datetime import datetime, timedelta
 from config import Config
@@ -110,6 +111,13 @@ class TradingBot:
         self.last_retrain_time = datetime.now()
         self.last_analytics_report = datetime.now()
         
+        # Background scanning state
+        self._scan_thread = None
+        self._scan_thread_running = False
+        self._scan_lock = threading.Lock()
+        self._latest_opportunities = []
+        self._last_opportunity_update = datetime.now()
+        
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
@@ -127,10 +135,12 @@ class TradingBot:
         self.logger.info("=" * 60)
         self.logger.info("⏳ Gracefully stopping bot...")
         self.logger.info("   - Stopping trading cycle")
+        self.logger.info("   - Stopping background scanning thread")
         self.logger.info("   - Will complete current operations")
         self.logger.info("   - Then proceed to shutdown")
         self.logger.info("=" * 60)
         self.running = False
+        self._scan_thread_running = False
     
     def execute_trade(self, opportunity: dict) -> bool:
         """Execute a trade based on opportunity"""
@@ -324,12 +334,56 @@ class TradingBot:
             except Exception as e:
                 self.logger.error(f"Error recording closed position {symbol}: {e}", exc_info=True)
     
-    def scan_for_opportunities(self):
-        """Scan market for new trading opportunities - called periodically"""
-        self.logger.info("🔍 Scanning market for opportunities...")
+    def _background_scanner(self):
+        """Background thread that continuously scans for opportunities"""
+        self.logger.info("🔍 Background scanner thread started")
         
-        # Scan market for opportunities
-        opportunities = self.scanner.get_best_pairs(n=5)
+        while self._scan_thread_running:
+            try:
+                # Scan market for opportunities
+                self.logger.info("🔍 [Background] Scanning market for opportunities...")
+                opportunities = self.scanner.get_best_pairs(n=5)
+                
+                # Update shared opportunities list in a thread-safe manner
+                with self._scan_lock:
+                    self._latest_opportunities = opportunities
+                    self._last_opportunity_update = datetime.now()
+                
+                if opportunities:
+                    self.logger.info(f"✅ [Background] Found {len(opportunities)} opportunities")
+                else:
+                    self.logger.debug("[Background] No opportunities found in this scan")
+                
+                # Sleep for the configured scan interval before next scan
+                # Check periodically if we should stop
+                for _ in range(Config.CHECK_INTERVAL):
+                    if not self._scan_thread_running:
+                        break
+                    time.sleep(1)
+                    
+            except Exception as e:
+                self.logger.error(f"❌ Error in background scanner: {e}", exc_info=True)
+                # Sleep briefly and continue
+                time.sleep(10)
+        
+        self.logger.info("🔍 Background scanner thread stopped")
+    
+    def _get_latest_opportunities(self):
+        """Get the latest opportunities from background scanner in a thread-safe manner"""
+        with self._scan_lock:
+            return list(self._latest_opportunities)  # Return a copy
+    
+    def scan_for_opportunities(self):
+        """Execute trades for opportunities from background scanner"""
+        # Get opportunities from background scanner
+        opportunities = self._get_latest_opportunities()
+        
+        if not opportunities:
+            self.logger.debug("No opportunities available from background scanner")
+            return
+        
+        age = (datetime.now() - self._last_opportunity_update).total_seconds()
+        self.logger.info(f"📊 Processing {len(opportunities)} opportunities from background scanner (age: {int(age)}s)")
         
         # Try to execute trades for top opportunities
         for opportunity in opportunities:
@@ -400,7 +454,7 @@ class TradingBot:
                 f"Total Trades: {metrics.get('total_trades', 0)}"
             )
         
-        # Scan for new opportunities
+        # Execute trades from opportunities found by background scanner
         self.scan_for_opportunities()
         
         # Check if we should retrain the ML model
@@ -424,6 +478,13 @@ class TradingBot:
         self.logger.info(f"📊 Max positions: {Config.MAX_OPEN_POSITIONS}")
         self.logger.info(f"💪 Leverage: {Config.LEVERAGE}x")
         self.logger.info("=" * 60)
+        self.logger.info("🔍 Starting background scanner thread for continuous market scanning...")
+        self.logger.info("=" * 60)
+        
+        # Start background scanner thread
+        self._scan_thread_running = True
+        self._scan_thread = threading.Thread(target=self._background_scanner, daemon=True, name="BackgroundScanner")
+        self._scan_thread.start()
         
         # Initialize timing
         last_full_cycle = datetime.now()
@@ -472,6 +533,16 @@ class TradingBot:
         self.logger.info("=" * 60)
         self.logger.info("🛑 SHUTTING DOWN BOT...")
         self.logger.info("=" * 60)
+        
+        # Stop background scanner thread
+        if self._scan_thread and self._scan_thread.is_alive():
+            self.logger.info("⏳ Stopping background scanner thread...")
+            self._scan_thread_running = False
+            self._scan_thread.join(timeout=5)  # Wait up to 5 seconds for thread to stop
+            if self._scan_thread.is_alive():
+                self.logger.warning("⚠️  Background scanner thread did not stop gracefully")
+            else:
+                self.logger.info("✅ Background scanner thread stopped")
         
         # Close all positions if configured to do so
         if getattr(Config, "CLOSE_POSITIONS_ON_SHUTDOWN", False):
