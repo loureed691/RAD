@@ -66,107 +66,72 @@ def test_kelly_criterion():
     print("\n✓ Kelly Criterion tests passed!")
     return True
 
-def test_early_exit_intelligence():
-    """Test early exit logic in Position class"""
+def test_smarter_stop_loss():
+    """Test smarter stop loss logic with time-based adjustments"""
     print("\n" + "="*60)
-    print("Testing Early Exit Intelligence")
+    print("Testing Smarter Stop Loss Logic")
     print("="*60)
     
     from position_manager import Position
     from datetime import datetime, timedelta
     
-    # Test 1: Rapid loss acceleration
-    print("\n1. Testing rapid loss acceleration exit...")
+    # Test 1: Normal stop loss triggers correctly
+    print("\n1. Testing normal stop loss trigger...")
     pos = Position('BTC/USDT:USDT', 'long', 50000, 1.0, 10, 48000, 52000)
     
-    # Simulate 15 minutes have passed
-    pos.entry_time = datetime.now() - timedelta(minutes=20)
+    current_price = 47900  # Below stop loss
+    should_close, reason = pos.should_close(current_price)
+    print(f"   Entry: ${pos.entry_price:,.0f}")
+    print(f"   Stop Loss: ${pos.stop_loss:,.0f}")
+    print(f"   Current Price: ${current_price:,.0f}")
+    print(f"   Should close: {should_close} (reason: {reason})")
+    assert should_close == True, "Should close at stop loss"
+    assert reason == 'stop_loss', f"Expected stop_loss, got {reason}"
+    print("   ✓ Normal stop loss working correctly")
     
-    # Simulate rapid loss (-1.8%)
-    current_price = 49100  # -1.8% loss with 10x leverage
-    current_pnl = pos.get_pnl(current_price)
+    # Test 2: Stalled position triggers tighter stop
+    print("\n2. Testing stalled position stop loss...")
+    pos2 = Position('ETH/USDT:USDT', 'long', 3000, 1.0, 10, 2900, 3200)
     
-    # Simulate consecutive negative updates
-    pos.consecutive_negative_updates = 3
-    pos.max_adverse_excursion = -0.018
+    # Simulate 5 hours have passed with minimal movement
+    pos2.entry_time = datetime.now() - timedelta(hours=5)
     
-    should_exit, reason = pos.should_early_exit(current_price, current_pnl)
-    print(f"   Current P/L: {current_pnl:.2%}")
-    print(f"   Consecutive negative updates: {pos.consecutive_negative_updates}")
-    print(f"   Should exit: {should_exit} (reason: {reason})")
-    assert should_exit == True, "Should exit on rapid loss"
-    assert reason == 'early_exit_rapid_loss', f"Expected rapid_loss, got {reason}"
-    print("   ✓ Rapid loss exit working correctly")
+    # Price slightly below entry (within 1%)
+    current_price = 2970  # -1% from entry
+    should_close, reason = pos2.should_close(current_price)
+    print(f"   Time in trade: 5 hours")
+    print(f"   Entry: ${pos2.entry_price:,.0f}")
+    print(f"   Current Price: ${current_price:,.0f}")
+    print(f"   P/L: {pos2.get_pnl(current_price):.2%}")
+    print(f"   Should close: {should_close} (reason: {reason})")
+    assert should_close == True, "Should close stalled position"
+    assert reason == 'stop_loss_stalled_position', f"Expected stop_loss_stalled_position, got {reason}"
+    print("   ✓ Stalled position stop loss working correctly")
     
-    # Test 2: Extended time underwater
-    print("\n2. Testing extended time underwater exit...")
-    pos2 = Position('ETH/USDT:USDT', 'long', 3000, 1.0, 10, 2950, 3100)
+    # Test 3: Profitable position doesn't trigger stalled stop
+    print("\n3. Testing profitable position not affected by stalled stop...")
+    pos3 = Position('SOL/USDT:USDT', 'long', 100, 1.0, 10, 95, 102)  # TP closer
     
-    # Simulate 2.5 hours have passed
-    pos2.entry_time = datetime.now() - timedelta(hours=2, minutes=30)
+    # Simulate 5 hours with small profit
+    pos3.entry_time = datetime.now() - timedelta(hours=5)
     
-    # Still losing after 2.5 hours
-    current_price = 2970  # -1% loss
-    current_pnl = pos2.get_pnl(current_price)
+    # Price with small profit (0.5% price move = 5% ROI with 10x, at threshold but TP is close)
+    current_price = 100.5  # +0.5% from entry, +5% ROI with 10x
+    should_close, reason = pos3.should_close(current_price)
+    pnl = pos3.get_pnl(current_price)
+    distance_to_tp = (pos3.take_profit - current_price) / current_price
+    print(f"   Time in trade: 5 hours")
+    print(f"   Entry: ${pos3.entry_price:.2f}")
+    print(f"   Take Profit: ${pos3.take_profit:.2f}")
+    print(f"   Current Price: ${current_price:.2f}")
+    print(f"   P/L: {pnl:.2%}")
+    print(f"   Distance to TP: {distance_to_tp:.2%}")
+    print(f"   Should close: {should_close} (reason: {reason})")
+    # Should not close - profit is 5% but TP is only 1.5% away (< 5% threshold)
+    assert should_close == False, f"Should not close when TP is close, got reason: {reason}"
+    print("   ✓ Profitable positions not affected by stalled stop when TP is close")
     
-    should_exit, reason = pos2.should_early_exit(current_price, current_pnl)
-    print(f"   Time in trade: 2.5 hours")
-    print(f"   Current P/L: {current_pnl:.2%}")
-    print(f"   Should exit: {should_exit} (reason: {reason})")
-    assert should_exit == True, "Should exit after extended time underwater"
-    assert reason == 'early_exit_extended_loss', f"Expected extended_loss, got {reason}"
-    print("   ✓ Extended underwater exit working correctly")
-    
-    # Test 3: Maximum adverse excursion
-    print("\n3. Testing max adverse excursion exit...")
-    pos3 = Position('SOL/USDT:USDT', 'long', 100, 1.0, 10, 97, 105)
-    
-    # Simulate high drawdown
-    pos3.max_adverse_excursion = -0.028  # -2.8% peak loss
-    current_price = 97.8  # -2.2% current loss
-    current_pnl = pos3.get_pnl(current_price)
-    
-    should_exit, reason = pos3.should_early_exit(current_price, current_pnl)
-    print(f"   Max adverse excursion: {pos3.max_adverse_excursion:.2%}")
-    print(f"   Current P/L: {current_pnl:.2%}")
-    print(f"   Should exit: {should_exit} (reason: {reason})")
-    assert should_exit == True, "Should exit on high adverse excursion"
-    assert reason == 'early_exit_mae_threshold', f"Expected mae_threshold, got {reason}"
-    print("   ✓ Max adverse excursion exit working correctly")
-    
-    # Test 4: Failed reversal
-    print("\n4. Testing failed reversal exit...")
-    pos4 = Position('BNB/USDT:USDT', 'long', 300, 1.0, 10, 295, 310)
-    
-    # Was up at some point
-    pos4.max_favorable_excursion = 0.007  # Was up 0.7%
-    
-    # Now falling significantly
-    current_price = 295.5  # -1.5% loss
-    current_pnl = pos4.get_pnl(current_price)
-    
-    should_exit, reason = pos4.should_early_exit(current_price, current_pnl)
-    print(f"   Max favorable excursion: {pos4.max_favorable_excursion:.2%}")
-    print(f"   Current P/L: {current_pnl:.2%}")
-    print(f"   Should exit: {should_exit} (reason: {reason})")
-    assert should_exit == True, "Should exit on failed reversal"
-    assert reason == 'early_exit_failed_reversal', f"Expected failed_reversal, got {reason}"
-    print("   ✓ Failed reversal exit working correctly")
-    
-    # Test 5: No exit on profitable position
-    print("\n5. Testing no exit on profitable position...")
-    pos5 = Position('AVAX/USDT:USDT', 'long', 20, 1.0, 10, 19, 22)
-    
-    current_price = 20.5  # +2.5% profit
-    current_pnl = pos5.get_pnl(current_price)
-    
-    should_exit, reason = pos5.should_early_exit(current_price, current_pnl)
-    print(f"   Current P/L: {current_pnl:.2%} (profitable)")
-    print(f"   Should exit: {should_exit}")
-    assert should_exit == False, "Should not exit profitable position early"
-    print("   ✓ No false exits on profitable positions")
-    
-    print("\n✓ Early exit intelligence tests passed!")
+    print("\n✓ Smarter stop loss tests passed!")
     return True
 
 def test_adaptive_threshold_momentum():
@@ -233,7 +198,7 @@ if __name__ == '__main__':
         # Run all tests
         success = True
         success = test_kelly_criterion() and success
-        success = test_early_exit_intelligence() and success
+        success = test_smarter_stop_loss() and success
         success = test_adaptive_threshold_momentum() and success
         
         print("\n" + "="*60)

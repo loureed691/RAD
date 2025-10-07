@@ -136,60 +136,6 @@ def demo_short_losing_trade():
     print(f"\n   ✅ Stop loss protected account from larger loss!")
     print(f"   Without stop loss, loss could have been much worse")
 
-def demo_early_exit():
-    """Demonstrate intelligent early profit taking"""
-    print_separator()
-    print("DEMO 3: INTELLIGENT EARLY EXIT")
-    print_separator()
-    
-    print("\n📊 MARKET ANALYSIS:")
-    print("   Symbol: SOL/USDT:USDT")
-    print("   Signal: BUY (Strong momentum)")
-    print("   Confidence: 90%")
-    print("   Entry Price: $100")
-    
-    print("\n💼 POSITION SETUP:")
-    position = Position(
-        symbol='SOL/USDT:USDT',
-        side='long',
-        entry_price=100,
-        amount=50.0,
-        leverage=10,
-        stop_loss=95,
-        take_profit=120  # 20% target (far away)
-    )
-    print(f"   Side: LONG")
-    print(f"   Amount: 50 SOL")
-    print(f"   Leverage: 10x")
-    print(f"   Entry: ${position.entry_price:.2f}")
-    print(f"   Stop Loss: ${position.stop_loss:.2f} (-5.0%)")
-    print(f"   Take Profit: ${position.take_profit:.2f} (+20.0%)")
-    
-    print("\n📈 PRICE MOVEMENT:")
-    
-    # Stage 1: Good profit
-    price = 108
-    pnl = position.get_pnl(price)
-    should_close, reason = position.should_close(price)
-    print(f"\n   ⏱️  2 hours later → ${price:.2f}")
-    print(f"      P/L: {pnl:+.1%} (${pnl * 10000:+,.0f} on $10k account)")
-    print(f"      Distance to TP: ${position.take_profit - price:.2f} (12% away)")
-    print(f"      Should Close: {should_close} ({reason}) 🎯")
-    print(f"\n      💡 INTELLIGENT FEATURE ACTIVATED:")
-    print(f"         Bot detects 80% ROI (8% price * 10x leverage)")
-    print(f"         Take profit is still 12% away")
-    print(f"         Early exit triggered to lock in excellent gains!")
-    print(f"         This prevents potential reversal eating profits")
-    
-    print("\n✅ POSITION CLOSED - EARLY EXIT!")
-    print(f"   Entry: ${100:.2f}")
-    print(f"   Exit: ${price:.2f}")
-    print(f"   Gain: ${price - 100:.2f} (+{((price/100)-1)*100:.1f}%)")
-    print(f"   ROI with 10x leverage: {pnl:+.1%}")
-    print(f"   Account Impact: ${pnl * 10000:+,.0f}")
-    print(f"\n   🧠 Smart Decision: Didn't wait for $120 target")
-    print(f"   Many traders would hold and potentially lose gains on reversal")
-
 def demo_trailing_stop_protection():
     """Demonstrate trailing stop protecting profits"""
     print_separator()
@@ -261,7 +207,6 @@ def main():
     
     demo_long_winning_trade()
     demo_short_losing_trade()
-    demo_early_exit()
     demo_trailing_stop_protection()
     
     print_separator()
@@ -273,14 +218,14 @@ def main():
 ✅ Stop Loss: Protects account from large losses
 ✅ Take Profit: Captures gains at targets
 ✅ Trailing Stops: Locks in profits as price moves favorably
-✅ Early Exits: Intelligent profit-taking prevents reversals
+✅ Smart TP/SL: Adaptive profit taking and intelligent stop loss
 ✅ Risk Management: All trades properly sized and managed
 
 🎯 Key Insights:
    • Winning trades maximize gains with intelligent exits
    • Losing trades are cut quickly to limit damage
    • Trailing stops protect accumulated profits
-   • Early exits prevent common trader mistakes
+   • Smart take profit captures gains when TP is far away
    • All trades have defined risk from the start
 
 💡 The bot combines mechanical execution with intelligent
