@@ -484,19 +484,27 @@ class KuCoinClient:
                             f"book depth {total_liquidity:.2f}. Potential high slippage."
                         )
             
-            # Switch to cross margin mode first (fixes error 330006)
-            self.exchange.set_margin_mode('cross', symbol)
+            # Skip leverage/margin mode setting for reduce_only orders (closing positions)
+            # Setting leverage on close can fail with error 330008 if all margin is in use
+            if not reduce_only:
+                # Switch to cross margin mode first (fixes error 330006)
+                self.exchange.set_margin_mode('cross', symbol)
+                
+                # Set leverage with cross margin mode
+                self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
             
-            # Set leverage with cross margin mode
-            self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
+            # Build order parameters
+            params = {"marginMode": "cross"}
+            if reduce_only:
+                params["reduceOnly"] = True
             
-            # Create market order with cross margin mode explicitly set
+            # Create market order
             order = self.exchange.create_order(
                 symbol=symbol,
                 type='market',
                 side=side,
                 amount=validated_amount,
-                params={"marginMode": "cross"}
+                params=params
             )
             
             # Wait briefly for order to be filled and fetch updated status
@@ -633,11 +641,14 @@ class KuCoinClient:
                         f"Adjusted limit order to fit margin: {adjusted_amount:.4f} contracts at {adjusted_leverage}x leverage"
                     )
             
-            # Switch to cross margin mode first (fixes error 330006)
-            self.exchange.set_margin_mode('cross', symbol)
-            
-            # Set leverage with cross margin mode
-            self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
+            # Skip leverage/margin mode setting for reduce_only orders (closing positions)
+            # Setting leverage on close can fail with error 330008 if all margin is in use
+            if not reduce_only:
+                # Switch to cross margin mode first (fixes error 330006)
+                self.exchange.set_margin_mode('cross', symbol)
+                
+                # Set leverage with cross margin mode
+                self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
             
             # Build order parameters
             params = {"marginMode": "cross"}
