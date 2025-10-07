@@ -304,11 +304,15 @@ class TradingBot:
                 
                 # Record trade for analytics
                 trade_duration = (datetime.now() - position.entry_time).total_seconds() / 60
+                
+                # DEFENSIVE: Ensure leverage is not zero (should never happen, but be safe)
+                leverage = position.leverage if position.leverage > 0 else 1
+                
                 self.analytics.record_trade({
                     'symbol': symbol,
                     'side': position.side,
                     'entry_price': position.entry_price,
-                    'exit_price': position.entry_price * (1 + pnl / position.leverage) if position.side == 'long' else position.entry_price * (1 - pnl / position.leverage),
+                    'exit_price': position.entry_price * (1 + pnl / leverage) if position.side == 'long' else position.entry_price * (1 - pnl / leverage),
                     'pnl': pnl,
                     'pnl_pct': pnl,
                     'duration': trade_duration,
