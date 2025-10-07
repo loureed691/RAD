@@ -122,11 +122,13 @@ class AdvancedAnalytics:
         for balance in balances:
             if balance > peak:
                 peak = balance
-            # Defensive: Handle zero peak to avoid division by zero
-            if peak > 0:
+            # Handle zero peak: if peak is zero and balance > 0, treat drawdown as 100%
+            if peak == 0:
+                dd = 1.0 if balance > 0 else 0.0
+            else:
                 dd = (peak - balance) / peak
-                if dd > max_dd:
-                    max_dd = dd
+            if dd > max_dd:
+                max_dd = dd
         
         if max_dd == 0:
             return float('inf')
