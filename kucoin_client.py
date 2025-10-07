@@ -348,14 +348,42 @@ class KuCoinClient:
             Tuple of (adjusted_amount, adjusted_leverage)
         """
         try:
+            # Guard: Check for insufficient margin early
+            if available_margin <= 0:
+                self.logger.error(
+                    f"Cannot adjust position: no margin available (available=${available_margin:.2f})"
+                )
+                return 0.0, 1
+            
+            # Guard: Check for invalid price
+            if price <= 0:
+                self.logger.error(
+                    f"Cannot adjust position: invalid price (price=${price:.4f})"
+                )
+                return 0.0, 1
+            
             # Get contract size for accurate calculations
             markets = self.exchange.load_markets()
             contract_size = 1
             if symbol in markets:
                 contract_size = markets[symbol].get('contractSize', 1)
             
+            # Guard: Check for invalid contract size
+            if contract_size <= 0:
+                self.logger.error(
+                    f"Cannot adjust position: invalid contract size (contract_size={contract_size})"
+                )
+                return 0.0, 1
+            
             # Reserve 10% of available margin for safety and fees
             usable_margin = available_margin * 0.90
+            
+            # Guard: Ensure usable_margin is positive
+            if usable_margin <= 0:
+                self.logger.error(
+                    f"Cannot adjust position: insufficient usable margin after buffer (usable=${usable_margin:.2f})"
+                )
+                return 0.0, 1
             
             # Calculate maximum position value we can take
             max_position_value = usable_margin * leverage
@@ -375,8 +403,12 @@ class KuCoinClient:
             if required_margin > usable_margin:
                 # Calculate what leverage we can actually use (must include contract_size)
                 position_value = adjusted_amount * price * contract_size
-                adjusted_leverage = int(position_value / usable_margin)
-                adjusted_leverage = max(1, min(adjusted_leverage, leverage))
+                # Guard: Prevent division by zero (already checked above, but be defensive)
+                if usable_margin > 0:
+                    adjusted_leverage = int(position_value / usable_margin)
+                    adjusted_leverage = max(1, min(adjusted_leverage, leverage))
+                else:
+                    adjusted_leverage = 1
                 
                 self.logger.warning(
                     f"Reducing leverage from {leverage}x to {adjusted_leverage}x to fit available margin"
