@@ -281,7 +281,8 @@ def test_market_order_with_depth_check():
                     'limits': {
                         'amount': {'min': 1, 'max': 10000},
                         'cost': {'min': 10, 'max': 1000000}
-                    }
+                    },
+                    'contractSize': 1
                 }
             })
             mock_exchange.fetch_ticker = Mock(return_value={
@@ -292,6 +293,12 @@ def test_market_order_with_depth_check():
                 'asks': [[50010, 200], [50020, 150]],
                 'timestamp': 1234567890
             })
+            mock_exchange.fetch_balance = Mock(return_value={
+                'free': {'USDT': 1000000},  # Sufficient margin for large order
+                'used': {'USDT': 0},
+                'total': {'USDT': 1000000}
+            })
+            mock_exchange.fetch_order = Mock(return_value=None)  # Prevent Mock from corrupting order data
             mock_exchange.create_order = Mock(return_value={
                 'id': '12345',
                 'status': 'closed',
@@ -325,7 +332,21 @@ def test_position_scaling_in():
             mock_exchange.set_position_mode = Mock()
             mock_exchange.set_margin_mode = Mock()
             mock_exchange.set_leverage = Mock()
-            mock_exchange.load_markets = Mock(return_value={})
+            mock_exchange.load_markets = Mock(return_value={
+                'BTC-USDT': {
+                    'limits': {
+                        'amount': {'min': 1, 'max': 10000},
+                        'cost': {'min': 10, 'max': 1000000}
+                    },
+                    'contractSize': 1
+                }
+            })
+            mock_exchange.fetch_balance = Mock(return_value={
+                'free': {'USDT': 100000},  # Sufficient margin
+                'used': {'USDT': 0},
+                'total': {'USDT': 100000}
+            })
+            mock_exchange.fetch_order = Mock(return_value=None)  # Prevent Mock from corrupting order data
             mock_exchange.create_order = Mock(return_value={
                 'id': '12345',
                 'status': 'closed',
@@ -373,7 +394,21 @@ def test_position_scaling_out():
             mock_exchange.set_position_mode = Mock()
             mock_exchange.set_margin_mode = Mock()
             mock_exchange.set_leverage = Mock()
-            mock_exchange.load_markets = Mock(return_value={})
+            mock_exchange.load_markets = Mock(return_value={
+                'BTC-USDT': {
+                    'limits': {
+                        'amount': {'min': 1, 'max': 10000},
+                        'cost': {'min': 10, 'max': 1000000}
+                    },
+                    'contractSize': 1
+                }
+            })
+            mock_exchange.fetch_balance = Mock(return_value={
+                'free': {'USDT': 100000},  # Sufficient margin
+                'used': {'USDT': 0},
+                'total': {'USDT': 100000}
+            })
+            mock_exchange.fetch_order = Mock(return_value=None)  # Prevent Mock from corrupting order data
             mock_exchange.create_order = Mock(return_value={
                 'id': '12345',
                 'status': 'closed',

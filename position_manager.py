@@ -342,11 +342,16 @@ class Position:
                         # This is the critical fix for "bot doesn't sell" issue
                         pass  # Keep TP at current value
                 else:
-                    # Price at or past TP - only allow if new TP brings it closer
-                    old_distance_to_tp = abs(current_price - self.take_profit)
-                    new_distance_to_tp = abs(current_price - new_take_profit)
-                    if new_distance_to_tp <= old_distance_to_tp:
+                    # Price at or past TP - allow extension if at TP, otherwise check if closer
+                    if current_price == self.take_profit:
+                        # At TP exactly - allow extension since we've reached target
                         self.take_profit = new_take_profit
+                    else:
+                        # Past TP - only allow if new TP brings it closer
+                        old_distance_to_tp = abs(current_price - self.take_profit)
+                        new_distance_to_tp = abs(current_price - new_take_profit)
+                        if new_distance_to_tp <= old_distance_to_tp:
+                            self.take_profit = new_take_profit
         else:  # short
             new_take_profit = self.entry_price * (1 - new_distance)
             # Only move take profit down (more favorable)
@@ -366,11 +371,16 @@ class Position:
                         # This is the critical fix for "bot doesn't sell" issue
                         pass  # Keep TP at current value
                 else:
-                    # Price at or past TP - only allow if new TP brings it closer
-                    old_distance_to_tp = abs(current_price - self.take_profit)
-                    new_distance_to_tp = abs(current_price - new_take_profit)
-                    if new_distance_to_tp <= old_distance_to_tp:
+                    # Price at or past TP - allow extension if at TP, otherwise check if closer
+                    if current_price == self.take_profit:
+                        # At TP exactly - allow extension since we've reached target
                         self.take_profit = new_take_profit
+                    else:
+                        # Past TP - only allow if new TP brings it closer
+                        old_distance_to_tp = abs(current_price - self.take_profit)
+                        new_distance_to_tp = abs(current_price - new_take_profit)
+                        if new_distance_to_tp <= old_distance_to_tp:
+                            self.take_profit = new_take_profit
     
     def calculate_intelligent_targets(self, current_price: float, support_resistance: Dict, 
                                      side: str) -> Tuple[float, float]:
