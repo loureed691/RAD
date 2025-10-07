@@ -93,7 +93,8 @@ class Indicators:
             df['volume_ratio'] = df['volume_ratio'].fillna(1.0)  # Default to 1.0 if NaN
             
             # Price momentum
-            df['momentum'] = df['close'].pct_change(periods=10)
+            # Fix: Specify fill_method=None to avoid FutureWarning about deprecated default
+            df['momentum'] = df['close'].pct_change(periods=10, fill_method=None)
             df['roc'] = ((df['close'] - df['close'].shift(10)) / df['close'].shift(10)) * 100
             
             # Volume-weighted indicators (VWAP with rolling window to avoid indefinite growth)
