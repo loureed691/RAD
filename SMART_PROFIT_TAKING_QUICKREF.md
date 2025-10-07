@@ -10,7 +10,6 @@ The profit-taking system is now **MUCH smarter** and protects profits aggressive
 |-----------|--------|-----------|-------------|
 | **20%** | ✅ Close ALWAYS | Unconditional | `take_profit_20pct_exceptional` |
 | **15%** | ✅ Close if TP far | TP > 2% away | `take_profit_15pct_far_tp` |
-| **12%** | ✅ Close ALWAYS | Unconditional | `take_profit_12pct` |
 | **10%** | ✅ Close if TP far | TP > 2% away | `take_profit_10pct` |
 | **8%** | ✅ Close if TP far | TP > 3% away | `take_profit_8pct` |
 | **5%** | ✅ Close if TP far | TP > 5% away | `take_profit_5pct` |
