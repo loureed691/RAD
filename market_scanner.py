@@ -23,7 +23,7 @@ class MarketScanner:
         
         # Caching mechanism to avoid redundant scans
         self.cache = {}
-        self.cache_duration = 300  # 5 minutes cache
+        self.cache_duration = Config.CACHE_DURATION  # Use configurable cache duration
         self.last_full_scan = None
         self.scan_results_cache = []
         

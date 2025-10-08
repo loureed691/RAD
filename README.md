@@ -188,6 +188,7 @@ Key configuration parameters in `.env`:
 - **CHECK_INTERVAL**: Seconds between market scans (default: 60)
 - **POSITION_UPDATE_INTERVAL**: Seconds between position checks (default: 5)
 - **MAX_WORKERS**: Number of parallel workers for market scanning (default: 20)
+- **CACHE_DURATION**: Cache duration in seconds (default: 300)
 - **TRAILING_STOP_PERCENTAGE**: Trailing stop percentage (default: 0.02 = 2%)
 - **MAX_OPEN_POSITIONS**: Maximum concurrent positions (default: 3)
 - **RETRAIN_INTERVAL**: Seconds between ML model retraining (default: 86400 = 24 hours)

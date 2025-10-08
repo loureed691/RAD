@@ -71,6 +71,27 @@ POSITION_UPDATE_INTERVAL=5  # Default: 5 seconds
 - **Aggressive**: 3 seconds
 - **Very Aggressive**: 2 seconds (may hit rate limits with many positions)
 
+### 4. Cache Duration (`CACHE_DURATION`)
+
+How long to cache market data before refreshing.
+
+**Configuration:**
+```env
+CACHE_DURATION=300  # Default: 300 seconds (5 minutes)
+```
+
+**Recommended Values:**
+- **Conservative**: 600 seconds (10 minutes - fewer API calls)
+- **Recommended**: 300 seconds (5 minutes - balanced)
+- **Aggressive**: 180 seconds (3 minutes - fresher data)
+- **Very Aggressive**: 60 seconds (1 minute - maximum freshness)
+
+**Trade-offs:**
+- ✅ Longer cache = fewer API calls, lower costs
+- ✅ Shorter cache = fresher data, more responsive
+- ⚠️ Too short may cause redundant API calls
+- ⚠️ Too long may miss opportunities
+
 ## Performance Monitoring
 
 ### Checking Scan Performance
@@ -94,6 +115,7 @@ Pairs scanned: 95
 MAX_WORKERS=10
 CHECK_INTERVAL=120
 POSITION_UPDATE_INTERVAL=10
+CACHE_DURATION=600
 ```
 - Good for: Small VPS, testing, development
 - Scan time: ~15 seconds
@@ -104,6 +126,7 @@ POSITION_UPDATE_INTERVAL=10
 MAX_WORKERS=20
 CHECK_INTERVAL=60
 POSITION_UPDATE_INTERVAL=5
+CACHE_DURATION=300
 ```
 - Good for: Most production deployments
 - Scan time: ~7 seconds
@@ -114,6 +137,7 @@ POSITION_UPDATE_INTERVAL=5
 MAX_WORKERS=40
 CHECK_INTERVAL=30
 POSITION_UPDATE_INTERVAL=3
+CACHE_DURATION=180
 ```
 - Good for: Powerful servers, day trading
 - Scan time: ~3 seconds
@@ -195,6 +219,7 @@ To test your optimal configuration:
 MAX_WORKERS=50
 CHECK_INTERVAL=20
 POSITION_UPDATE_INTERVAL=2
+CACHE_DURATION=60
 ```
 ⚠️ Only use on powerful servers with excellent network
 
@@ -203,6 +228,7 @@ POSITION_UPDATE_INTERVAL=2
 MAX_WORKERS=5
 CHECK_INTERVAL=180
 POSITION_UPDATE_INTERVAL=15
+CACHE_DURATION=900
 ```
 ⚠️ Slower reaction times, may miss opportunities
 
@@ -211,6 +237,7 @@ POSITION_UPDATE_INTERVAL=15
 MAX_WORKERS=30
 CHECK_INTERVAL=30
 POSITION_UPDATE_INTERVAL=3
+CACHE_DURATION=180
 ```
 ✅ Balance of speed and resource usage
 
