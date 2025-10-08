@@ -281,7 +281,8 @@ def test_market_order_with_depth_check():
                     'limits': {
                         'amount': {'min': 1, 'max': 10000},
                         'cost': {'min': 10, 'max': 1000000}
-                    }
+                    },
+                    'contractSize': 1
                 }
             })
             mock_exchange.fetch_ticker = Mock(return_value={
@@ -292,11 +293,25 @@ def test_market_order_with_depth_check():
                 'asks': [[50010, 200], [50020, 150]],
                 'timestamp': 1234567890
             })
+            # Mock balance with very large amount so position doesn't get adjusted down
+            mock_exchange.fetch_balance = Mock(return_value={
+                'free': {'USDT': 10000000.0},
+                'used': {'USDT': 0.0},
+                'total': {'USDT': 10000000.0}
+            })
             mock_exchange.create_order = Mock(return_value={
                 'id': '12345',
                 'status': 'closed',
                 'average': 50000,
                 'amount': 150.0
+            })
+            mock_exchange.fetch_order = Mock(return_value={
+                'id': '12345',
+                'status': 'closed',
+                'average': 50000,
+                'filled': 150.0,
+                'cost': 7500000.0,
+                'timestamp': 1234567890
             })
             
             client = KuCoinClient('key', 'secret', 'pass')
@@ -325,14 +340,36 @@ def test_position_scaling_in():
             mock_exchange.set_position_mode = Mock()
             mock_exchange.set_margin_mode = Mock()
             mock_exchange.set_leverage = Mock()
-            mock_exchange.load_markets = Mock(return_value={})
+            mock_exchange.load_markets = Mock(return_value={
+                'BTC-USDT': {
+                    'limits': {
+                        'amount': {'min': 1, 'max': 10000},
+                        'cost': {'min': 10, 'max': 1000000}
+                    },
+                    'contractSize': 1
+                }
+            })
             mock_exchange.create_order = Mock(return_value={
                 'id': '12345',
                 'status': 'closed',
                 'average': 51000,
                 'amount': 1.0
             })
+            mock_exchange.fetch_order = Mock(return_value={
+                'id': '12345',
+                'status': 'closed',
+                'average': 51000,
+                'filled': 1.0,
+                'cost': 51000.0,
+                'timestamp': 1234567890
+            })
             mock_exchange.fetch_ticker = Mock(return_value={'last': 51000})
+            # Mock balance with proper nested structure
+            mock_exchange.fetch_balance = Mock(return_value={
+                'free': {'USDT': 100000.0},
+                'used': {'USDT': 0.0},
+                'total': {'USDT': 100000.0}
+            })
             
             client = KuCoinClient('key', 'secret', 'pass')
             manager = PositionManager(client)
@@ -373,14 +410,36 @@ def test_position_scaling_out():
             mock_exchange.set_position_mode = Mock()
             mock_exchange.set_margin_mode = Mock()
             mock_exchange.set_leverage = Mock()
-            mock_exchange.load_markets = Mock(return_value={})
+            mock_exchange.load_markets = Mock(return_value={
+                'BTC-USDT': {
+                    'limits': {
+                        'amount': {'min': 1, 'max': 10000},
+                        'cost': {'min': 10, 'max': 1000000}
+                    },
+                    'contractSize': 1
+                }
+            })
             mock_exchange.create_order = Mock(return_value={
                 'id': '12345',
                 'status': 'closed',
                 'average': 52000,
                 'amount': 1.0
             })
+            mock_exchange.fetch_order = Mock(return_value={
+                'id': '12345',
+                'status': 'closed',
+                'average': 52000,
+                'filled': 1.0,
+                'cost': 52000.0,
+                'timestamp': 1234567890
+            })
             mock_exchange.fetch_ticker = Mock(return_value={'last': 52000})
+            # Mock balance with proper nested structure
+            mock_exchange.fetch_balance = Mock(return_value={
+                'free': {'USDT': 100000.0},
+                'used': {'USDT': 0.0},
+                'total': {'USDT': 100000.0}
+            })
             
             client = KuCoinClient('key', 'secret', 'pass')
             manager = PositionManager(client)
