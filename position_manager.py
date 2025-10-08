@@ -501,8 +501,28 @@ class Position:
         if current_pnl > self.max_favorable_excursion:
             self.max_favorable_excursion = current_pnl
         
-        # Intelligent profit taking - take profits at key ROI levels when TP is far away
+        # PRIORITY 1: Standard stop loss and take profit checks
+        # These should be checked FIRST to ensure positions reach their intended targets
+        if self.side == 'long':
+            # Check stop loss
+            if current_price <= self.stop_loss:
+                return True, 'stop_loss'
+            
+            # Check take profit - this is the primary exit condition
+            if self.take_profit and current_price >= self.take_profit:
+                return True, 'take_profit'
+        else:  # short
+            # Check stop loss
+            if current_price >= self.stop_loss:
+                return True, 'stop_loss'
+            
+            # Check take profit - this is the primary exit condition
+            if self.take_profit and current_price <= self.take_profit:
+                return True, 'take_profit'
+        
+        # PRIORITY 2: Intelligent profit taking for extreme profits or momentum loss
         # This prevents scenarios where TP gets extended too far and price retraces
+        # Only applies if we haven't reached TP yet (checked above)
         if current_pnl > 0 and self.take_profit:
             # Calculate distance to take profit
             if self.side == 'long':
@@ -510,18 +530,16 @@ class Position:
             else:  # short
                 distance_to_tp = (current_price - self.take_profit) / current_price
             
-            # Exceptional profit levels - always take profit (no override)
-            if current_pnl >= 0.20:  # 20% ROI
-                return True, 'take_profit_20pct_exceptional'
+            # Exceptional profit levels - take profit when both ROI is very high AND TP is far
+            # This protects against unrealistic TP targets that are unlikely to be reached
+            if current_pnl >= 0.80 and distance_to_tp > 0.15:  # 80% ROI and TP >15% away
+                return True, 'emergency_profit_protection'
             
-            # Very high profit - take if TP is far (>2%)
-            if current_pnl >= 0.15:
-                if distance_to_tp > 0.02:
-                    return True, 'take_profit_15pct_far_tp'
+            if current_pnl >= 0.20 and distance_to_tp > 0.09:  # 20% ROI and TP >9% away
+                return True, 'take_profit_20pct_exceptional'
             
             # Profit velocity check - take profit if we're losing momentum
             # Check this at various profit levels to catch retracements early
-            # This takes priority over flat ROI thresholds when losing significant momentum
             if self.max_favorable_excursion >= 0.10:  # Had at least 10% profit (significant)
                 profit_drawdown = self.max_favorable_excursion - current_pnl
                 drawdown_pct = profit_drawdown / self.max_favorable_excursion
@@ -537,77 +555,21 @@ class Position:
                 # Use 0.299 to handle floating point precision issues
                 if drawdown_pct >= 0.299 and 0.03 <= current_pnl < 0.15:
                     return True, 'take_profit_momentum_loss'
-            
-            # 10% ROI - take profit if TP is >2% away
-            if current_pnl >= 0.10:
-                if distance_to_tp > 0.02:
-                    return True, 'take_profit_10pct'
-            
-            # 8% ROI - take profit if TP is >3% away
-            if current_pnl >= 0.08:
-                if distance_to_tp > 0.03:
-                    return True, 'take_profit_8pct'
-            
-            # 5% ROI - take profit if TP is >5% away
-            if current_pnl >= 0.05:
-                if distance_to_tp > 0.05:
-                    return True, 'take_profit_5pct'
         
-        # Standard stop loss and take profit checks (primary logic)
+        # PRIORITY 3: Smart stop loss - tighten for stalled positions
         # Enhanced stop loss with time-based awareness
-        if self.side == 'long':
-            # Check stop loss
-            if current_price <= self.stop_loss:
-                return True, 'stop_loss'
-            
-            # Smart stop loss: tighten stop if position has been open for a while with no progress
-            time_in_trade = (datetime.now() - self.entry_time).total_seconds() / 3600  # hours
-            if time_in_trade >= 4.0 and current_pnl < 0.02:  # 4 hours with < 2% profit
+        time_in_trade = (datetime.now() - self.entry_time).total_seconds() / 3600  # hours
+        if time_in_trade >= 4.0 and current_pnl < 0.02:  # 4 hours with < 2% profit
+            if self.side == 'long':
                 # Calculate a tighter stop loss for stalled positions
                 tighter_stop = self.entry_price * 0.99  # 1% below entry
                 if current_price <= tighter_stop:
                     return True, 'stop_loss_stalled_position'
-            
-            # Check take profit
-            if self.take_profit and current_price >= self.take_profit:
-                return True, 'take_profit'
-        else:  # short
-            # Check stop loss
-            if current_price >= self.stop_loss:
-                return True, 'stop_loss'
-            
-            # Smart stop loss: tighten stop if position has been open for a while with no progress
-            time_in_trade = (datetime.now() - self.entry_time).total_seconds() / 3600  # hours
-            if time_in_trade >= 4.0 and current_pnl < 0.02:  # 4 hours with < 2% profit
+            else:  # short
                 # Calculate a tighter stop loss for stalled positions
                 tighter_stop = self.entry_price * 1.01  # 1% above entry
                 if current_price >= tighter_stop:
                     return True, 'stop_loss_stalled_position'
-            
-            # Check take profit
-            if self.take_profit and current_price <= self.take_profit:
-                return True, 'take_profit'
-        
-        # Emergency profit protection - only trigger if TP is unreachable or position has extreme profit
-        # This is a safety mechanism for when TP extension logic fails, not normal operation
-        if self.take_profit and current_pnl >= 0.05:  # Only check if we have 5%+ ROI
-            # Calculate how far we are from the take profit target
-            if self.side == 'long':
-                distance_to_tp = (self.take_profit - current_price) / current_price
-                passed_tp = current_price >= self.take_profit
-            else:  # short
-                distance_to_tp = (current_price - self.take_profit) / current_price
-                passed_tp = current_price <= self.take_profit
-            
-            # Only use emergency profit protection if:
-            # 1. We've already passed TP (should have closed above, but just in case), OR
-            # 2. We have extreme profits (>50% ROI) AND TP is far away (>10%)
-            if passed_tp:
-                # Already at/past TP - close immediately
-                return True, 'take_profit'
-            elif current_pnl >= 0.50 and distance_to_tp > 0.10:
-                # Extreme profit (50%+ ROI) but TP is 10%+ away - protect profits
-                return True, 'emergency_profit_protection'
         
         return False, ''
     
