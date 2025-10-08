@@ -118,6 +118,11 @@ class TradingBot:
         self._latest_opportunities = []
         self._last_opportunity_update = datetime.now()
         
+        # Position monitoring state - separate from scanning
+        self._position_monitor_thread = None
+        self._position_monitor_running = False
+        self._last_position_check = datetime.now()
+        
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
@@ -136,11 +141,13 @@ class TradingBot:
         self.logger.info("⏳ Gracefully stopping bot...")
         self.logger.info("   - Stopping trading cycle")
         self.logger.info("   - Stopping background scanning thread")
+        self.logger.info("   - Stopping position monitoring thread")
         self.logger.info("   - Will complete current operations")
         self.logger.info("   - Then proceed to shutdown")
         self.logger.info("=" * 60)
         self.running = False
         self._scan_thread_running = False
+        self._position_monitor_running = False
     
     def execute_trade(self, opportunity: dict) -> bool:
         """
@@ -324,7 +331,9 @@ class TradingBot:
             try:
                 # Scan market for opportunities
                 self.logger.info("🔍 [Background] Scanning market for opportunities...")
+                scan_start = datetime.now()
                 opportunities = self.scanner.get_best_pairs(n=5)
+                scan_duration = (datetime.now() - scan_start).total_seconds()
                 
                 # Update shared opportunities list in a thread-safe manner
                 with self._scan_lock:
@@ -332,12 +341,12 @@ class TradingBot:
                     self._last_opportunity_update = datetime.now()
                 
                 if opportunities:
-                    self.logger.info(f"✅ [Background] Found {len(opportunities)} opportunities")
+                    self.logger.info(f"✅ [Background] Found {len(opportunities)} opportunities (scan took {scan_duration:.1f}s)")
                 else:
                     self.logger.debug("[Background] No opportunities found in this scan")
                 
                 # Sleep for the configured scan interval before next scan
-                # Check periodically if we should stop
+                # Check periodically if we should stop - yield control more frequently
                 for _ in range(Config.CHECK_INTERVAL):
                     if not self._scan_thread_running:
                         break
@@ -349,6 +358,30 @@ class TradingBot:
                 time.sleep(10)
         
         self.logger.info("🔍 Background scanner thread stopped")
+    
+    def _position_monitor(self):
+        """Dedicated thread for monitoring positions - runs independently of scanning"""
+        self.logger.info("👁️ Position monitor thread started")
+        
+        while self._position_monitor_running:
+            try:
+                # Only update if we have positions
+                if self.position_manager.get_open_positions_count() > 0:
+                    time_since_last = (datetime.now() - self._last_position_check).total_seconds()
+                    
+                    # Update positions at configured interval
+                    if time_since_last >= Config.POSITION_UPDATE_INTERVAL:
+                        self.update_open_positions()
+                        self._last_position_check = datetime.now()
+                
+                # Short sleep to avoid CPU hogging but stay responsive
+                time.sleep(0.05)  # 50ms - very responsive for position monitoring
+                
+            except Exception as e:
+                self.logger.error(f"❌ Error in position monitor: {e}", exc_info=True)
+                time.sleep(1)
+        
+        self.logger.info("👁️ Position monitor thread stopped")
     
     def _get_latest_opportunities(self):
         """Get the latest opportunities from background scanner in a thread-safe manner"""
@@ -412,8 +445,8 @@ class TradingBot:
         self.scanner.signal_generator.set_adaptive_threshold(adaptive_threshold)
         self.logger.debug(f"Using adaptive confidence threshold: {adaptive_threshold:.2f}")
         
-        # Update existing positions
-        self.update_open_positions()
+        # Note: Position updates are now handled by dedicated position monitor thread
+        # No need to update positions here - they're continuously monitored
         
         # Record current equity for analytics
         balance = self.client.get_balance()
@@ -456,13 +489,14 @@ class TradingBot:
         self.logger.info("🚀 BOT STARTED SUCCESSFULLY!")
         self.logger.info("=" * 60)
         self.logger.info(f"⏱️  Opportunity scan interval: {Config.CHECK_INTERVAL}s")
-        self.logger.info(f"⚡ Position monitoring: TRULY LIVE (continuous, no cycles)")
+        self.logger.info(f"⚡ Position monitoring: DEDICATED THREAD (independent of scanning)")
         self.logger.info(f"🔥 Position update throttle: {Config.POSITION_UPDATE_INTERVAL}s minimum between API calls")
         self.logger.info(f"📊 Max positions: {Config.MAX_OPEN_POSITIONS}")
         self.logger.info(f"💪 Leverage: {Config.LEVERAGE}x")
         self.logger.info(f"⚙️  Parallel workers: {Config.MAX_WORKERS} (market scanning)")
         self.logger.info("=" * 60)
         self.logger.info("🔍 Starting background scanner thread for continuous market scanning...")
+        self.logger.info("👁️ Starting dedicated position monitor thread for fast position tracking...")
         self.logger.info("=" * 60)
         
         # Start background scanner thread
@@ -470,35 +504,29 @@ class TradingBot:
         self._scan_thread = threading.Thread(target=self._background_scanner, daemon=True, name="BackgroundScanner")
         self._scan_thread.start()
         
-        # Initialize timing for throttling
+        # Start dedicated position monitor thread
+        self._position_monitor_running = True
+        self._position_monitor_thread = threading.Thread(target=self._position_monitor, daemon=True, name="PositionMonitor")
+        self._position_monitor_thread.start()
+        
+        # Initialize timing for full cycles
         last_full_cycle = datetime.now()
-        last_position_update = datetime.now() - timedelta(seconds=Config.POSITION_UPDATE_INTERVAL)
         
         try:
             while self.running:
                 try:
-                    # Continuously check positions if any exist (live monitoring with throttling)
-                    if self.position_manager.get_open_positions_count() > 0:
-                        time_since_last_update = (datetime.now() - last_position_update).total_seconds()
-                        
-                        # Update positions if enough time has passed (throttle to respect API limits)
-                        if time_since_last_update >= Config.POSITION_UPDATE_INTERVAL:
-                            self.update_open_positions()
-                            last_position_update = datetime.now()
-                    
-                    # Check if it's time for a full cycle (opportunity scan + analytics)
+                    # Main loop now only handles full trading cycles (analytics, ML retraining, etc.)
+                    # Position monitoring is handled by dedicated thread
                     time_since_last_cycle = (datetime.now() - last_full_cycle).total_seconds()
                     
                     if time_since_last_cycle >= Config.CHECK_INTERVAL:
                         # Run full trading cycle (includes opportunity scanning)
                         self.run_cycle()
                         last_full_cycle = datetime.now()
-                        # Also reset position update timer to avoid immediate update after cycle
-                        last_position_update = datetime.now()
                     
                     # Very short sleep to avoid CPU hogging while staying responsive
-                    # This makes the bot truly live - always checking, never stuck in long sleep cycles
-                    time.sleep(Config.LIVE_LOOP_INTERVAL)  # Default 100ms - responsive enough for live trading
+                    # Main loop is now lightweight - heavy work delegated to background threads
+                    time.sleep(Config.LIVE_LOOP_INTERVAL)  # Default 50ms - very responsive
                     
                 except Exception as e:
                     self.logger.error(f"❌ Error in trading loop: {e}", exc_info=True)
@@ -529,6 +557,16 @@ class TradingBot:
                 self.logger.warning("⚠️  Background scanner thread did not stop gracefully")
             else:
                 self.logger.info("✅ Background scanner thread stopped")
+        
+        # Stop position monitor thread
+        if self._position_monitor_thread and self._position_monitor_thread.is_alive():
+            self.logger.info("⏳ Stopping position monitor thread...")
+            self._position_monitor_running = False
+            self._position_monitor_thread.join(timeout=5)  # Wait up to 5 seconds for thread to stop
+            if self._position_monitor_thread.is_alive():
+                self.logger.warning("⚠️  Position monitor thread did not stop gracefully")
+            else:
+                self.logger.info("✅ Position monitor thread stopped")
         
         # Close all positions if configured to do so
         if getattr(Config, "CLOSE_POSITIONS_ON_SHUTDOWN", False):
