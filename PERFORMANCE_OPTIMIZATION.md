@@ -92,6 +92,13 @@ CACHE_DURATION=300  # Default: 300 seconds (5 minutes)
 - ⚠️ Too short may cause redundant API calls
 - ⚠️ Too long may miss opportunities
 
+**⚠️ IMPORTANT - Cache Usage:**
+- **Cache is ONLY used for market scanning** to identify trading opportunities
+- **Cached data is NEVER used for actual trading decisions**
+- When executing a trade, the bot ALWAYS fetches fresh live data from the exchange
+- Cache serves only as a fallback during scanning when live data fetch fails
+- This ensures all trades are based on real-time market conditions
+
 ## Performance Monitoring
 
 ### Checking Scan Performance

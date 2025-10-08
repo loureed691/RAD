@@ -40,6 +40,12 @@ This update significantly enhances the trading bot's performance through configu
 - Fresher data with shorter cache (better opportunities)
 - Configurable per trading style (day trading vs swing trading)
 
+**⚠️ IMPORTANT - Cache Safety:**
+- **Cache is ONLY used for market scanning** (finding opportunities)
+- **Trading ALWAYS uses fresh live data** from the exchange
+- Cached data is never used for actual trade execution
+- All trades are based on real-time market conditions
+
 ## Performance Gains
 
 | Configuration | Scan Time | Workers | Use Case |

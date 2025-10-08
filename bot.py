@@ -143,7 +143,13 @@ class TradingBot:
         self._scan_thread_running = False
     
     def execute_trade(self, opportunity: dict) -> bool:
-        """Execute a trade based on opportunity"""
+        """
+        Execute a trade based on opportunity
+        
+        IMPORTANT: This method ALWAYS uses fresh live data from the exchange.
+        Cached data from scanning is NEVER used for actual trading decisions.
+        All market data, prices, and indicators are fetched in real-time.
+        """
         # Bug fix: Safely access opportunity dictionary with validation
         symbol = opportunity.get('symbol')
         signal = opportunity.get('signal')

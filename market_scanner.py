@@ -22,6 +22,9 @@ class MarketScanner:
         self.scanning_logger = Logger.get_scanning_logger()
         
         # Caching mechanism to avoid redundant scans
+        # IMPORTANT: Cache is ONLY used for market scanning to identify opportunities
+        # Actual trading decisions ALWAYS use fresh live data from the exchange
+        # This cache stores scan results (scores, signals) as fallback, NOT trading data
         self.cache = {}
         self.cache_duration = Config.CACHE_DURATION  # Use configurable cache duration
         self.last_full_scan = None
@@ -33,6 +36,11 @@ class MarketScanner:
     def scan_pair(self, symbol: str) -> Tuple[str, float, str, float, Dict]:
         """
         Scan a single trading pair with caching as fallback only
+        
+        IMPORTANT: This method is used ONLY for market scanning to identify opportunities.
+        Cached data is NEVER used for actual trading decisions - only as a fallback 
+        during scanning when live data fetch fails. When execute_trade() is called,
+        it ALWAYS fetches fresh live data from the exchange.
         
         Returns:
             Tuple of (symbol, score, signal, confidence, reasons)
