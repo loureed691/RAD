@@ -23,7 +23,25 @@ This update significantly enhances the trading bot's performance through configu
 - **4-5x faster** with optimized settings (30-40 workers)
 - Better CPU utilization on multi-core systems
 
-### 2. Configurable Cache Duration (CACHE_DURATION)
+### 2. Faster Trailing Stop Updates (POSITION_UPDATE_INTERVAL)
+
+**Before:**
+- Position updates every 5 seconds (old default)
+- Slower reaction to price movements
+- Trailing stops lagged behind market
+
+**After:**
+- Default improved to **3 seconds** (40% faster) ⭐
+- Configurable from 1s to 10s based on trading style
+- Much more responsive trailing stops
+
+**Impact:**
+- **40% faster** trailing stop updates by default
+- **Up to 5x faster** with aggressive settings (1-2 seconds)
+- Better profit protection during volatile moves
+- More responsive stop-loss management
+
+### 3. Configurable Cache Duration (CACHE_DURATION)
 
 **Before:**
 - Hardcoded 5-minute cache duration
@@ -89,7 +107,7 @@ Add these to your `.env` file:
 MAX_WORKERS=20          # Parallel workers for scanning (default: 20)
 CACHE_DURATION=300      # Cache duration in seconds (default: 300)
 CHECK_INTERVAL=60       # Scan interval in seconds (default: 60)
-POSITION_UPDATE_INTERVAL=5  # Position check interval (default: 5)
+POSITION_UPDATE_INTERVAL=3  # Position check interval (default: 3) - IMPROVED for faster trailing stops ⭐
 ```
 
 ## Benefits by Use Case
@@ -98,16 +116,19 @@ POSITION_UPDATE_INTERVAL=5  # Position check interval (default: 5)
 - Use MAX_WORKERS=30-40 for fastest scanning
 - Use CACHE_DURATION=180 for fresh data
 - Use CHECK_INTERVAL=30 for frequent scans
+- Use POSITION_UPDATE_INTERVAL=2 for fast trailing stops
 
 ### Swing Trading
 - Use MAX_WORKERS=20 for balanced performance
 - Use CACHE_DURATION=300-600 for efficiency
 - Use CHECK_INTERVAL=60-120 for standard scans
+- Use POSITION_UPDATE_INTERVAL=3 for responsive trailing stops (default)
 
 ### Conservative Trading
 - Use MAX_WORKERS=10-15 for lower resource usage
 - Use CACHE_DURATION=600 for minimal API calls
 - Use CHECK_INTERVAL=120+ for infrequent scans
+- Use POSITION_UPDATE_INTERVAL=5 for slower trailing stops
 
 ## Monitoring Performance
 

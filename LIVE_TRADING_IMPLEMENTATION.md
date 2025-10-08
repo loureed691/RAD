@@ -42,7 +42,7 @@ while running:
 # NEW behavior: Truly continuous monitoring
 while running:
     # Check if enough time passed for API call (throttling)
-    if has_positions and time_since_last_update >= 5:
+    if has_positions and time_since_last_update >= 3:  # Improved from 5s to 3s
         update_open_positions()
     
     if time_for_full_cycle:
@@ -85,9 +85,9 @@ CHECK_INTERVAL=60
 
 | Account Type | LIVE_LOOP_INTERVAL | POSITION_UPDATE_INTERVAL | CHECK_INTERVAL | Reasoning |
 |-------------|-------------------|-------------------------|----------------|-----------|
-| **Default/Recommended** | **0.1** | **5** | **60** | **Balanced: maximum responsiveness with API safety** |
-| Conservative | 0.5 | 10 | 120 | Slower pace, minimal API usage |
-| Aggressive | 0.05 | 3 | 30 | Ultra-responsive monitoring |
+| **Default/Recommended** | **0.1** | **3** | **60** | **Balanced: maximum responsiveness with API safety** ⭐ **IMPROVED** |
+| Conservative | 0.5 | 5 | 120 | Slower pace, minimal API usage |
+| Aggressive | 0.05 | 2 | 30 | Ultra-responsive monitoring |
 | High-Frequency | 0.01 | 1 | 20 | Very active trading (requires high API limits) |
 
 ### Important Notes
@@ -103,8 +103,8 @@ CHECK_INTERVAL=60
 ### API Calls
 - **Old cycle-based**: ~1 call per minute when no positions
 - **Previous (5s sleep)**: ~12 calls per minute when positions open
-- **Now (truly live)**: Still ~12 calls per minute when positions open (same - throttled by POSITION_UPDATE_INTERVAL)
-- **Impact**: Same API usage, but with 50x more responsive monitoring (100ms vs 5s loop)
+- **Now (truly live, 3s default)**: ~20 calls per minute when positions open (40% more responsive) ⭐
+- **Impact**: Slightly more API usage, but much more responsive trailing stops
 
 ### Benefits
 1. ✅ **Near-Instant Stop Loss Execution**: 100ms reaction time vs 5s
@@ -130,9 +130,9 @@ CHECK_INTERVAL=60
 - **Reaction time**: 5s
 
 **Now (truly live)**: Price hits stop loss at 10:00:05, bot is continuously monitoring
-- **Result**: API call scheduled at 10:00:10 (throttled by POSITION_UPDATE_INTERVAL)
-- **Reaction time**: 5s for API call, but continuous monitoring means instant detection
-- **Improvement**: Always aware, never sleeping through opportunities
+- **Result**: API call scheduled at 10:00:08 (throttled by POSITION_UPDATE_INTERVAL=3s)
+- **Reaction time**: 3s for API call (40% faster than before)
+- **Improvement**: Always aware, faster trailing stop updates
 
 ### Scenario 2: Quick Profit Opportunity
 **Old (60s cycles)**: 
@@ -287,12 +287,13 @@ test_position_update_throttling_prevents_spam ... ok
 
 ## Summary
 
-| Metric | Old (60s cycles) | Previous (5s sleep) | Now (Truly Live) | Improvement |
-|--------|-----------------|-------------------|------------------|-------------|
+| Metric | Old (60s cycles) | Previous (5s sleep) | Now (Truly Live, 3s default) | Improvement |
+|--------|-----------------|-------------------|------------------------------|-------------|
 | Loop iteration interval | 60s | 5s | **0.1s** | **600x faster** |
 | Position check frequency | Every 60s | Every 5s | Every 0.1s | **600x more checks** |
-| API call frequency | Every 60s | Every 5s | Every 5s (throttled) | **Same as previous** |
-| Reaction time to conditions | 0-60s | 0-5s | **0-0.1s** | **50x faster** |
+| API call frequency | Every 60s | Every 5s | **Every 3s** (throttled) ⭐ | **40% faster than previous** |
+| Reaction time to conditions | 0-60s | 0-5s | **0-0.1s** (monitoring) | **50x faster** |
+| Trailing stop updates | Every 60s | Every 5s | **Every 3s** | **40% more responsive** ⭐ |
 | Risk management | Good | Excellent | **Near real-time** | **Maximum precision** |
 | CPU usage | Minimal | Minimal | **Slightly higher** | **Negligible on modern systems** |
 
