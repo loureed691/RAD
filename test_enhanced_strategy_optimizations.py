@@ -235,9 +235,9 @@ def test_enhanced_market_filtering():
         # Create mock client (won't actually connect)
         try:
             client = KuCoinClient()
-        except:
+        except Exception as e:
             # If connection fails, that's okay for this test
-            print("  ℹ Skipping market filtering test (no API connection)")
+            print(f"  ℹ Skipping market filtering test (no API connection): {e}")
             return True
         
         scanner = MarketScanner(client)
