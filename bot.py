@@ -317,13 +317,13 @@ class TradingBot:
                 self.logger.error(f"Error recording closed position {symbol}: {e}", exc_info=True)
     
     def _background_scanner(self):
-        """Background thread that continuously scans for opportunities"""
-        self.logger.info("🔍 Background scanner thread started")
+        """Background thread that continuously scans for opportunities and executes trades live"""
+        self.logger.info("🔍 Background scanner thread started - LIVE TRADING MODE")
         
         while self._scan_thread_running:
             try:
                 # Scan market for opportunities
-                self.logger.info("🔍 [Background] Scanning market for opportunities...")
+                self.logger.info("🔍 [LIVE] Scanning market for opportunities...")
                 opportunities = self.scanner.get_best_pairs(n=5)
                 
                 # Update shared opportunities list in a thread-safe manner
@@ -332,9 +332,35 @@ class TradingBot:
                     self._last_opportunity_update = datetime.now()
                 
                 if opportunities:
-                    self.logger.info(f"✅ [Background] Found {len(opportunities)} opportunities")
+                    self.logger.info(f"✅ [LIVE] Found {len(opportunities)} opportunities - executing immediately")
+                    
+                    # LIVE TRADING: Execute trades immediately when opportunities are found
+                    for opportunity in opportunities:
+                        try:
+                            if self.position_manager.get_open_positions_count() >= Config.MAX_OPEN_POSITIONS:
+                                self.logger.info("⚠️  Maximum positions reached, skipping remaining opportunities")
+                                break
+                            
+                            # Validate opportunity
+                            if not isinstance(opportunity, dict) or 'symbol' not in opportunity:
+                                self.logger.warning(f"Invalid opportunity data: {opportunity}")
+                                continue
+                            
+                            self.logger.info(
+                                f"🎯 [LIVE] Executing trade: {opportunity.get('symbol', 'UNKNOWN')} - "
+                                f"Score: {opportunity.get('score', 0):.1f}, Signal: {opportunity.get('signal', 'UNKNOWN')}, "
+                                f"Confidence: {opportunity.get('confidence', 0):.2f}"
+                            )
+                            
+                            success = self.execute_trade(opportunity)
+                            if success:
+                                self.logger.info(f"✅ [LIVE] Trade executed immediately for {opportunity.get('symbol', 'UNKNOWN')}")
+                            
+                        except Exception as e:
+                            self.logger.error(f"Error executing live trade: {e}", exc_info=True)
+                            continue
                 else:
-                    self.logger.debug("[Background] No opportunities found in this scan")
+                    self.logger.debug("[LIVE] No opportunities found in this scan")
                 
                 # Sleep for the configured scan interval before next scan
                 # Check periodically if we should stop
@@ -394,8 +420,8 @@ class TradingBot:
                 continue
     
     def run_cycle(self):
-        """Run one complete trading cycle"""
-        self.logger.info("🔄 Starting trading cycle...")
+        """Run periodic maintenance tasks (no longer used for trade execution)"""
+        self.logger.info("🔧 Running periodic maintenance...")
         
         # Periodically sync existing positions from exchange (every 10 cycles)
         # This ensures we catch any positions opened manually or by other means
@@ -436,8 +462,8 @@ class TradingBot:
                 f"Total Trades: {metrics.get('total_trades', 0)}"
             )
         
-        # Execute trades from opportunities found by background scanner
-        self.scan_for_opportunities()
+        # NOTE: Trade execution now happens immediately in background scanner (LIVE MODE)
+        # No longer calling scan_for_opportunities() here to avoid cycle-based trading
         
         # Check if we should retrain the ML model
         time_since_retrain = (datetime.now() - self.last_retrain_time).total_seconds()
@@ -450,52 +476,49 @@ class TradingBot:
         self.last_scan_time = datetime.now()
     
     def run(self):
-        """Main bot loop with continuous position monitoring"""
+        """Main bot loop with continuous position monitoring and live trading"""
         self.running = True
         self.logger.info("=" * 60)
-        self.logger.info("🚀 BOT STARTED SUCCESSFULLY!")
+        self.logger.info("🚀 BOT STARTED SUCCESSFULLY - LIVE TRADING MODE!")
         self.logger.info("=" * 60)
-        self.logger.info(f"⏱️  Opportunity scan interval: {Config.CHECK_INTERVAL}s")
-        self.logger.info(f"⚡ Position update interval: {Config.POSITION_UPDATE_INTERVAL}s (LIVE MONITORING)")
+        self.logger.info(f"⚡ Market scan interval: {Config.CHECK_INTERVAL}s")
+        self.logger.info(f"⚡ Position update interval: {Config.POSITION_UPDATE_INTERVAL}s")
+        self.logger.info(f"🎯 LIVE MODE: Trades execute immediately when opportunities are found")
         self.logger.info(f"📊 Max positions: {Config.MAX_OPEN_POSITIONS}")
         self.logger.info(f"💪 Leverage: {Config.LEVERAGE}x")
         self.logger.info(f"⚙️  Parallel workers: {Config.MAX_WORKERS} (market scanning)")
         self.logger.info("=" * 60)
-        self.logger.info("🔍 Starting background scanner thread for continuous market scanning...")
+        self.logger.info("🔍 Starting live trading scanner thread...")
         self.logger.info("=" * 60)
         
-        # Start background scanner thread
+        # Start background scanner thread for live trading
         self._scan_thread_running = True
-        self._scan_thread = threading.Thread(target=self._background_scanner, daemon=True, name="BackgroundScanner")
+        self._scan_thread = threading.Thread(target=self._background_scanner, daemon=True, name="LiveTradingScanner")
         self._scan_thread.start()
         
-        # Initialize timing
-        last_full_cycle = datetime.now()
+        # Initialize timing for maintenance tasks
+        last_maintenance = datetime.now()
         
         try:
             while self.running:
                 try:
-                    # Always update open positions (live monitoring)
+                    # Always update open positions (continuous monitoring)
                     if self.position_manager.get_open_positions_count() > 0:
                         self.update_open_positions()
                     
-                    # Check if it's time for a full cycle (opportunity scan)
-                    time_since_last_cycle = (datetime.now() - last_full_cycle).total_seconds()
+                    # Run periodic maintenance tasks (analytics, ML retraining, etc.)
+                    time_since_maintenance = (datetime.now() - last_maintenance).total_seconds()
                     
-                    if time_since_last_cycle >= Config.CHECK_INTERVAL:
-                        # Run full trading cycle (includes opportunity scanning)
-                        self.run_cycle()
-                        last_full_cycle = datetime.now()
-                    else:
-                        # Just sleep for position update interval
-                        remaining_time = Config.CHECK_INTERVAL - time_since_last_cycle
-                        sleep_time = min(Config.POSITION_UPDATE_INTERVAL, remaining_time)
-                        
-                        # Log less frequently to avoid spam
-                        if self.position_manager.get_open_positions_count() > 0:
-                            self.logger.debug(f"💓 Monitoring {self.position_manager.get_open_positions_count()} position(s)... (next scan in {int(remaining_time)}s)")
-                        
-                        time.sleep(sleep_time)
+                    # Run maintenance every CHECK_INTERVAL seconds
+                    if time_since_maintenance >= Config.CHECK_INTERVAL:
+                        self.run_cycle()  # Now just runs maintenance, not trade execution
+                        last_maintenance = datetime.now()
+                    
+                    # Sleep for position update interval
+                    if self.position_manager.get_open_positions_count() > 0:
+                        self.logger.debug(f"💓 Monitoring {self.position_manager.get_open_positions_count()} position(s)... [LIVE MODE]")
+                    
+                    time.sleep(Config.POSITION_UPDATE_INTERVAL)
                     
                 except Exception as e:
                     self.logger.error(f"❌ Error in trading loop: {e}", exc_info=True)
