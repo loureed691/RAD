@@ -186,9 +186,13 @@ Key configuration parameters in `.env`:
 - **RISK_PER_TRADE**: Risk per trade as percentage of balance (default: 0.02 = 2%)
 - **MIN_PROFIT_THRESHOLD**: Minimum profit threshold to consider (default: 0.005 = 0.5%)
 - **CHECK_INTERVAL**: Seconds between market scans (default: 60)
+- **POSITION_UPDATE_INTERVAL**: Seconds between position checks (default: 5)
+- **MAX_WORKERS**: Number of parallel workers for market scanning (default: 20)
 - **TRAILING_STOP_PERCENTAGE**: Trailing stop percentage (default: 0.02 = 2%)
 - **MAX_OPEN_POSITIONS**: Maximum concurrent positions (default: 3)
 - **RETRAIN_INTERVAL**: Seconds between ML model retraining (default: 86400 = 24 hours)
+
+For performance tuning, see [PERFORMANCE_OPTIMIZATION.md](PERFORMANCE_OPTIMIZATION.md)
 
 ## Usage
 

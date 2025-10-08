@@ -421,10 +421,16 @@ pip install -U ccxt
    ```
 
 2. **Increase Workers** for faster scanning:
-   Edit `market_scanner.py` line with ThreadPoolExecutor:
-   ```python
-   max_workers=20  # Default is 10
+   Add to your `.env` file:
+   ```env
+   MAX_WORKERS=30  # Default is 20, increase for faster market scanning
    ```
+   
+   Higher values = faster market scanning but more system resources used.
+   Recommended values:
+   - Conservative: 10-15 workers
+   - **Recommended: 20 workers** (default)
+   - Aggressive: 30-40 workers (requires good CPU/network)
 
 3. **Optimize Logging**:
    ```env

@@ -32,6 +32,7 @@ class Config:
     POSITION_UPDATE_INTERVAL = int(os.getenv('POSITION_UPDATE_INTERVAL', '5'))  # How often to check positions (seconds)
     TRAILING_STOP_PERCENTAGE = float(os.getenv('TRAILING_STOP_PERCENTAGE', '0.02'))
     MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))
+    MAX_WORKERS = int(os.getenv('MAX_WORKERS', '20'))  # Number of parallel workers for market scanning
     
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')

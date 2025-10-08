@@ -10,6 +10,7 @@ from kucoin_client import KuCoinClient
 from indicators import Indicators
 from signals import SignalGenerator
 from logger import Logger
+from config import Config
 
 class MarketScanner:
     """Scan market for best trading opportunities"""
@@ -185,17 +186,21 @@ class MarketScanner:
         
         return priority_pairs
     
-    def scan_all_pairs(self, max_workers: int = 10, use_cache: bool = True) -> List[Dict]:
+    def scan_all_pairs(self, max_workers: int = None, use_cache: bool = True) -> List[Dict]:
         """
         Scan all available trading pairs in parallel with smart filtering
         
         Args:
-            max_workers: Number of parallel workers
+            max_workers: Number of parallel workers (defaults to Config.MAX_WORKERS)
             use_cache: Whether to use cached results as fallback if live fetch fails
         
         Returns:
             List of dicts with scan results sorted by score
         """
+        # Use configured value if not specified
+        if max_workers is None:
+            max_workers = Config.MAX_WORKERS
+        
         self.scanning_logger.info(f"\n{'='*80}")
         self.scanning_logger.info(f"FULL MARKET SCAN - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.scanning_logger.info(f"{'='*80}")

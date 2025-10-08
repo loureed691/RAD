@@ -453,6 +453,7 @@ class TradingBot:
         self.logger.info(f"⚡ Position update interval: {Config.POSITION_UPDATE_INTERVAL}s (LIVE MONITORING)")
         self.logger.info(f"📊 Max positions: {Config.MAX_OPEN_POSITIONS}")
         self.logger.info(f"💪 Leverage: {Config.LEVERAGE}x")
+        self.logger.info(f"⚙️  Parallel workers: {Config.MAX_WORKERS} (market scanning)")
         self.logger.info("=" * 60)
         self.logger.info("🔍 Starting background scanner thread for continuous market scanning...")
         self.logger.info("=" * 60)
