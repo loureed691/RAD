@@ -214,7 +214,7 @@ Key configuration parameters in `.env`:
 - **RISK_PER_TRADE**: Risk per trade as percentage of balance (default: 0.02 = 2%)
 - **MIN_PROFIT_THRESHOLD**: Minimum profit threshold to consider (default: 0.005 = 0.5%)
 - **CHECK_INTERVAL**: Seconds between market scans (default: 60)
-- **POSITION_UPDATE_INTERVAL**: Seconds between position checks (default: 5)
+- **POSITION_UPDATE_INTERVAL**: Seconds between position checks (default: 3) - **IMPROVED for 40% faster trailing stops** ⭐
 - **MAX_WORKERS**: Number of parallel workers for market scanning (default: 20)
 - **CACHE_DURATION**: Cache duration in seconds (default: 300)
 - **TRAILING_STOP_PERCENTAGE**: Trailing stop percentage (default: 0.02 = 2%)
