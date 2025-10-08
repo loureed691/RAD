@@ -990,7 +990,8 @@ class PositionManager:
             # Calculate P/L
             pnl = position.get_pnl(current_price)
             position_value = position.amount * position.entry_price
-            pnl_usd = (pnl / position.leverage) * position_value if position.leverage > 0 else 0
+            # P/L already includes leverage effect, so just multiply by position value
+            pnl_usd = pnl * position_value
             
             # Calculate duration
             duration = datetime.now() - position.entry_time
@@ -1099,7 +1100,8 @@ class PositionManager:
                 # Calculate current P/L
                 current_pnl = position.get_pnl(current_price)
                 position_value = position.amount * position.entry_price
-                pnl_usd = (current_pnl / position.leverage) * position_value if position.leverage > 0 else 0
+                # P/L already includes leverage effect, so just multiply by position value
+                pnl_usd = current_pnl * position_value
                 
                 self.position_logger.info(f"  Current P/L: {current_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
                 self.position_logger.debug(f"  Stop Loss: {format_price(position.stop_loss)}")

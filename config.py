@@ -28,8 +28,8 @@ class Config:
     _MIN_PROFIT_THRESHOLD_OVERRIDE = os.getenv('MIN_PROFIT_THRESHOLD')
     
     # Bot Parameters
-    CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '60'))
-    POSITION_UPDATE_INTERVAL = int(os.getenv('POSITION_UPDATE_INTERVAL', '5'))  # How often to check positions (seconds)
+    CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '30'))  # Reduced from 60s to 30s for faster trading
+    POSITION_UPDATE_INTERVAL = int(os.getenv('POSITION_UPDATE_INTERVAL', '3'))  # Reduced from 5s to 3s for faster position updates
     TRAILING_STOP_PERCENTAGE = float(os.getenv('TRAILING_STOP_PERCENTAGE', '0.02'))
     MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))
     MAX_WORKERS = int(os.getenv('MAX_WORKERS', '20'))  # Number of parallel workers for market scanning
