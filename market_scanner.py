@@ -10,6 +10,7 @@ from kucoin_client import KuCoinClient
 from indicators import Indicators
 from signals import SignalGenerator
 from logger import Logger
+from config import Config
 
 class MarketScanner:
     """Scan market for best trading opportunities"""
@@ -21,8 +22,11 @@ class MarketScanner:
         self.scanning_logger = Logger.get_scanning_logger()
         
         # Caching mechanism to avoid redundant scans
+        # IMPORTANT: Cache is ONLY used for market scanning to identify opportunities
+        # Actual trading decisions ALWAYS use fresh live data from the exchange
+        # This cache stores scan results (scores, signals) as fallback, NOT trading data
         self.cache = {}
-        self.cache_duration = 300  # 5 minutes cache
+        self.cache_duration = Config.CACHE_DURATION  # Use configurable cache duration
         self.last_full_scan = None
         self.scan_results_cache = []
         
@@ -32,6 +36,11 @@ class MarketScanner:
     def scan_pair(self, symbol: str) -> Tuple[str, float, str, float, Dict]:
         """
         Scan a single trading pair with caching as fallback only
+        
+        IMPORTANT: This method is used ONLY for market scanning to identify opportunities.
+        Cached data is NEVER used for actual trading decisions - only as a fallback 
+        during scanning when live data fetch fails. When execute_trade() is called,
+        it ALWAYS fetches fresh live data from the exchange.
         
         Returns:
             Tuple of (symbol, score, signal, confidence, reasons)
@@ -185,17 +194,21 @@ class MarketScanner:
         
         return priority_pairs
     
-    def scan_all_pairs(self, max_workers: int = 10, use_cache: bool = True) -> List[Dict]:
+    def scan_all_pairs(self, max_workers: int = None, use_cache: bool = True) -> List[Dict]:
         """
         Scan all available trading pairs in parallel with smart filtering
         
         Args:
-            max_workers: Number of parallel workers
+            max_workers: Number of parallel workers (defaults to Config.MAX_WORKERS)
             use_cache: Whether to use cached results as fallback if live fetch fails
         
         Returns:
             List of dicts with scan results sorted by score
         """
+        # Use configured value if not specified
+        if max_workers is None:
+            max_workers = Config.MAX_WORKERS
+        
         self.scanning_logger.info(f"\n{'='*80}")
         self.scanning_logger.info(f"FULL MARKET SCAN - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         self.scanning_logger.info(f"{'='*80}")
