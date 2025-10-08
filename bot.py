@@ -16,6 +16,7 @@ from risk_manager import RiskManager
 from ml_model import MLModel
 from indicators import Indicators
 from advanced_analytics import AdvancedAnalytics
+from health_monitor import HealthMonitor
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -104,6 +105,9 @@ class TradingBot:
         
         # Advanced analytics module
         self.analytics = AdvancedAnalytics()
+        
+        # Health monitoring
+        self.health_monitor = HealthMonitor()
         
         # State
         self.running = False
@@ -282,6 +286,10 @@ class TradingBot:
             symbol, signal, position_size, leverage, stop_loss_percentage
         )
         
+        # Record position opening in health monitor
+        if success:
+            self.health_monitor.record_position_opened(symbol)
+        
         return success
     
     def update_open_positions(self):
@@ -291,6 +299,10 @@ class TradingBot:
             try:
                 profit_icon = "📈" if pnl > 0 else "📉"
                 self.logger.info(f"{profit_icon} Position closed: {symbol}, P/L: {pnl:.2%}")
+                
+                # Record position closing in health monitor
+                is_win = pnl > 0
+                self.health_monitor.record_position_closed(symbol, pnl, is_win)
                 
                 # Record trade for analytics
                 trade_duration = (datetime.now() - position.entry_time).total_seconds() / 60
@@ -329,11 +341,17 @@ class TradingBot:
         
         while self._scan_thread_running:
             try:
+                # Send heartbeat
+                self.health_monitor.heartbeat_scanner()
+                
                 # Scan market for opportunities
                 self.logger.info("🔍 [Background] Scanning market for opportunities...")
                 scan_start = datetime.now()
                 opportunities = self.scanner.get_best_pairs(n=5)
                 scan_duration = (datetime.now() - scan_start).total_seconds()
+                
+                # Record scan completion
+                self.health_monitor.record_scan_completed(scan_duration)
                 
                 # Update shared opportunities list in a thread-safe manner
                 with self._scan_lock:
@@ -354,6 +372,8 @@ class TradingBot:
                     
             except Exception as e:
                 self.logger.error(f"❌ Error in background scanner: {e}", exc_info=True)
+                self.health_monitor.record_scan_error()
+                self.health_monitor.record_error('scanner', str(e))
                 # Sleep briefly and continue
                 time.sleep(10)
         
@@ -365,6 +385,9 @@ class TradingBot:
         
         while self._position_monitor_running:
             try:
+                # Send heartbeat
+                self.health_monitor.heartbeat_position_monitor()
+                
                 # Only update if we have positions
                 if self.position_manager.get_open_positions_count() > 0:
                     time_since_last = (datetime.now() - self._last_position_check).total_seconds()
@@ -372,6 +395,7 @@ class TradingBot:
                     # Update positions at configured interval
                     if time_since_last >= Config.POSITION_UPDATE_INTERVAL:
                         self.update_open_positions()
+                        self.health_monitor.record_position_update(success=True)
                         self._last_position_check = datetime.now()
                 
                 # Short sleep to avoid CPU hogging but stay responsive
@@ -379,6 +403,8 @@ class TradingBot:
                 
             except Exception as e:
                 self.logger.error(f"❌ Error in position monitor: {e}", exc_info=True)
+                self.health_monitor.record_position_update(success=False)
+                self.health_monitor.record_error('position_monitor', str(e))
                 time.sleep(1)
         
         self.logger.info("👁️ Position monitor thread stopped")
@@ -458,6 +484,8 @@ class TradingBot:
         time_since_report = (datetime.now() - self.last_analytics_report).total_seconds()
         if time_since_report > 3600:  # 1 hour
             self.logger.info(self.analytics.get_performance_summary())
+            # Also log health status
+            self.logger.info("\n" + self.health_monitor.get_status_summary())
             self.last_analytics_report = datetime.now()
         
         # Log performance metrics
@@ -515,6 +543,9 @@ class TradingBot:
         try:
             while self.running:
                 try:
+                    # Send heartbeat for main loop
+                    self.health_monitor.heartbeat_main_loop()
+                    
                     # Main loop now only handles full trading cycles (analytics, ML retraining, etc.)
                     # Position monitoring is handled by dedicated thread
                     time_since_last_cycle = (datetime.now() - last_full_cycle).total_seconds()
@@ -530,6 +561,7 @@ class TradingBot:
                     
                 except Exception as e:
                     self.logger.error(f"❌ Error in trading loop: {e}", exc_info=True)
+                    self.health_monitor.record_error('main_loop', str(e))
                     time.sleep(1)  # Brief wait on error, then continue monitoring
         
         except KeyboardInterrupt:
@@ -547,6 +579,9 @@ class TradingBot:
         self.logger.info("=" * 60)
         self.logger.info("🛑 SHUTTING DOWN BOT...")
         self.logger.info("=" * 60)
+        
+        # Log final health status
+        self.logger.info("\n" + self.health_monitor.get_status_summary())
         
         # Stop background scanner thread
         if self._scan_thread and self._scan_thread.is_alive():
