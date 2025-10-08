@@ -62,14 +62,14 @@ How often the bot checks open positions for stop loss, take profit, and trailing
 
 **Configuration:**
 ```env
-POSITION_UPDATE_INTERVAL=5  # Default: 5 seconds
+POSITION_UPDATE_INTERVAL=3  # Default: 3 seconds (improved for faster trailing stops)
 ```
 
 **Recommended Values:**
-- **Conservative**: 10 seconds
-- **Recommended**: 5 seconds (12x faster than old 60s default)
-- **Aggressive**: 3 seconds
-- **Very Aggressive**: 2 seconds (may hit rate limits with many positions)
+- **Conservative**: 5-10 seconds
+- **Recommended**: 3 seconds (20x faster than old 60s default) ⭐ **NEW DEFAULT**
+- **Aggressive**: 2 seconds
+- **Very Aggressive**: 1 second (may hit rate limits with many positions)
 
 ### 4. Cache Duration (`CACHE_DURATION`)
 
@@ -121,34 +121,37 @@ Pairs scanned: 95
 ```env
 MAX_WORKERS=10
 CHECK_INTERVAL=120
-POSITION_UPDATE_INTERVAL=10
+POSITION_UPDATE_INTERVAL=5
 CACHE_DURATION=600
 ```
 - Good for: Small VPS, testing, development
 - Scan time: ~15 seconds
 - API calls: Minimal
+- Trailing stop updates: Every 5 seconds
 
 #### Example 2: Recommended (Balanced)
 ```env
 MAX_WORKERS=20
 CHECK_INTERVAL=60
-POSITION_UPDATE_INTERVAL=5
+POSITION_UPDATE_INTERVAL=3
 CACHE_DURATION=300
 ```
 - Good for: Most production deployments
 - Scan time: ~7 seconds
 - API calls: Moderate
+- Trailing stop updates: Every 3 seconds ⭐
 
 #### Example 3: Aggressive (High Performance)
 ```env
 MAX_WORKERS=40
 CHECK_INTERVAL=30
-POSITION_UPDATE_INTERVAL=3
+POSITION_UPDATE_INTERVAL=2
 CACHE_DURATION=180
 ```
 - Good for: Powerful servers, day trading
 - Scan time: ~3 seconds
 - API calls: High (but within limits)
+- Trailing stop updates: Every 2 seconds
 
 ## System Requirements by Configuration
 
@@ -207,6 +210,7 @@ To test your optimal configuration:
 |--------|--------|-----------------|-------------------|
 | Market scan workers | 10 | 20 | 30-40 |
 | Scan time (100 pairs) | ~15s | ~7s | ~3s |
+| Trailing stop updates | 60s | **3s** | 1-2s |
 | Configuration | Hardcoded | Environment variable | Tunable |
 | Performance gain | Baseline | **2x faster** | **4-5x faster** |
 
@@ -225,28 +229,31 @@ To test your optimal configuration:
 ```env
 MAX_WORKERS=50
 CHECK_INTERVAL=20
-POSITION_UPDATE_INTERVAL=2
+POSITION_UPDATE_INTERVAL=1
 CACHE_DURATION=60
 ```
 ⚠️ Only use on powerful servers with excellent network
+- Ultra-fast trailing stops (1 second updates)
 
 ### For Minimum Resource Usage
 ```env
 MAX_WORKERS=5
 CHECK_INTERVAL=180
-POSITION_UPDATE_INTERVAL=15
+POSITION_UPDATE_INTERVAL=10
 CACHE_DURATION=900
 ```
 ⚠️ Slower reaction times, may miss opportunities
+- Slower trailing stops (10 second updates)
 
 ### For Day Trading
 ```env
 MAX_WORKERS=30
 CHECK_INTERVAL=30
-POSITION_UPDATE_INTERVAL=3
+POSITION_UPDATE_INTERVAL=2
 CACHE_DURATION=180
 ```
 ✅ Balance of speed and resource usage
+- Fast trailing stops (2 second updates)
 
 ## Conclusion
 
