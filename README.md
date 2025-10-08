@@ -16,6 +16,21 @@ A production-grade, fully automated, **self-learning and hyper-intelligent** KuC
 
 👉 **See [TRULY_LIVE_TRADING.md](TRULY_LIVE_TRADING.md) for quick overview** or [LIVE_TRADING_IMPLEMENTATION.md](LIVE_TRADING_IMPLEMENTATION.md) for complete technical details.
 
+## 🏥 NEW: Production-Grade Monitoring & Error Recovery ⭐⭐⭐⭐⭐
+
+**The bot now includes enterprise-grade monitoring and resilience!** Latest improvements:
+
+- **📊 Health Monitoring** - Real-time tracking of API calls, positions, scans, and thread health
+- **🔄 Error Recovery** - Automatic retry with exponential backoff for transient failures
+- **🛡️ Circuit Breaker** - Prevents cascading failures by failing fast when thresholds exceeded
+- **⏱️ Rate Limiting** - Token bucket algorithm to prevent API throttling
+- **📈 Performance Metrics** - Comprehensive tracking of bot performance and health
+- **🚨 Error Tracking** - Maintains history of recent errors with timestamps
+
+**Expected Impact:** Better reliability, faster error recovery, improved observability, production-ready monitoring
+
+👉 **See [BOT_IMPROVEMENTS.md](BOT_IMPROVEMENTS.md) for complete details on monitoring and error recovery**
+
 ## ⚡ Latest: Performance Optimization ⭐⭐⭐⭐⭐
 
 **The bot is now 2x faster with configurable performance tuning!** Major performance improvements:
