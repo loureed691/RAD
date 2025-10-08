@@ -116,7 +116,8 @@ def test_position_sizing_with_risk_override():
     try:
         from risk_manager import RiskManager
         
-        manager = RiskManager(1000, 0.02, 3)
+        # Use larger max_position_size to allow for proper differentiation between risk levels
+        manager = RiskManager(10000, 0.02, 3)
         
         # Test with default risk
         balance = 10000

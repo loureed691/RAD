@@ -485,7 +485,8 @@ class TradeSimulationTester:
             
             # Verify risk is within limits
             price_distance = abs(entry_price - stop_loss_price) / entry_price
-            risk_amount = position_size * entry_price * price_distance * leverage
+            # Risk calculation should NOT include leverage as it's already factored into position sizing
+            risk_amount = position_size * entry_price * price_distance
             risk_percentage = risk_amount / balance
             print(f"  ✓ Risk per trade: {risk_percentage:.2%} (target: 2%)")
             assert risk_percentage <= 0.025, f"Risk {risk_percentage:.2%} exceeds 2.5% threshold"
