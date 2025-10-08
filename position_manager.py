@@ -1595,12 +1595,11 @@ class PositionManager:
             position = self.positions[symbol]
             
             # Check if we're closing the entire position
-            if amount_to_close >= position.amount:
-                # Release lock before calling close_position (it will acquire its own lock)
-                return  # Will handle closing outside the lock
+            # Need to check outside the lock to avoid deadlock since close_position acquires the lock
+            closing_entire_position = amount_to_close >= position.amount
         
         # If closing entire position, use close_position method
-        if amount_to_close >= position.amount:
+        if closing_entire_position:
             return self.close_position(symbol, reason)
         
         try:

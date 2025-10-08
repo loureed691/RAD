@@ -310,10 +310,11 @@ class RiskManager:
         # Calculate price distance to stop loss
         price_distance = abs(entry_price - stop_loss_price) / entry_price
         
-        # Calculate position size considering leverage
-        # Risk = Position_Size * Price_Distance * Leverage
+        # Calculate position size based on risk
+        # Risk = Position_Value * Price_Distance (leverage doesn't affect risk calculation)
+        # Position_Value = Risk / Price_Distance
         if price_distance > 0:
-            position_value = risk_amount / (price_distance * leverage)
+            position_value = risk_amount / price_distance
         else:
             position_value = self.max_position_size
         
