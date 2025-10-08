@@ -450,13 +450,14 @@ class TradingBot:
         self.last_scan_time = datetime.now()
     
     def run(self):
-        """Main bot loop with continuous position monitoring"""
+        """Main bot loop with truly live continuous monitoring"""
         self.running = True
         self.logger.info("=" * 60)
         self.logger.info("🚀 BOT STARTED SUCCESSFULLY!")
         self.logger.info("=" * 60)
         self.logger.info(f"⏱️  Opportunity scan interval: {Config.CHECK_INTERVAL}s")
-        self.logger.info(f"⚡ Position update interval: {Config.POSITION_UPDATE_INTERVAL}s (LIVE MONITORING)")
+        self.logger.info(f"⚡ Position monitoring: TRULY LIVE (continuous, no cycles)")
+        self.logger.info(f"🔥 Position update throttle: {Config.POSITION_UPDATE_INTERVAL}s minimum between API calls")
         self.logger.info(f"📊 Max positions: {Config.MAX_OPEN_POSITIONS}")
         self.logger.info(f"💪 Leverage: {Config.LEVERAGE}x")
         self.logger.info(f"⚙️  Parallel workers: {Config.MAX_WORKERS} (market scanning)")
@@ -469,37 +470,39 @@ class TradingBot:
         self._scan_thread = threading.Thread(target=self._background_scanner, daemon=True, name="BackgroundScanner")
         self._scan_thread.start()
         
-        # Initialize timing
+        # Initialize timing for throttling
         last_full_cycle = datetime.now()
+        last_position_update = datetime.now() - timedelta(seconds=Config.POSITION_UPDATE_INTERVAL)
         
         try:
             while self.running:
                 try:
-                    # Always update open positions (live monitoring)
+                    # Continuously check positions if any exist (live monitoring with throttling)
                     if self.position_manager.get_open_positions_count() > 0:
-                        self.update_open_positions()
+                        time_since_last_update = (datetime.now() - last_position_update).total_seconds()
+                        
+                        # Update positions if enough time has passed (throttle to respect API limits)
+                        if time_since_last_update >= Config.POSITION_UPDATE_INTERVAL:
+                            self.update_open_positions()
+                            last_position_update = datetime.now()
                     
-                    # Check if it's time for a full cycle (opportunity scan)
+                    # Check if it's time for a full cycle (opportunity scan + analytics)
                     time_since_last_cycle = (datetime.now() - last_full_cycle).total_seconds()
                     
                     if time_since_last_cycle >= Config.CHECK_INTERVAL:
                         # Run full trading cycle (includes opportunity scanning)
                         self.run_cycle()
                         last_full_cycle = datetime.now()
-                    else:
-                        # Just sleep for position update interval
-                        remaining_time = Config.CHECK_INTERVAL - time_since_last_cycle
-                        sleep_time = min(Config.POSITION_UPDATE_INTERVAL, remaining_time)
-                        
-                        # Log less frequently to avoid spam
-                        if self.position_manager.get_open_positions_count() > 0:
-                            self.logger.debug(f"💓 Monitoring {self.position_manager.get_open_positions_count()} position(s)... (next scan in {int(remaining_time)}s)")
-                        
-                        time.sleep(sleep_time)
+                        # Also reset position update timer to avoid immediate update after cycle
+                        last_position_update = datetime.now()
+                    
+                    # Very short sleep to avoid CPU hogging while staying responsive
+                    # This makes the bot truly live - always checking, never stuck in long sleep cycles
+                    time.sleep(Config.LIVE_LOOP_INTERVAL)  # Default 100ms - responsive enough for live trading
                     
                 except Exception as e:
                     self.logger.error(f"❌ Error in trading loop: {e}", exc_info=True)
-                    time.sleep(10)  # Short wait on error, then continue monitoring
+                    time.sleep(1)  # Brief wait on error, then continue monitoring
         
         except KeyboardInterrupt:
             self.logger.info("=" * 60)
