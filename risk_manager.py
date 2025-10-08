@@ -132,12 +132,13 @@ class RiskManager:
         
         # Count positions in same group
         same_group_count = 0
+        # Get all assets in this group for faster lookup
+        group_assets = self.correlation_groups.get(asset_group, [])
         for pos in open_positions:
             pos_base = pos.symbol.split('/')[0].replace('USDT', '').replace('USD', '')
-            for asset in self.correlation_groups.get(asset_group, []):
-                if asset in pos_base:
-                    same_group_count += 1
-                    break
+            # Check if position's asset is in the same group (optimized with any())
+            if any(asset in pos_base for asset in group_assets):
+                same_group_count += 1
         
         # Allow max 2 positions from same correlation group
         if same_group_count >= 2:

@@ -317,7 +317,17 @@ class TradingBot:
                 self.logger.error(f"Error recording closed position {symbol}: {e}", exc_info=True)
     
     def _background_scanner(self):
-        """Background thread that continuously scans for opportunities"""
+        """Background thread that continuously scans for opportunities
+        
+        Thread Safety:
+        - Runs in a separate daemon thread for non-blocking market scanning
+        - Uses self._scan_lock to protect shared state (self._latest_opportunities)
+        - Controlled by self._scan_thread_running flag for clean shutdown
+        - Sleeps in 1-second intervals to allow responsive shutdown
+        
+        The scanner runs independently from the main trading loop, providing
+        continuous market monitoring without blocking position updates.
+        """
         self.logger.info("🔍 Background scanner thread started")
         
         while self._scan_thread_running:
@@ -351,7 +361,15 @@ class TradingBot:
         self.logger.info("🔍 Background scanner thread stopped")
     
     def _get_latest_opportunities(self):
-        """Get the latest opportunities from background scanner in a thread-safe manner"""
+        """Get the latest opportunities from background scanner in a thread-safe manner
+        
+        Thread Safety:
+        - Acquires self._scan_lock before reading shared state
+        - Returns a copy of the list to prevent external modification
+        
+        Returns:
+            List of opportunity dictionaries from the background scanner
+        """
         with self._scan_lock:
             return list(self._latest_opportunities)  # Return a copy
     

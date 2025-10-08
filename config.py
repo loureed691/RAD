@@ -28,13 +28,13 @@ class Config:
     _MIN_PROFIT_THRESHOLD_OVERRIDE = os.getenv('MIN_PROFIT_THRESHOLD')
     
     # Bot Parameters
-    CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '60'))
-    POSITION_UPDATE_INTERVAL = int(os.getenv('POSITION_UPDATE_INTERVAL', '5'))  # Minimum time between position API calls (seconds)
-    LIVE_LOOP_INTERVAL = float(os.getenv('LIVE_LOOP_INTERVAL', '0.1'))  # Main loop sleep interval for live monitoring (seconds)
-    TRAILING_STOP_PERCENTAGE = float(os.getenv('TRAILING_STOP_PERCENTAGE', '0.02'))
-    MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))
-    MAX_WORKERS = int(os.getenv('MAX_WORKERS', '20'))  # Number of parallel workers for market scanning
-    CACHE_DURATION = int(os.getenv('CACHE_DURATION', '300'))  # Cache duration in seconds (default: 5 minutes)
+    CHECK_INTERVAL = max(1, int(os.getenv('CHECK_INTERVAL', '60')))  # Min 1 second
+    POSITION_UPDATE_INTERVAL = max(1, int(os.getenv('POSITION_UPDATE_INTERVAL', '5')))  # Min 1 second
+    LIVE_LOOP_INTERVAL = max(0.01, float(os.getenv('LIVE_LOOP_INTERVAL', '0.1')))  # Min 10ms
+    TRAILING_STOP_PERCENTAGE = max(0.001, min(0.5, float(os.getenv('TRAILING_STOP_PERCENTAGE', '0.02'))))  # 0.1% to 50%
+    MAX_OPEN_POSITIONS = max(1, min(20, int(os.getenv('MAX_OPEN_POSITIONS', '3'))))  # 1 to 20 positions
+    MAX_WORKERS = max(1, min(100, int(os.getenv('MAX_WORKERS', '20'))))  # 1 to 100 workers
+    CACHE_DURATION = max(1, int(os.getenv('CACHE_DURATION', '300')))  # Min 1 second
     
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')

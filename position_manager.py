@@ -1055,7 +1055,17 @@ class PositionManager:
             return None
     
     def update_positions(self):
-        """Update all positions and manage trailing stops with adaptive parameters"""
+        """Update all positions and manage trailing stops with adaptive parameters
+        
+        Thread Safety:
+        - Acquires self._positions_lock when accessing shared positions dict
+        - Takes a snapshot of position keys to avoid iteration issues
+        - Re-acquires lock for each position to check if it still exists
+        - This design allows other threads to close positions during updates
+        
+        The method safely handles positions being closed by other threads
+        (e.g., manual closes, stop losses triggered by external systems).
+        """
         # Get a thread-safe snapshot of positions to iterate over
         with self._positions_lock:
             positions_snapshot = list(self.positions.keys())
