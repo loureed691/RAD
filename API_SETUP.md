@@ -259,9 +259,11 @@ Error: 403 - IP restricted
 Error: 429 - Too Many Requests
 ```
 **Solution**: 
-- Bot has built-in rate limiting
-- Reduce CHECK_INTERVAL if needed
-- Wait a few minutes and retry
+- Bot has built-in rate limiting with automatic retry
+- Retries use exponential backoff (1s, 2s, 4s...)
+- If errors persist, reduce CHECK_INTERVAL
+- Enable WebSocket to reduce REST API calls
+- See [API_ERROR_HANDLING.md](API_ERROR_HANDLING.md) for details
 
 ## API Rate Limits
 
@@ -271,7 +273,18 @@ Error: 429 - Too Many Requests
 - **Private Endpoints**: 40 requests per 10 seconds
 - **Order Placement**: 30 requests per 10 seconds
 
-The bot automatically handles rate limiting via ccxt.
+The bot automatically handles rate limiting via ccxt and includes comprehensive error handling with automatic retries.
+
+### Rate Limit Handling
+
+The bot includes advanced error handling for all API limitations:
+
+✅ **Automatic Retries**: Rate limit errors trigger exponential backoff (1s, 2s, 4s...)
+✅ **Smart Error Classification**: Different errors handled appropriately (retry vs. fail)
+✅ **Comprehensive Logging**: All errors logged with retry attempts and outcomes
+✅ **Zero Configuration**: Works out of the box with optimal settings
+
+**See [API_ERROR_HANDLING.md](API_ERROR_HANDLING.md) for complete documentation.**
 
 ## Production Checklist
 
