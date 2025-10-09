@@ -409,7 +409,7 @@ class TradingBot:
         self.logger.info(f"📊 Processing {len(opportunities)} opportunities from background scanner (age: {int(age)}s)")
         
         # Validate opportunity age - reject if too old (stale data)
-        max_age = Config.CHECK_INTERVAL * 2  # Allow up to 2x the check interval
+        max_age = Config.CHECK_INTERVAL * Config.STALE_DATA_MULTIPLIER  # Allow up to configurable multiple of the check interval
         if age > max_age:
             self.logger.warning(f"⚠️  Opportunities are stale (age: {int(age)}s > max: {int(max_age)}s), skipping")
             return
