@@ -194,9 +194,16 @@ class NeuralNetworkModel:
             return 'HOLD', 0.0
         
         try:
-            # Ensure features is 2D array
+            # Ensure features is 2D array and has correct length
             if features.ndim == 1:
+                if features.shape[0] != self.input_dim:
+                    self.logger.error(f"Feature vector length {features.shape[0]} does not match expected input_dim {self.input_dim}")
+                    return 'HOLD', 0.0
                 features = features.reshape(1, -1)
+            elif features.ndim == 2:
+                if features.shape[1] != self.input_dim:
+                    self.logger.error(f"Feature matrix width {features.shape[1]} does not match expected input_dim {self.input_dim}")
+                    return 'HOLD', 0.0
             
             # Get prediction probabilities
             probabilities = self.model.predict(features, verbose=0)[0]
