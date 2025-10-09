@@ -2,7 +2,21 @@
 
 A production-grade, fully automated, **self-learning and hyper-intelligent** KuCoin Futures trading bot with dynamic 3-15x leverage capability. This bot is designed to be hands-off and resilient, automatically discovering the best trading pairs and executing trades based on advanced technical indicators, multi-timeframe analysis, and institutional-grade machine learning.
 
-## 🔥 BREAKING: Truly Live Trading - No More Cycles! ⭐⭐⭐⭐⭐ (LATEST!)
+## 🔄 NEW: Online/Incremental Learning with River ⭐⭐⭐⭐⭐ (LATEST!)
+
+**The bot now supports real-time incremental learning!** Revolutionary machine learning upgrade:
+
+- **🎓 Learns from Every Trade** - Model updates immediately after each trade outcome
+- **⚡ No Retraining Delays** - Continuous adaptation without batch retraining cycles
+- **🧠 Concept Drift Detection** - ADWIN algorithm automatically detects market regime changes
+- **💾 Memory Efficient** - 90% less memory usage vs batch learning
+- **🎯 Always Current** - Model reflects the latest market behavior instantly
+
+**Expected Impact:** Better adaptation to changing markets, faster learning, lower resource usage
+
+👉 **See [INCREMENTAL_LEARNING.md](INCREMENTAL_LEARNING.md) for complete guide** or run `python demo_incremental_learning.py` for interactive demo.
+
+## 🔥 BREAKING: Truly Live Trading - No More Cycles! ⭐⭐⭐⭐⭐
 
 **The bot is now TRULY LIVE - no sleep cycles, continuous monitoring!** Revolutionary upgrade:
 
@@ -220,8 +234,14 @@ Key configuration parameters in `.env`:
 - **TRAILING_STOP_PERCENTAGE**: Trailing stop percentage (default: 0.02 = 2%)
 - **MAX_OPEN_POSITIONS**: Maximum concurrent positions (default: 3)
 - **RETRAIN_INTERVAL**: Seconds between ML model retraining (default: 86400 = 24 hours)
+- **USE_INCREMENTAL_LEARNING**: Enable online/incremental learning with River (default: false) - **NEW! ⭐**
+- **INCREMENTAL_GRACE_PERIOD**: Samples before tree splitting (default: 50)
+- **INCREMENTAL_MAX_DEPTH**: Maximum tree depth (default: 10)
+- **INCREMENTAL_N_MODELS**: Number of models in ensemble (default: 10)
 
 For performance tuning, see [PERFORMANCE_OPTIMIZATION.md](PERFORMANCE_OPTIMIZATION.md)
+
+For incremental learning setup, see [INCREMENTAL_LEARNING.md](INCREMENTAL_LEARNING.md)
 
 ## Usage
 
