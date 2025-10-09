@@ -86,8 +86,8 @@ def test_river_available():
             y = 1 if x['feature1'] + x['feature2'] > 1 else 0
             
             # Scale and learn
-            x_scaled = scaler.learn_one(x)
-            model.learn_one(x_scaled, y)
+            scaled_x = scaler.learn_one(x)
+            model.learn_one(scaled_x, y)
         
         # Test prediction
         x_test = {'feature1': 0.8, 'feature2': 0.7}
