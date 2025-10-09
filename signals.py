@@ -7,6 +7,7 @@ from typing import Dict, Tuple
 from indicators import Indicators
 from logger import Logger
 from pattern_recognition import PatternRecognition
+from volume_profile import VolumeProfile
 
 class SignalGenerator:
     """Generate trading signals based on multiple indicators"""
@@ -17,6 +18,7 @@ class SignalGenerator:
         self.market_regime = 'neutral'  # 'trending', 'ranging', 'neutral'
         self.adaptive_threshold = 0.55
         self.pattern_recognizer = PatternRecognition()
+        self.volume_profile_analyzer = VolumeProfile()
     
     def detect_support_resistance(self, df: pd.DataFrame, current_price: float) -> Dict:
         """
@@ -518,7 +520,7 @@ class SignalGenerator:
     
     def calculate_score(self, df: pd.DataFrame) -> float:
         """
-        Calculate a numerical score for ranking trading pairs
+        Calculate a numerical score for ranking trading pairs with volume profile analysis
         Higher score = better trading opportunity
         """
         signal, confidence, reasons = self.generate_signal(df)
@@ -585,20 +587,57 @@ class SignalGenerator:
             elif risk_reward_ratio < 0.5:
                 score -= 8  # Poor risk/reward - increased penalty from -5
         
-        # NEW: Bonus for support/resistance proximity
+        # ENHANCED: Volume Profile Analysis (NEW)
         close = indicators.get('close', 0)
         if close > 0:
-            sr_levels = self.detect_support_resistance(df, close)
-            if sr_levels.get('near_support', False) and signal == 'BUY':
-                score += 10  # Bouncing off support
-            elif sr_levels.get('near_resistance', False) and signal == 'SELL':
-                score += 10  # Rejecting at resistance
+            # Calculate volume profile
+            volume_profile = self.volume_profile_analyzer.calculate_volume_profile(df)
+            
+            if volume_profile.get('poc'):
+                # Check if near high-volume node
+                is_near_node, node_type = self.volume_profile_analyzer.is_near_high_volume_node(
+                    close, volume_profile, threshold=0.015
+                )
+                
+                # Get volume-based support/resistance
+                vol_sr = self.volume_profile_analyzer.get_support_resistance_from_volume(
+                    close, volume_profile
+                )
+                
+                # Bonus for being in value area (institutional interest)
+                if vol_sr.get('in_value_area', False):
+                    score += 8  # Trading in high-volume area
+                
+                # Strong bonus for bouncing off volume-based support (BUY)
+                if signal == 'BUY' and vol_sr.get('support'):
+                    distance_to_support = (close - vol_sr['support']) / close
+                    if distance_to_support < 0.02:  # Within 2% of support
+                        strength = vol_sr.get('support_strength', 0)
+                        score += 15 * strength  # Weighted by support strength
+                        if node_type == 'POC':
+                            score += 5  # Extra bonus for POC (strongest level)
+                
+                # Strong bonus for rejecting at volume-based resistance (SELL)
+                if signal == 'SELL' and vol_sr.get('resistance'):
+                    distance_to_resistance = (vol_sr['resistance'] - close) / close
+                    if distance_to_resistance < 0.02:  # Within 2% of resistance
+                        strength = vol_sr.get('resistance_strength', 0)
+                        score += 15 * strength  # Weighted by resistance strength
+                        if node_type == 'POC':
+                            score += 5  # Extra bonus for POC (strongest level)
         
-        # NEW: Bonus for multi-timeframe alignment (if available in reasons)
+        # Existing support/resistance bonus (keep for compatibility)
+        sr_levels = self.detect_support_resistance(df, close)
+        if sr_levels.get('near_support', False) and signal == 'BUY':
+            score += 10  # Bouncing off support
+        elif sr_levels.get('near_resistance', False) and signal == 'SELL':
+            score += 10  # Rejecting at resistance
+        
+        # Bonus for multi-timeframe alignment (if available in reasons)
         if reasons.get('mtf_boost'):
             score += 8  # Multi-timeframe confirmation
         
-        # NEW: Penalty for conflicting signals
+        # Penalty for conflicting signals
         if reasons.get('mtf_conflict'):
             score -= 5  # Multi-timeframe conflict
         
