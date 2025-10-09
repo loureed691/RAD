@@ -363,7 +363,7 @@ class MLModel:
             # Get feature importance from the base XGBoost model
             try:
                 # Access the base estimator through CalibratedClassifierCV
-                base_estimator = ensemble.estimators_[0]  # Get XGBoost from VotingClassifier
+                base_estimator = self.model.calibrated_classifiers_[0].estimator.estimators_[0]  # Get fitted XGBoost from VotingClassifier inside CalibratedClassifierCV
                 if hasattr(base_estimator, 'feature_importances_'):
                     feature_names = [
                         'rsi', 'macd', 'macd_signal', 'macd_diff', 'stoch_k', 'stoch_d',
