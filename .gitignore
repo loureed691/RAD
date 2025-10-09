@@ -54,6 +54,9 @@ models/
 *.h5
 *.pt
 
+# CatBoost training artifacts
+catboost_info/
+
 # OS
 .DS_Store
 Thumbs.db
