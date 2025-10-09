@@ -3,16 +3,33 @@ KuCoin Futures API Client Wrapper
 """
 import ccxt
 import time
-from typing import List, Dict, Optional
+import threading
+import queue
+from typing import List, Dict, Optional, Callable, Any
 from logger import Logger
+from enum import IntEnum
+
+class APICallPriority(IntEnum):
+    """Priority levels for API calls - lower number = higher priority"""
+    CRITICAL = 1   # Order execution, position closing - MUST execute first
+    HIGH = 2       # Position monitoring, balance checks
+    NORMAL = 3     # Market scanning, ticker fetching
+    LOW = 4        # Analytics, non-critical data
 
 class KuCoinClient:
-    """Wrapper for KuCoin Futures API using ccxt"""
+    """Wrapper for KuCoin Futures API using ccxt with API call prioritization"""
     
     def __init__(self, api_key: str, api_secret: str, api_passphrase: str):
-        """Initialize KuCoin client"""
+        """Initialize KuCoin client with priority queue system"""
         self.logger = Logger.get_logger()
         self.orders_logger = Logger.get_orders_logger()
+        
+        # Initialize API call priority queue system
+        # This ensures trading operations always execute before scanning operations
+        self._api_queue = queue.PriorityQueue()
+        self._api_lock = threading.Lock()
+        self._pending_critical_calls = 0  # Track critical calls in progress
+        self._critical_call_lock = threading.Lock()
         
         try:
             self.exchange = ccxt.kucoinfutures({
@@ -22,6 +39,7 @@ class KuCoinClient:
                 'enableRateLimit': True,
             })
             self.logger.info("KuCoin Futures client initialized successfully")
+            self.logger.info("✅ API Call Priority System: ENABLED (Trading operations have priority)")
             
             # Set position mode to one-way (single position per symbol)
             # This prevents error 330011: "position mode does not match"
@@ -36,8 +54,61 @@ class KuCoinClient:
             self.logger.error(f"Failed to initialize KuCoin client: {e}")
             raise
     
+    def _wait_for_critical_calls(self, priority: APICallPriority):
+        """
+        Wait if there are pending critical calls and current call is not critical.
+        This ensures trading operations complete before scanning operations start.
+        """
+        if priority > APICallPriority.CRITICAL:
+            # Non-critical call - wait for any pending critical calls to complete
+            max_wait = 5.0  # Maximum 5 seconds wait
+            start_time = time.time()
+            
+            while time.time() - start_time < max_wait:
+                with self._critical_call_lock:
+                    if self._pending_critical_calls == 0:
+                        break
+                time.sleep(0.05)  # Short sleep to avoid busy waiting
+    
+    def _track_critical_call(self, priority: APICallPriority, increment: bool):
+        """Track critical API calls in progress"""
+        if priority == APICallPriority.CRITICAL:
+            with self._critical_call_lock:
+                if increment:
+                    self._pending_critical_calls += 1
+                else:
+                    self._pending_critical_calls = max(0, self._pending_critical_calls - 1)
+    
+    def _execute_with_priority(self, func: Callable, priority: APICallPriority, 
+                               call_name: str, *args, **kwargs) -> Any:
+        """
+        Execute an API call with priority handling.
+        Critical calls (orders, position closing) execute immediately.
+        Non-critical calls (scanning) wait for critical calls to complete.
+        """
+        # Wait for critical calls if this is a non-critical call
+        self._wait_for_critical_calls(priority)
+        
+        # Track if this is a critical call
+        self._track_critical_call(priority, increment=True)
+        
+        try:
+            # Log priority for critical operations
+            if priority == APICallPriority.CRITICAL:
+                self.logger.debug(f"🔴 CRITICAL API call: {call_name}")
+            
+            # Execute the actual API call
+            result = func(*args, **kwargs)
+            return result
+        finally:
+            # Always decrement critical call counter
+            self._track_critical_call(priority, increment=False)
+    
     def get_active_futures(self, include_volume: bool = True) -> List[Dict]:
         """Get all active futures trading pairs (perpetual swaps and quarterly futures) - USDT pairs only
+        
+        This is a SCANNING operation with NORMAL priority.
+        Will wait for any critical trading operations to complete first.
         
         Args:
             include_volume: If True, fetch ticker data to include 24h volume (adds API call overhead)
@@ -45,92 +116,118 @@ class KuCoinClient:
         Returns:
             List of futures with symbol, info, swap, future, and optionally quoteVolume
         """
-        try:
-            markets = self.exchange.load_markets()
-            futures = [
-                {
-                    'symbol': symbol,
-                    'info': market,
-                    'swap': market.get('swap', False),
-                    'future': market.get('future', False)
-                }
-                for symbol, market in markets.items()
-                if (market.get('swap') or market.get('future')) and market.get('active') and ':USDT' in symbol
-            ]
-            self.logger.info(f"Found {len(futures)} active USDT futures pairs")
-            
-            # Optionally fetch volume data from tickers
-            if include_volume:
-                try:
-                    tickers = self.exchange.fetch_tickers()
-                    for future in futures:
-                        symbol = future['symbol']
-                        if symbol in tickers:
-                            ticker = tickers[symbol]
-                            # Add 24h quote volume (volume in quote currency, e.g., USDT)
-                            future['quoteVolume'] = ticker.get('quoteVolume', 0)
-                    self.logger.debug(f"Added volume data for {len(futures)} futures")
-                except Exception as e:
-                    self.logger.warning(f"Could not fetch volume data: {e}")
-                    # Continue without volume data
-            
-            # Log details of found pairs for debugging
-            if futures:
-                swap_only_count = sum(1 for f in futures if f.get('swap') and not f.get('future'))
-                future_only_count = sum(1 for f in futures if f.get('future') and not f.get('swap'))
-                both_count = sum(1 for f in futures if f.get('swap') and f.get('future'))
-                self.logger.debug(
-                    f"Breakdown: {swap_only_count} perpetual swaps only, "
-                    f"{future_only_count} dated futures only, "
-                    f"{both_count} instruments that are both swap and future"
-                )
-            
-            return futures
-        except Exception as e:
-            self.logger.error(f"Error fetching active futures: {e}")
-            return []
+        def _fetch():
+            try:
+                markets = self.exchange.load_markets()
+                futures = [
+                    {
+                        'symbol': symbol,
+                        'info': market,
+                        'swap': market.get('swap', False),
+                        'future': market.get('future', False)
+                    }
+                    for symbol, market in markets.items()
+                    if (market.get('swap') or market.get('future')) and market.get('active') and ':USDT' in symbol
+                ]
+                self.logger.info(f"Found {len(futures)} active USDT futures pairs")
+                
+                # Optionally fetch volume data from tickers
+                if include_volume:
+                    try:
+                        tickers = self.exchange.fetch_tickers()
+                        for future in futures:
+                            symbol = future['symbol']
+                            if symbol in tickers:
+                                ticker = tickers[symbol]
+                                # Add 24h quote volume (volume in quote currency, e.g., USDT)
+                                future['quoteVolume'] = ticker.get('quoteVolume', 0)
+                        self.logger.debug(f"Added volume data for {len(futures)} futures")
+                    except Exception as e:
+                        self.logger.warning(f"Could not fetch volume data: {e}")
+                        # Continue without volume data
+                
+                # Log details of found pairs for debugging
+                if futures:
+                    swap_only_count = sum(1 for f in futures if f.get('swap') and not f.get('future'))
+                    future_only_count = sum(1 for f in futures if f.get('future') and not f.get('swap'))
+                    both_count = sum(1 for f in futures if f.get('swap') and f.get('future'))
+                    self.logger.debug(
+                        f"Breakdown: {swap_only_count} perpetual swaps only, "
+                        f"{future_only_count} dated futures only, "
+                        f"{both_count} instruments that are both swap and future"
+                    )
+                
+                return futures
+            except Exception as e:
+                self.logger.error(f"Error fetching active futures: {e}")
+                return []
+        
+        # Execute with NORMAL priority - will wait for CRITICAL operations
+        return self._execute_with_priority(_fetch, APICallPriority.NORMAL, 'get_active_futures')
     
-    def get_ticker(self, symbol: str) -> Optional[Dict]:
-        """Get ticker information for a symbol"""
-        try:
-            ticker = self.exchange.fetch_ticker(symbol)
-            return ticker
-        except Exception as e:
-            self.logger.error(f"Error fetching ticker for {symbol}: {e}")
-            return None
+    def get_ticker(self, symbol: str, priority: APICallPriority = APICallPriority.HIGH) -> Optional[Dict]:
+        """Get ticker information for a symbol
+        
+        Args:
+            symbol: Trading pair symbol
+            priority: Priority level (HIGH for position monitoring, NORMAL for scanning)
+        
+        Returns:
+            Ticker dict or None
+        """
+        def _fetch():
+            try:
+                ticker = self.exchange.fetch_ticker(symbol)
+                return ticker
+            except Exception as e:
+                self.logger.error(f"Error fetching ticker for {symbol}: {e}")
+                return None
+        
+        return self._execute_with_priority(_fetch, priority, f'get_ticker({symbol})')
     
     def get_ohlcv(self, symbol: str, timeframe: str = '1h', limit: int = 100) -> List:
-        """Get OHLCV data for a symbol with retry logic"""
-        max_retries = 3
-        retry_delay = 1
+        """Get OHLCV data for a symbol with retry logic
         
-        for attempt in range(max_retries):
-            try:
-                ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
-                if not ohlcv:
-                    self.logger.warning(f"Empty OHLCV data returned for {symbol}")
-                    return []
-                
-                self.logger.debug(f"Fetched {len(ohlcv)} candles for {symbol}")
-                return ohlcv
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    self.logger.warning(f"Error fetching OHLCV for {symbol} (attempt {attempt+1}/{max_retries}): {e}")
-                    time.sleep(retry_delay * (attempt + 1))
-                else:
-                    self.logger.error(f"Failed to fetch OHLCV for {symbol} after {max_retries} attempts: {e}")
-                    return []
+        This is typically used for SCANNING, so uses NORMAL priority by default.
+        Will wait for critical trading operations to complete first.
+        """
+        def _fetch():
+            max_retries = 3
+            retry_delay = 1
+            
+            for attempt in range(max_retries):
+                try:
+                    ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+                    if not ohlcv:
+                        self.logger.warning(f"Empty OHLCV data returned for {symbol}")
+                        return []
+                    
+                    self.logger.debug(f"Fetched {len(ohlcv)} candles for {symbol}")
+                    return ohlcv
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        self.logger.warning(f"Error fetching OHLCV for {symbol} (attempt {attempt+1}/{max_retries}): {e}")
+                        time.sleep(retry_delay * (attempt + 1))
+                    else:
+                        self.logger.error(f"Failed to fetch OHLCV for {symbol} after {max_retries} attempts: {e}")
+                        return []
+            
+            return []
         
-        return []
+        # Execute with NORMAL priority - will wait for CRITICAL and HIGH operations
+        return self._execute_with_priority(_fetch, APICallPriority.NORMAL, f'get_ohlcv({symbol})')
     
     def get_balance(self) -> Dict:
-        """Get account balance"""
-        try:
-            balance = self.exchange.fetch_balance()
-            return balance
-        except Exception as e:
-            self.logger.error(f"Error fetching balance: {e}")
-            return {}
+        """Get account balance - HIGH priority for position monitoring"""
+        def _fetch():
+            try:
+                balance = self.exchange.fetch_balance()
+                return balance
+            except Exception as e:
+                self.logger.error(f"Error fetching balance: {e}")
+                return {}
+        
+        return self._execute_with_priority(_fetch, APICallPriority.HIGH, 'get_balance')
     
     def get_market_limits(self, symbol: str) -> Optional[Dict]:
         """Get market limits for a symbol (min/max order size)"""
@@ -483,6 +580,8 @@ class KuCoinClient:
                            validate_depth: bool = True, reduce_only: bool = False) -> Optional[Dict]:
         """Create a market order with leverage and slippage protection
         
+        🔴 CRITICAL PRIORITY: This order operation executes BEFORE any scanning operations.
+        
         Args:
             symbol: Trading pair symbol
             side: 'buy' or 'sell'
@@ -495,200 +594,206 @@ class KuCoinClient:
         Returns:
             Order dict if successful, None otherwise
         """
-        try:
-            # Get current price first for margin checks
-            ticker = self.get_ticker(symbol)
-            if not ticker:
-                self.logger.error(f"Could not get ticker for {symbol}")
-                return None
+        def _create_order():
+            try:
+                # Get current price first for margin checks (use HIGH priority for position-related ticker)
+                ticker = self.get_ticker(symbol, priority=APICallPriority.HIGH)
+                if not ticker:
+                    self.logger.error(f"Could not get ticker for {symbol}")
+                    return None
+                    
+                reference_price = ticker['last']
+                self.logger.debug(f"Reference price for {symbol}: {reference_price}")
                 
-            reference_price = ticker['last']
-            self.logger.debug(f"Reference price for {symbol}: {reference_price}")
-            
-            # Validate and cap amount to exchange limits
-            validated_amount = self.validate_and_cap_amount(symbol, amount)
-            
-            # Skip margin check for reduce_only orders as they close positions
-            if not reduce_only:
-                # Check if we have enough margin for this position (error 330008 prevention)
-                has_margin, available_margin, margin_reason = self.check_available_margin(
-                    symbol, validated_amount, reference_price, leverage
-                )
-            
-                if not has_margin:
-                    self.logger.warning(f"Margin check failed: {margin_reason}")
-                    # Try to adjust position to fit available margin
-                    adjusted_amount, adjusted_leverage = self.adjust_position_for_margin(
-                        symbol, validated_amount, reference_price, leverage, available_margin
+                # Validate and cap amount to exchange limits
+                validated_amount = self.validate_and_cap_amount(symbol, amount)
+                
+                # Skip margin check for reduce_only orders as they close positions
+                if not reduce_only:
+                    # Check if we have enough margin for this position (error 330008 prevention)
+                    has_margin, available_margin, margin_reason = self.check_available_margin(
+                        symbol, validated_amount, reference_price, leverage
                     )
-                    
-                    # Check if adjusted position is viable (meets exchange minimums and meaningful size)
-                    is_viable, viability_reason = self.is_position_viable(
-                        symbol, adjusted_amount, reference_price, adjusted_leverage
-                    )
-                    if not is_viable:
-                        self.logger.error(
-                            f"Cannot open position: adjusted position not viable - {viability_reason} "
-                            f"(adjusted: {adjusted_amount:.4f}, desired: {validated_amount:.4f})"
+                
+                    if not has_margin:
+                        self.logger.warning(f"Margin check failed: {margin_reason}")
+                        # Try to adjust position to fit available margin
+                        adjusted_amount, adjusted_leverage = self.adjust_position_for_margin(
+                            symbol, validated_amount, reference_price, leverage, available_margin
                         )
-                        return None
-                    
-                    # Use adjusted values
-                    validated_amount = adjusted_amount
-                    leverage = adjusted_leverage
-                    self.logger.info(
-                        f"Adjusted position to fit margin: {adjusted_amount:.4f} contracts at {adjusted_leverage}x leverage"
-                    )
-            
-            # For large orders, check order book depth and predict slippage
-            if validate_depth and validated_amount > 100:  # Threshold for "large" order
-                order_book = self.get_order_book(symbol, limit=20)
-                if order_book:
-                    levels = order_book['bids'] if side == 'sell' else order_book['asks']
-                    total_liquidity = sum(level[1] for level in levels)
-                    
-                    # Predict slippage based on order book
-                    predicted_slippage = self._predict_slippage(
-                        validated_amount, levels, reference_price
-                    )
-                    
-                    if predicted_slippage > max_slippage:
-                        self.logger.warning(
-                            f"High predicted slippage for {symbol}: {predicted_slippage:.2%} "
-                            f"(max: {max_slippage:.2%}). Consider reducing size or using limit order."
+                        
+                        # Check if adjusted position is viable (meets exchange minimums and meaningful size)
+                        is_viable, viability_reason = self.is_position_viable(
+                            symbol, adjusted_amount, reference_price, adjusted_leverage
                         )
-                        # Optionally reduce order size to fit liquidity
-                        safe_amount = min(validated_amount, total_liquidity * 0.5)
-                        if safe_amount < validated_amount * 0.7:
-                            self.logger.warning(
-                                f"Reducing order size from {validated_amount:.4f} to {safe_amount:.4f} "
-                                f"to limit slippage"
+                        if not is_viable:
+                            self.logger.error(
+                                f"Cannot open position: adjusted position not viable - {viability_reason} "
+                                f"(adjusted: {adjusted_amount:.4f}, desired: {validated_amount:.4f})"
                             )
-                            validated_amount = safe_amount
-                    
-                    if total_liquidity < validated_amount * 1.5:
-                        self.logger.warning(
-                            f"Low liquidity for {symbol}: order size {validated_amount} vs "
-                            f"book depth {total_liquidity:.2f}. Potential high slippage."
+                            return None
+                        
+                        # Use adjusted values
+                        validated_amount = adjusted_amount
+                        leverage = adjusted_leverage
+                        self.logger.info(
+                            f"Adjusted position to fit margin: {adjusted_amount:.4f} contracts at {adjusted_leverage}x leverage"
                         )
-                    
-                    # Check spread for timing
-                    spread = self._calculate_spread(order_book)
-                    if spread > 0.005:  # >0.5% spread
-                        self.logger.warning(
-                            f"Wide spread detected for {symbol}: {spread:.2%}. "
-                            f"Consider waiting for tighter spread."
-                        )
-            
-            # Skip leverage/margin mode setting for reduce_only orders (closing positions)
-            # Setting leverage on close can fail with error 330008 if all margin is in use
-            if not reduce_only:
-                # Switch to cross margin mode first (fixes error 330006)
-                self.exchange.set_margin_mode('cross', symbol)
                 
-                # Set leverage with cross margin mode
-                self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
-            
-            # Build order parameters
-            params = {"marginMode": "cross"}
-            if reduce_only:
-                params["reduceOnly"] = True
-            
-            # Create market order
-            order = self.exchange.create_order(
-                symbol=symbol,
-                type='market',
-                side=side,
-                amount=validated_amount,
-                params=params
-            )
-            
-            # Wait briefly for order to be filled and fetch updated status
-            # Market orders typically fill immediately, but we need to fetch the status to get fill details
-            time.sleep(0.5)  # Brief pause to allow order to be processed
-            if order.get('id'):
-                try:
-                    filled_order = self.exchange.fetch_order(order['id'], symbol)
-                    # Update order with filled details if available
-                    if filled_order:
-                        order.update({
-                            'status': filled_order.get('status', order.get('status')),
-                            'average': filled_order.get('average', order.get('average')),
-                            'filled': filled_order.get('filled', order.get('filled')),
-                            'cost': filled_order.get('cost', order.get('cost')),
-                            'timestamp': filled_order.get('timestamp', order.get('timestamp'))
-                        })
-                except Exception as e:
-                    self.logger.warning(f"Could not fetch order status immediately: {e}")
-            
-            # Log order details to main logger
-            avg_price = order.get('average') or order.get('price') or reference_price
-            self.logger.info(
-                f"Created {side} market order for {validated_amount} {symbol} "
-                f"at {leverage}x leverage (avg fill: {avg_price})"
-            )
-            
-            # Log detailed order information to orders logger
-            self.orders_logger.info("=" * 80)
-            self.orders_logger.info(f"{side.upper()} ORDER EXECUTED: {symbol}")
-            self.orders_logger.info("-" * 80)
-            self.orders_logger.info(f"  Order ID: {order.get('id', 'N/A')}")
-            self.orders_logger.info(f"  Type: MARKET")
-            self.orders_logger.info(f"  Side: {side.upper()}")
-            self.orders_logger.info(f"  Symbol: {symbol}")
-            self.orders_logger.info(f"  Amount: {validated_amount} contracts")
-            self.orders_logger.info(f"  Leverage: {leverage}x")
-            self.orders_logger.info(f"  Reference Price: {reference_price}")
-            self.orders_logger.info(f"  Average Fill Price: {avg_price}")
-            if order.get('filled'):
-                self.orders_logger.info(f"  Filled Amount: {order.get('filled')}")
-            if order.get('cost'):
-                self.orders_logger.info(f"  Total Cost: {order.get('cost')}")
-            self.orders_logger.info(f"  Status: {order.get('status', 'N/A')}")
-            # Format timestamp if available
-            timestamp = order.get('timestamp', 'N/A')
-            if timestamp and timestamp != 'N/A':
-                try:
-                    from datetime import datetime
-                    # Heuristic: if timestamp > 10^12, it's milliseconds; if < 10^10, it's seconds
-                    ts = float(timestamp)
-                    if ts > 1e12:
-                        ts = ts / 1000.0
-                    elif ts < 1e10:
-                        ts = ts
-                    else:
-                        # Ambiguous, log a warning and assume milliseconds
-                        self.orders_logger.warning(f"Ambiguous timestamp units for value: {timestamp}, assuming milliseconds.")
-                        ts = ts / 1000.0
-                    timestamp_str = datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
-                    self.orders_logger.info(f"  Timestamp: {timestamp_str}")
-                except Exception as e:
-                    self.orders_logger.info(f"  Timestamp: {timestamp} (error: {e})")
-            else:
-                self.orders_logger.info(f"  Timestamp: N/A")
-            
-            # Check actual slippage if we have both prices
-            if order.get('average'):
-                actual_slippage = abs(order['average'] - reference_price) / reference_price
-                self.orders_logger.info(f"  Slippage: {actual_slippage:.4%}")
-                if actual_slippage > max_slippage:
-                    self.orders_logger.warning(f"  ⚠ High slippage detected (threshold: {max_slippage:.2%})")
-                    self.logger.warning(
-                        f"High slippage detected: {actual_slippage:.2%} "
-                        f"(reference: {reference_price}, filled: {order['average']})"
-                    )
-            self.orders_logger.info("=" * 80)
-            self.orders_logger.info("")  # Empty line for readability
-            
-            return order
-        except Exception as e:
-            self.logger.error(f"Error creating market order: {e}")
-            return None
+                # For large orders, check order book depth and predict slippage
+                if validate_depth and validated_amount > 100:  # Threshold for "large" order
+                    order_book = self.get_order_book(symbol, limit=20)
+                    if order_book:
+                        levels = order_book['bids'] if side == 'sell' else order_book['asks']
+                        total_liquidity = sum(level[1] for level in levels)
+                        
+                        # Predict slippage based on order book
+                        predicted_slippage = self._predict_slippage(
+                            validated_amount, levels, reference_price
+                        )
+                        
+                        if predicted_slippage > max_slippage:
+                            self.logger.warning(
+                                f"High predicted slippage for {symbol}: {predicted_slippage:.2%} "
+                                f"(max: {max_slippage:.2%}). Consider reducing size or using limit order."
+                            )
+                            # Optionally reduce order size to fit liquidity
+                            safe_amount = min(validated_amount, total_liquidity * 0.5)
+                            if safe_amount < validated_amount * 0.7:
+                                self.logger.warning(
+                                    f"Reducing order size from {validated_amount:.4f} to {safe_amount:.4f} "
+                                    f"to limit slippage"
+                                )
+                                validated_amount = safe_amount
+                        
+                        if total_liquidity < validated_amount * 1.5:
+                            self.logger.warning(
+                                f"Low liquidity for {symbol}: order size {validated_amount} vs "
+                                f"book depth {total_liquidity:.2f}. Potential high slippage."
+                            )
+                        
+                        # Check spread for timing
+                        spread = self._calculate_spread(order_book)
+                        if spread > 0.005:  # >0.5% spread
+                            self.logger.warning(
+                                f"Wide spread detected for {symbol}: {spread:.2%}. "
+                                f"Consider waiting for tighter spread."
+                            )
+                
+                # Skip leverage/margin mode setting for reduce_only orders (closing positions)
+                # Setting leverage on close can fail with error 330008 if all margin is in use
+                if not reduce_only:
+                    # Switch to cross margin mode first (fixes error 330006)
+                    self.exchange.set_margin_mode('cross', symbol)
+                    
+                    # Set leverage with cross margin mode
+                    self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
+                
+                # Build order parameters
+                params = {"marginMode": "cross"}
+                if reduce_only:
+                    params["reduceOnly"] = True
+                
+                # Create market order
+                order = self.exchange.create_order(
+                    symbol=symbol,
+                    type='market',
+                    side=side,
+                    amount=validated_amount,
+                    params=params
+                )
+                
+                # Wait briefly for order to be filled and fetch updated status
+                # Market orders typically fill immediately, but we need to fetch the status to get fill details
+                time.sleep(0.5)  # Brief pause to allow order to be processed
+                if order.get('id'):
+                    try:
+                        filled_order = self.exchange.fetch_order(order['id'], symbol)
+                        # Update order with filled details if available
+                        if filled_order:
+                            order.update({
+                                'status': filled_order.get('status', order.get('status')),
+                                'average': filled_order.get('average', order.get('average')),
+                                'filled': filled_order.get('filled', order.get('filled')),
+                                'cost': filled_order.get('cost', order.get('cost')),
+                                'timestamp': filled_order.get('timestamp', order.get('timestamp'))
+                            })
+                    except Exception as e:
+                        self.logger.warning(f"Could not fetch order status immediately: {e}")
+                
+                # Log order details to main logger
+                avg_price = order.get('average') or order.get('price') or reference_price
+                self.logger.info(
+                    f"Created {side} market order for {validated_amount} {symbol} "
+                    f"at {leverage}x leverage (avg fill: {avg_price})"
+                )
+                
+                # Log detailed order information to orders logger
+                self.orders_logger.info("=" * 80)
+                self.orders_logger.info(f"{side.upper()} ORDER EXECUTED: {symbol}")
+                self.orders_logger.info("-" * 80)
+                self.orders_logger.info(f"  Order ID: {order.get('id', 'N/A')}")
+                self.orders_logger.info(f"  Type: MARKET")
+                self.orders_logger.info(f"  Side: {side.upper()}")
+                self.orders_logger.info(f"  Symbol: {symbol}")
+                self.orders_logger.info(f"  Amount: {validated_amount} contracts")
+                self.orders_logger.info(f"  Leverage: {leverage}x")
+                self.orders_logger.info(f"  Reference Price: {reference_price}")
+                self.orders_logger.info(f"  Average Fill Price: {avg_price}")
+                if order.get('filled'):
+                    self.orders_logger.info(f"  Filled Amount: {order.get('filled')}")
+                if order.get('cost'):
+                    self.orders_logger.info(f"  Total Cost: {order.get('cost')}")
+                self.orders_logger.info(f"  Status: {order.get('status', 'N/A')}")
+                # Format timestamp if available
+                timestamp = order.get('timestamp', 'N/A')
+                if timestamp and timestamp != 'N/A':
+                    try:
+                        from datetime import datetime
+                        # Heuristic: if timestamp > 10^12, it's milliseconds; if < 10^10, it's seconds
+                        ts = float(timestamp)
+                        if ts > 1e12:
+                            ts = ts / 1000.0
+                        elif ts < 1e10:
+                            ts = ts
+                        else:
+                            # Ambiguous, log a warning and assume milliseconds
+                            self.orders_logger.warning(f"Ambiguous timestamp units for value: {timestamp}, assuming milliseconds.")
+                            ts = ts / 1000.0
+                        timestamp_str = datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+                        self.orders_logger.info(f"  Timestamp: {timestamp_str}")
+                    except Exception as e:
+                        self.orders_logger.info(f"  Timestamp: {timestamp} (error: {e})")
+                else:
+                    self.orders_logger.info(f"  Timestamp: N/A")
+                
+                # Check actual slippage if we have both prices
+                if order.get('average'):
+                    actual_slippage = abs(order['average'] - reference_price) / reference_price
+                    self.orders_logger.info(f"  Slippage: {actual_slippage:.4%}")
+                    if actual_slippage > max_slippage:
+                        self.orders_logger.warning(f"  ⚠ High slippage detected (threshold: {max_slippage:.2%})")
+                        self.logger.warning(
+                            f"High slippage detected: {actual_slippage:.2%} "
+                            f"(reference: {reference_price}, filled: {order['average']})"
+                        )
+                self.orders_logger.info("=" * 80)
+                self.orders_logger.info("")  # Empty line for readability
+                
+                return order
+            except Exception as e:
+                self.logger.error(f"Error creating market order: {e}")
+                return None
+        
+        # Execute with CRITICAL priority - this will block scanning operations
+        return self._execute_with_priority(_create_order, APICallPriority.CRITICAL, f'create_market_order({symbol}, {side})')
     
     def create_limit_order(self, symbol: str, side: str, amount: float, 
                           price: float, leverage: int = 10, post_only: bool = False,
                           reduce_only: bool = False) -> Optional[Dict]:
         """Create a limit order with leverage.
+        
+        🔴 CRITICAL PRIORITY: This order operation executes BEFORE any scanning operations.
 
         Cross margin mode is enforced when setting leverage.
         
@@ -701,126 +806,137 @@ class KuCoinClient:
             post_only: If True, ensures order is a maker order (reduces fees)
             reduce_only: If True, order only reduces position (safer exits)
         """
-        try:
-            # Validate and cap amount to exchange limits
-            validated_amount = self.validate_and_cap_amount(symbol, amount)
-            
-            # Check if we have enough margin for this position (error 330008 prevention)
-            # Skip margin check for reduce_only orders as they close positions
-            if not reduce_only:
-                has_margin, available_margin, margin_reason = self.check_available_margin(
-                    symbol, validated_amount, price, leverage
+        def _create_order():
+            try:
+                # Validate and cap amount to exchange limits
+                validated_amount = self.validate_and_cap_amount(symbol, amount)
+                
+                # Check if we have enough margin for this position (error 330008 prevention)
+                # Skip margin check for reduce_only orders as they close positions
+                if not reduce_only:
+                    has_margin, available_margin, margin_reason = self.check_available_margin(
+                        symbol, validated_amount, price, leverage
+                    )
+                    
+                    if not has_margin:
+                        self.logger.warning(f"Margin check failed: {margin_reason}")
+                        # Try to adjust position to fit available margin
+                        adjusted_amount, adjusted_leverage = self.adjust_position_for_margin(
+                            symbol, validated_amount, price, leverage, available_margin
+                        )
+                        
+                        # Check if adjusted position is viable (meets exchange minimums and meaningful size)
+                        is_viable, viability_reason = self.is_position_viable(
+                            symbol, adjusted_amount, price, adjusted_leverage
+                        )
+                        if not is_viable:
+                            self.logger.error(
+                                f"Cannot open position: adjusted position not viable - {viability_reason} "
+                                f"(adjusted: {adjusted_amount:.4f}, desired: {validated_amount:.4f})"
+                            )
+                            return None
+                        
+                        # Use adjusted values
+                        validated_amount = adjusted_amount
+                        leverage = adjusted_leverage
+                        self.logger.info(
+                            f"Adjusted limit order to fit margin: {adjusted_amount:.4f} contracts at {adjusted_leverage}x leverage"
+                        )
+                
+                # Skip leverage/margin mode setting for reduce_only orders (closing positions)
+                # Setting leverage on close can fail with error 330008 if all margin is in use
+                if not reduce_only:
+                    # Switch to cross margin mode first (fixes error 330006)
+                    self.exchange.set_margin_mode('cross', symbol)
+                    
+                    # Set leverage with cross margin mode
+                    self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
+                
+                # Build order parameters
+                params = {"marginMode": "cross"}
+                if post_only:
+                    params["postOnly"] = True
+                if reduce_only:
+                    params["reduceOnly"] = True
+                
+                # Create limit order with cross margin mode explicitly set
+                order = self.exchange.create_order(
+                    symbol=symbol,
+                    type='limit',
+                    side=side,
+                    amount=validated_amount,
+                    price=price,
+                    params=params
                 )
                 
-                if not has_margin:
-                    self.logger.warning(f"Margin check failed: {margin_reason}")
-                    # Try to adjust position to fit available margin
-                    adjusted_amount, adjusted_leverage = self.adjust_position_for_margin(
-                        symbol, validated_amount, price, leverage, available_margin
-                    )
-                    
-                    # Check if adjusted position is viable (meets exchange minimums and meaningful size)
-                    is_viable, viability_reason = self.is_position_viable(
-                        symbol, adjusted_amount, price, adjusted_leverage
-                    )
-                    if not is_viable:
-                        self.logger.error(
-                            f"Cannot open position: adjusted position not viable - {viability_reason} "
-                            f"(adjusted: {adjusted_amount:.4f}, desired: {validated_amount:.4f})"
-                        )
-                        return None
-                    
-                    # Use adjusted values
-                    validated_amount = adjusted_amount
-                    leverage = adjusted_leverage
-                    self.logger.info(
-                        f"Adjusted limit order to fit margin: {adjusted_amount:.4f} contracts at {adjusted_leverage}x leverage"
-                    )
-            
-            # Skip leverage/margin mode setting for reduce_only orders (closing positions)
-            # Setting leverage on close can fail with error 330008 if all margin is in use
-            if not reduce_only:
-                # Switch to cross margin mode first (fixes error 330006)
-                self.exchange.set_margin_mode('cross', symbol)
+                # Log order details to main logger
+                self.logger.info(
+                    f"Created {side} limit order for {validated_amount} {symbol} at {price} "
+                    f"(leverage={leverage}x, post_only={post_only}, reduce_only={reduce_only})"
+                )
                 
-                # Set leverage with cross margin mode
-                self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
-            
-            # Build order parameters
-            params = {"marginMode": "cross"}
-            if post_only:
-                params["postOnly"] = True
-            if reduce_only:
-                params["reduceOnly"] = True
-            
-            # Create limit order with cross margin mode explicitly set
-            order = self.exchange.create_order(
-                symbol=symbol,
-                type='limit',
-                side=side,
-                amount=validated_amount,
-                price=price,
-                params=params
-            )
-            
-            # Log order details to main logger
-            self.logger.info(
-                f"Created {side} limit order for {validated_amount} {symbol} at {price} "
-                f"(leverage={leverage}x, post_only={post_only}, reduce_only={reduce_only})"
-            )
-            
-            # Log detailed order information to orders logger
-            self.orders_logger.info("=" * 80)
-            self.orders_logger.info(f"{side.upper()} ORDER CREATED: {symbol}")
-            self.orders_logger.info("-" * 80)
-            self.orders_logger.info(f"  Order ID: {order.get('id', 'N/A')}")
-            self.orders_logger.info(f"  Type: LIMIT")
-            self.orders_logger.info(f"  Side: {side.upper()}")
-            self.orders_logger.info(f"  Symbol: {symbol}")
-            self.orders_logger.info(f"  Amount: {validated_amount} contracts")
-            self.orders_logger.info(f"  Limit Price: {price}")
-            self.orders_logger.info(f"  Leverage: {leverage}x")
-            self.orders_logger.info(f"  Post Only: {post_only}")
-            self.orders_logger.info(f"  Reduce Only: {reduce_only}")
-            self.orders_logger.info(f"  Status: {order.get('status', 'N/A')}")
-            self.orders_logger.info(f"  Timestamp: {order.get('timestamp', 'N/A')}")
-            self.orders_logger.info("=" * 80)
-            self.orders_logger.info("")  # Empty line for readability
-            
-            return order
-        except Exception as e:
-            self.logger.error(f"Error creating limit order: {e}")
-            return None
+                # Log detailed order information to orders logger
+                self.orders_logger.info("=" * 80)
+                self.orders_logger.info(f"{side.upper()} ORDER CREATED: {symbol}")
+                self.orders_logger.info("-" * 80)
+                self.orders_logger.info(f"  Order ID: {order.get('id', 'N/A')}")
+                self.orders_logger.info(f"  Type: LIMIT")
+                self.orders_logger.info(f"  Side: {side.upper()}")
+                self.orders_logger.info(f"  Symbol: {symbol}")
+                self.orders_logger.info(f"  Amount: {validated_amount} contracts")
+                self.orders_logger.info(f"  Limit Price: {price}")
+                self.orders_logger.info(f"  Leverage: {leverage}x")
+                self.orders_logger.info(f"  Post Only: {post_only}")
+                self.orders_logger.info(f"  Reduce Only: {reduce_only}")
+                self.orders_logger.info(f"  Status: {order.get('status', 'N/A')}")
+                self.orders_logger.info(f"  Timestamp: {order.get('timestamp', 'N/A')}")
+                self.orders_logger.info("=" * 80)
+                self.orders_logger.info("")  # Empty line for readability
+                
+                return order
+            except Exception as e:
+                self.logger.error(f"Error creating limit order: {e}")
+                return None
+        
+        # Execute with CRITICAL priority
+        return self._execute_with_priority(_create_order, APICallPriority.CRITICAL, f'create_limit_order({symbol}, {side})')
     
     def cancel_order(self, order_id: str, symbol: str) -> bool:
-        """Cancel an order"""
-        try:
-            self.exchange.cancel_order(order_id, symbol)
-            self.logger.info(f"Cancelled order {order_id} for {symbol}")
-            
-            # Log cancellation to orders logger
-            self.orders_logger.info("=" * 80)
-            self.orders_logger.info(f"ORDER CANCELLED: {symbol}")
-            self.orders_logger.info("-" * 80)
-            self.orders_logger.info(f"  Order ID: {order_id}")
-            self.orders_logger.info(f"  Symbol: {symbol}")
-            self.orders_logger.info("=" * 80)
-            self.orders_logger.info("")  # Empty line for readability
-            
-            return True
-        except Exception as e:
-            self.logger.error(f"Error cancelling order: {e}")
-            return False
+        """Cancel an order - CRITICAL priority for risk management"""
+        def _cancel():
+            try:
+                self.exchange.cancel_order(order_id, symbol)
+                self.logger.info(f"Cancelled order {order_id} for {symbol}")
+                
+                # Log cancellation to orders logger
+                self.orders_logger.info("=" * 80)
+                self.orders_logger.info(f"ORDER CANCELLED: {symbol}")
+                self.orders_logger.info("-" * 80)
+                self.orders_logger.info(f"  Order ID: {order_id}")
+                self.orders_logger.info(f"  Symbol: {symbol}")
+                self.orders_logger.info("=" * 80)
+                self.orders_logger.info("")  # Empty line for readability
+                
+                return True
+            except Exception as e:
+                self.logger.error(f"Error cancelling order: {e}")
+                return False
+        
+        # Execute with CRITICAL priority
+        return self._execute_with_priority(_cancel, APICallPriority.CRITICAL, f'cancel_order({order_id})')
     
     def get_open_positions(self) -> List[Dict]:
-        """Get all open positions"""
-        try:
-            positions = self.exchange.fetch_positions()
-            open_positions = [pos for pos in positions if float(pos.get('contracts', 0)) > 0]
-            return open_positions
-        except Exception as e:
-            self.logger.error(f"Error fetching positions: {e}")
-            return []
+        """Get all open positions - HIGH priority for position monitoring"""
+        def _fetch():
+            try:
+                positions = self.exchange.fetch_positions()
+                open_positions = [pos for pos in positions if float(pos.get('contracts', 0)) > 0]
+                return open_positions
+            except Exception as e:
+                self.logger.error(f"Error fetching positions: {e}")
+                return []
+        
+        return self._execute_with_priority(_fetch, APICallPriority.HIGH, 'get_open_positions')
     
     def close_position(self, symbol: str, use_limit: bool = False, 
                       slippage_tolerance: float = 0.002) -> bool:
@@ -908,6 +1024,8 @@ class KuCoinClient:
                                leverage: int = 10, reduce_only: bool = False) -> Optional[Dict]:
         """Create a stop-limit order for stop loss or take profit
         
+        🔴 CRITICAL PRIORITY: This order operation executes BEFORE any scanning operations.
+        
         Args:
             symbol: Trading pair symbol
             side: 'buy' or 'sell'
@@ -920,62 +1038,66 @@ class KuCoinClient:
         Returns:
             Order dict if successful, None otherwise
         """
-        try:
-            # Validate and cap amount to exchange limits
-            validated_amount = self.validate_and_cap_amount(symbol, amount)
-            
-            # Switch to cross margin mode first
-            self.exchange.set_margin_mode('cross', symbol)
-            
-            # Set leverage with cross margin mode
-            self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
-            
-            # Build order parameters
-            params = {
-                "marginMode": "cross",
-                "stopPrice": stop_price
-            }
-            if reduce_only:
-                params["reduceOnly"] = True
-            
-            # Create stop-limit order
-            order = self.exchange.create_order(
-                symbol=symbol,
-                type='limit',
-                side=side,
-                amount=validated_amount,
-                price=limit_price,
-                params=params
-            )
-            
-            # Log order details to main logger
-            self.logger.info(
-                f"Created {side} stop-limit order for {validated_amount} {symbol} "
-                f"(stop={stop_price}, limit={limit_price}, reduce_only={reduce_only})"
-            )
-            
-            # Log detailed order information to orders logger
-            self.orders_logger.info("=" * 80)
-            self.orders_logger.info(f"{side.upper()} ORDER CREATED: {symbol}")
-            self.orders_logger.info("-" * 80)
-            self.orders_logger.info(f"  Order ID: {order.get('id', 'N/A')}")
-            self.orders_logger.info(f"  Type: STOP-LIMIT")
-            self.orders_logger.info(f"  Side: {side.upper()}")
-            self.orders_logger.info(f"  Symbol: {symbol}")
-            self.orders_logger.info(f"  Amount: {validated_amount} contracts")
-            self.orders_logger.info(f"  Stop Price: {stop_price}")
-            self.orders_logger.info(f"  Limit Price: {limit_price}")
-            self.orders_logger.info(f"  Leverage: {leverage}x")
-            self.orders_logger.info(f"  Reduce Only: {reduce_only}")
-            self.orders_logger.info(f"  Status: {order.get('status', 'N/A')}")
-            self.orders_logger.info(f"  Timestamp: {order.get('timestamp', 'N/A')}")
-            self.orders_logger.info("=" * 80)
-            self.orders_logger.info("")  # Empty line for readability
-            
-            return order
-        except Exception as e:
-            self.logger.error(f"Error creating stop-limit order: {e}")
-            return None
+        def _create_order():
+            try:
+                # Validate and cap amount to exchange limits
+                validated_amount = self.validate_and_cap_amount(symbol, amount)
+                
+                # Switch to cross margin mode first
+                self.exchange.set_margin_mode('cross', symbol)
+                
+                # Set leverage with cross margin mode
+                self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
+                
+                # Build order parameters
+                params = {
+                    "marginMode": "cross",
+                    "stopPrice": stop_price
+                }
+                if reduce_only:
+                    params["reduceOnly"] = True
+                
+                # Create stop-limit order
+                order = self.exchange.create_order(
+                    symbol=symbol,
+                    type='limit',
+                    side=side,
+                    amount=validated_amount,
+                    price=limit_price,
+                    params=params
+                )
+                
+                # Log order details to main logger
+                self.logger.info(
+                    f"Created {side} stop-limit order for {validated_amount} {symbol} "
+                    f"(stop={stop_price}, limit={limit_price}, reduce_only={reduce_only})"
+                )
+                
+                # Log detailed order information to orders logger
+                self.orders_logger.info("=" * 80)
+                self.orders_logger.info(f"{side.upper()} ORDER CREATED: {symbol}")
+                self.orders_logger.info("-" * 80)
+                self.orders_logger.info(f"  Order ID: {order.get('id', 'N/A')}")
+                self.orders_logger.info(f"  Type: STOP-LIMIT")
+                self.orders_logger.info(f"  Side: {side.upper()}")
+                self.orders_logger.info(f"  Symbol: {symbol}")
+                self.orders_logger.info(f"  Amount: {validated_amount} contracts")
+                self.orders_logger.info(f"  Stop Price: {stop_price}")
+                self.orders_logger.info(f"  Limit Price: {limit_price}")
+                self.orders_logger.info(f"  Leverage: {leverage}x")
+                self.orders_logger.info(f"  Reduce Only: {reduce_only}")
+                self.orders_logger.info(f"  Status: {order.get('status', 'N/A')}")
+                self.orders_logger.info(f"  Timestamp: {order.get('timestamp', 'N/A')}")
+                self.orders_logger.info("=" * 80)
+                self.orders_logger.info("")  # Empty line for readability
+                
+                return order
+            except Exception as e:
+                self.logger.error(f"Error creating stop-limit order: {e}")
+                return None
+        
+        # Execute with CRITICAL priority
+        return self._execute_with_priority(_create_order, APICallPriority.CRITICAL, f'create_stop_limit_order({symbol}, {side})')
     
     def get_order_status(self, order_id: str, symbol: str) -> Optional[Dict]:
         """Get the status of an order
