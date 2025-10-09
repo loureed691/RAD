@@ -205,11 +205,17 @@ class KuCoinClient:
                 if not self.websocket.has_ticker(symbol):
                     self.logger.debug(f"Subscribing to ticker: {symbol}")
                     self.websocket.subscribe_ticker(symbol)
-                    # Give it a moment to receive data
-                    time.sleep(0.5)
-                    ticker = self.websocket.get_ticker(symbol)
-                    if ticker:
-                        return ticker
+                    # Wait up to 500ms for ticker data, polling every 50ms
+                    timeout = 0.5
+                    interval = 0.05
+                    waited = 0.0
+                    ticker = None
+                    while waited < timeout:
+                        ticker = self.websocket.get_ticker(symbol)
+                        if ticker:
+                            return ticker
+                        time.sleep(interval)
+                        waited += interval
                 # Fall through to REST API if no WebSocket data
                 self.logger.debug(f"No WebSocket data for {symbol}, using REST API")
         
