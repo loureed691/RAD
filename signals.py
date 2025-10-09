@@ -459,6 +459,10 @@ class SignalGenerator:
         if confidence < min_confidence:
             signal = 'HOLD'
             reasons['confidence'] = f'too low ({confidence:.2f} < {min_confidence:.2f})'
+            self.logger.debug(
+                f"Signal rejected: {symbol if 'symbol' in locals() else 'UNKNOWN'} - "
+                f"Confidence {confidence:.2f} < threshold {min_confidence:.2f}"
+            )
         
         # Apply confluence scoring boost (NEW)
         if signal != 'HOLD':

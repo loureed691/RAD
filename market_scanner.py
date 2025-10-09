@@ -391,13 +391,22 @@ class MarketScanner:
         results = self.scan_all_pairs()
         best_pairs = results[:n]
         
-        for pair in best_pairs:
+        if not best_pairs:
+            self.logger.warning(f"⚠️  No trading opportunities found in market scan")
+            self.logger.warning(f"   This could mean:")
+            self.logger.warning(f"   - All signals have low confidence (< threshold)")
+            self.logger.warning(f"   - Market conditions are unfavorable")
+            self.logger.warning(f"   - All pairs returned HOLD signals")
+            return []
+        
+        self.logger.info(f"📊 Returning top {len(best_pairs)} trading opportunities:")
+        for i, pair in enumerate(best_pairs, 1):
             self.logger.info(
-                f"Best pair: {pair['symbol']} - "
-                f"Score: {pair['score']:.1f}, "
-                f"Signal: {pair['signal']}, "
-                f"Confidence: {pair['confidence']:.2f}, "
-                f"Regime: {pair['reasons'].get('market_regime', 'N/A')}"
+                f"   {i}. {pair['symbol']}: "
+                f"Score={pair['score']:.1f}, "
+                f"Signal={pair['signal']}, "
+                f"Confidence={pair['confidence']:.2f}, "
+                f"Regime={pair['reasons'].get('market_regime', 'N/A')}"
             )
         
         return best_pairs

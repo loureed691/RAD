@@ -165,12 +165,16 @@ class TradingBot:
         confidence = opportunity.get('confidence')
         
         if not symbol or not signal or confidence is None:
-            self.logger.error(f"Invalid opportunity data: {opportunity}")
+            self.logger.error(f"❌ TRADE REJECTED - Invalid opportunity data: {opportunity}")
+            self.logger.error(f"   Symbol: {symbol}, Signal: {signal}, Confidence: {confidence}")
             return False
+        
+        self.logger.info(f"🔍 EVALUATING TRADE: {symbol}")
+        self.logger.info(f"   Signal: {signal}, Confidence: {confidence:.2f}")
         
         # Check if we already have a position for this symbol
         if self.position_manager.has_position(symbol):
-            self.logger.debug(f"Already have position for {symbol}, skipping")
+            self.logger.info(f"❌ TRADE REJECTED - Already have position for {symbol}")
             return False
         
         # Get current balance
@@ -178,13 +182,15 @@ class TradingBot:
         
         # Check if balance fetch was successful
         if not balance or 'free' not in balance:
-            self.logger.error("Failed to fetch balance from exchange")
+            self.logger.error("❌ TRADE REJECTED - Failed to fetch balance from exchange")
+            self.logger.error(f"   Balance response: {balance}")
             return False
         
         available_balance = float(balance.get('free', {}).get('USDT', 0))
+        self.logger.info(f"   Available balance: ${available_balance:.2f} USDT")
         
         if available_balance <= 0:
-            self.logger.warning("💰 No available balance")
+            self.logger.warning("❌ TRADE REJECTED - No available balance")
             return False
         
         # Check portfolio diversification
@@ -194,8 +200,11 @@ class TradingBot:
         )
         
         if not is_diversified:
-            self.logger.info(f"Diversification check failed for {symbol}: {div_reason}")
+            self.logger.info(f"❌ TRADE REJECTED - Diversification check failed for {symbol}: {div_reason}")
+            self.logger.info(f"   Current positions: {open_position_symbols}")
             return False
+        
+        self.logger.info(f"   ✓ Diversification check passed")
         
         # Check if we should open a position
         current_positions = self.position_manager.get_open_positions_count()
@@ -204,8 +213,11 @@ class TradingBot:
         )
         
         if not should_open:
-            self.logger.info(f"Not opening position: {reason}")
+            self.logger.info(f"❌ TRADE REJECTED - Not opening position: {reason}")
+            self.logger.info(f"   Current positions: {current_positions}/{Config.MAX_OPEN_POSITIONS}")
             return False
+        
+        self.logger.info(f"   ✓ Position limit check passed ({current_positions}/{Config.MAX_OPEN_POSITIONS})")
         
         # Validate trade
         is_valid, reason = self.risk_manager.validate_trade(
@@ -213,19 +225,25 @@ class TradingBot:
         )
         
         if not is_valid:
-            self.logger.info(f"Trade not valid: {reason}")
+            self.logger.info(f"❌ TRADE REJECTED - Trade validation failed: {reason}")
+            self.logger.info(f"   Signal: {signal}, Confidence: {confidence:.2f}")
             return False
+        
+        self.logger.info(f"   ✓ Trade validation passed (confidence: {confidence:.2f})")
         
         # Get market data for position sizing
         ticker = self.client.get_ticker(symbol)
         if not ticker:
+            self.logger.error(f"❌ TRADE REJECTED - Failed to fetch ticker for {symbol}")
             return False
         
         # Bug fix: Safely access 'last' price with validation
         entry_price = ticker.get('last')
         if not entry_price or entry_price <= 0:
-            self.logger.warning(f"Invalid entry price for {symbol}: {entry_price}")
+            self.logger.warning(f"❌ TRADE REJECTED - Invalid entry price for {symbol}: {entry_price}")
             return False
+        
+        self.logger.info(f"   Entry price: ${entry_price:.6f}")
         
         # Get volatility for stop loss calculation
         ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
@@ -291,10 +309,20 @@ class TradingBot:
             kelly_fraction=kelly_fraction * risk_adjustment if kelly_fraction is not None else None
         )
         
+        # Log final trade parameters
+        self.logger.info(f"   ✓ All validation checks passed - Attempting to open position")
+        self.logger.info(f"   Leverage: {leverage}x, Position size: ${position_size:.2f}")
+        self.logger.info(f"   Stop loss: ${stop_loss_price:.6f} ({stop_loss_percentage:.2%})")
+        
         # Open position
         success = self.position_manager.open_position(
             symbol, signal, position_size, leverage, stop_loss_percentage
         )
+        
+        if success:
+            self.logger.info(f"✅ TRADE EXECUTED - Successfully opened {signal} position for {symbol}")
+        else:
+            self.logger.error(f"❌ TRADE FAILED - Position manager failed to open position for {symbol}")
         
         return success
     
@@ -348,6 +376,8 @@ class TradingBot:
     def _background_scanner(self):
         """Background thread that continuously scans for opportunities"""
         self.logger.info("🔍 Background scanner thread started")
+        self.logger.info(f"   Scan interval: {Config.CHECK_INTERVAL}s")
+        self.logger.info(f"   Max workers: {Config.MAX_WORKERS}")
         
         # Give position monitor thread a head start (additional safety measure)
         # This ensures critical position monitoring API calls happen first
@@ -369,8 +399,16 @@ class TradingBot:
                 
                 if opportunities:
                     self.logger.info(f"✅ [Background] Found {len(opportunities)} opportunities (scan took {scan_duration:.1f}s)")
+                    # Log summary of opportunities
+                    for i, opp in enumerate(opportunities[:3], 1):  # Show top 3
+                        self.logger.info(
+                            f"   {i}. {opp.get('symbol', 'UNKNOWN')}: "
+                            f"Signal={opp.get('signal', 'UNKNOWN')}, "
+                            f"Confidence={opp.get('confidence', 0):.2f}, "
+                            f"Score={opp.get('score', 0):.1f}"
+                        )
                 else:
-                    self.logger.debug("[Background] No opportunities found in this scan")
+                    self.logger.info(f"ℹ️  [Background] No opportunities found in this scan (scan took {scan_duration:.1f}s)")
                 
                 # Sleep for the configured scan interval before next scan
                 # Check periodically if we should stop - yield control more frequently
@@ -381,6 +419,7 @@ class TradingBot:
                     
             except Exception as e:
                 self.logger.error(f"❌ Error in background scanner: {e}", exc_info=True)
+                self.logger.error(f"   Scanner will retry after brief delay")
                 # Sleep briefly and continue
                 time.sleep(10)
         
@@ -425,7 +464,7 @@ class TradingBot:
         opportunities = self._get_latest_opportunities()
         
         if not opportunities:
-            self.logger.debug("No opportunities available from background scanner")
+            self.logger.debug("ℹ️  No opportunities available from background scanner")
             return
         
         # Thread-safe access to last update time
@@ -437,34 +476,49 @@ class TradingBot:
         # Validate opportunity age - reject if too old (stale data)
         max_age = Config.CHECK_INTERVAL * Config.STALE_DATA_MULTIPLIER  # Allow up to configurable multiple of the check interval
         if age > max_age:
-            self.logger.warning(f"⚠️  Opportunities are stale (age: {int(age)}s > max: {int(max_age)}s), skipping")
+            self.logger.warning(f"⚠️  OPPORTUNITIES REJECTED - Data is stale (age: {int(age)}s > max: {int(max_age)}s)")
+            self.logger.warning(f"   Background scanner may be slow or encountering errors")
             return
         
+        self.logger.info(f"   ✓ Opportunity data is fresh (age: {int(age)}s <= max: {int(max_age)}s)")
+        
         # Try to execute trades for top opportunities
+        trades_attempted = 0
+        trades_executed = 0
+        
         for opportunity in opportunities:
             try:
                 if self.position_manager.get_open_positions_count() >= Config.MAX_OPEN_POSITIONS:
-                    self.logger.info("Maximum positions reached")
+                    self.logger.info(f"⚠️  Maximum positions reached ({Config.MAX_OPEN_POSITIONS}), stopping trade execution")
                     break
                 
                 # ENHANCEMENT: Validate opportunity dict before using
                 if not isinstance(opportunity, dict) or 'symbol' not in opportunity:
-                    self.logger.warning(f"Invalid opportunity data: {opportunity}")
+                    self.logger.warning(f"⚠️  Invalid opportunity data (not a dict or missing symbol): {opportunity}")
                     continue
                 
+                trades_attempted += 1
+                
                 self.logger.info(
-                    f"🔎 Evaluating opportunity: {opportunity.get('symbol', 'UNKNOWN')} - "
+                    f"🔎 Evaluating opportunity {trades_attempted}/{len(opportunities)}: {opportunity.get('symbol', 'UNKNOWN')} - "
                     f"Score: {opportunity.get('score', 0):.1f}, Signal: {opportunity.get('signal', 'UNKNOWN')}, "
                     f"Confidence: {opportunity.get('confidence', 0):.2f}"
                 )
                 
                 success = self.execute_trade(opportunity)
                 if success:
-                    self.logger.info(f"✅ Trade executed for {opportunity.get('symbol', 'UNKNOWN')}")
+                    trades_executed += 1
+                    self.logger.info(f"✅ Trade {trades_executed} executed for {opportunity.get('symbol', 'UNKNOWN')}")
             
             except Exception as e:
                 self.logger.error(f"Error processing opportunity: {e}", exc_info=True)
                 continue
+        
+        # Summary logging
+        if trades_attempted > 0:
+            self.logger.info(f"📊 SCAN SUMMARY: Attempted {trades_attempted} trades, executed {trades_executed}")
+        else:
+            self.logger.info(f"📊 SCAN SUMMARY: No valid opportunities to attempt")
     
     def run_cycle(self):
         """Run one complete trading cycle"""
