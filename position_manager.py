@@ -577,7 +577,8 @@ class Position:
                     return True, 'stop_loss_stalled_position'
             
             # Check take profit (with small tolerance for floating point precision)
-            if self.take_profit and current_price >= self.take_profit * 0.9999:
+            # Tolerance of 0.00001 (0.001%) handles floating point errors without being too permissive
+            if self.take_profit and current_price >= self.take_profit * 0.99999:
                 return True, 'take_profit'
         else:  # short
             # Check stop loss
@@ -593,7 +594,8 @@ class Position:
                     return True, 'stop_loss_stalled_position'
             
             # Check take profit (with small tolerance for floating point precision)
-            if self.take_profit and current_price <= self.take_profit * 1.0001:
+            # Tolerance of 0.00001 (0.001%) handles floating point errors without being too permissive
+            if self.take_profit and current_price <= self.take_profit * 1.00001:
                 return True, 'take_profit'
         
         # Emergency profit protection - only trigger if TP is unreachable or position has extreme profit
@@ -602,12 +604,12 @@ class Position:
             # Calculate how far we are from the take profit target
             if self.side == 'long':
                 distance_to_tp = (self.take_profit - current_price) / current_price
-                # Use small tolerance for floating point precision
-                passed_tp = current_price >= self.take_profit * 0.9999
+                # Use small tolerance for floating point precision (0.001%)
+                passed_tp = current_price >= self.take_profit * 0.99999
             else:  # short
                 distance_to_tp = (current_price - self.take_profit) / current_price
-                # Use small tolerance for floating point precision
-                passed_tp = current_price <= self.take_profit * 1.0001
+                # Use small tolerance for floating point precision (0.001%)
+                passed_tp = current_price <= self.take_profit * 1.00001
             
             # Only use emergency profit protection if:
             # 1. We've already passed TP (should have closed above, but just in case), OR
