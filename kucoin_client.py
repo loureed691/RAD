@@ -137,10 +137,11 @@ class KuCoinClient:
             except ccxt.RateLimitExceeded as e:
                 last_exception = e
                 # Calculate backoff delay
+                base_delay = 1  # Base delay in seconds
                 if exponential_backoff:
-                    delay = (2 ** attempt)  # 1s, 2s, 4s, 8s...
+                    delay = (2 ** attempt) * base_delay  # 1s, 2s, 4s, 8s...
                 else:
-                    delay = 2  # Fixed 2s delay
+                    delay = base_delay  # Fixed 1s delay
                 
                 # Cap maximum delay at 30 seconds
                 delay = min(delay, 30)
