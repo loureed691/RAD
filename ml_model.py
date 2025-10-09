@@ -1,5 +1,6 @@
 """
 Machine Learning model for signal optimization
+Supports both batch learning (traditional) and incremental learning (River)
 """
 import os
 import numpy as np
@@ -28,13 +29,15 @@ from logger import Logger
 class MLModel:
     """Self-learning ML model for optimizing trading signals with modern gradient boosting ensemble (XGBoost/LightGBM/CatBoost)"""
     
-    def __init__(self, model_path: str = 'models/signal_model.pkl'):
+    def __init__(self, model_path: str = 'models/signal_model.pkl', use_incremental: bool = False):
         self.model_path = model_path
         self.model = None
         self.scaler = StandardScaler()
         self.logger = Logger.get_logger()
         self.training_data = []
         self.feature_importance = {}
+        self.use_incremental = use_incremental
+        self.incremental_model = None
         self.performance_metrics = {
             'win_rate': 0.0,
             'avg_profit': 0.0,
@@ -47,6 +50,16 @@ class MLModel:
         
         # Create models directory if it doesn't exist
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
+        
+        # Initialize incremental model if requested
+        if use_incremental:
+            try:
+                from incremental_ml_model import IncrementalMLModel
+                self.incremental_model = IncrementalMLModel(model_path.replace('.pkl', '_incremental.pkl'))
+                self.logger.info("Using incremental/online learning mode with River")
+            except ImportError:
+                self.logger.warning("River library not installed, falling back to batch learning")
+                self.use_incremental = False
         
         # Load existing model if available
         self.load_model()
@@ -74,6 +87,11 @@ class MLModel:
     def save_model(self):
         """Save trained model to disk"""
         try:
+            # Save incremental model if enabled
+            if self.use_incremental and self.incremental_model is not None:
+                self.incremental_model.save_model()
+                return
+            
             joblib.dump({
                 'model': self.model,
                 'scaler': self.scaler,
@@ -199,6 +217,10 @@ class MLModel:
             signal: 'BUY', 'SELL', or 'HOLD'
             confidence: probability of the prediction
         """
+        # Use incremental model if enabled
+        if self.use_incremental and self.incremental_model is not None:
+            return self.incremental_model.predict(indicators)
+        
         if self.model is None:
             return 'HOLD', 0.0
         
@@ -228,6 +250,13 @@ class MLModel:
             signal: The signal that was generated ('BUY' or 'SELL')
             profit_loss: The profit or loss from the trade (percentage)
         """
+        # Use incremental learning if enabled
+        if self.use_incremental and self.incremental_model is not None:
+            self.incremental_model.record_outcome(indicators, signal, profit_loss)
+            # Sync performance metrics from incremental model
+            self.performance_metrics = self.incremental_model.get_performance_metrics()
+            return
+        
         # Determine label based on outcome with refined thresholds
         if profit_loss > 0.005:  # Profitable trade (>0.5%)
             label = 1 if signal == 'BUY' else 2
@@ -396,6 +425,9 @@ class MLModel:
     
     def get_performance_metrics(self) -> Dict:
         """Get current performance metrics"""
+        # Use incremental model metrics if enabled
+        if self.use_incremental and self.incremental_model is not None:
+            return self.incremental_model.get_performance_metrics()
         return self.performance_metrics.copy()
     
     def get_adaptive_confidence_threshold(self) -> float:
@@ -405,6 +437,10 @@ class MLModel:
         Returns:
             Adjusted confidence threshold (0.5-0.75)
         """
+        # Use incremental model's threshold if enabled
+        if self.use_incremental and self.incremental_model is not None:
+            return self.incremental_model.get_adaptive_confidence_threshold()
+        
         base_threshold = 0.6
         
         # Adjust based on overall win rate
@@ -459,6 +495,10 @@ class MLModel:
             Kelly fraction (0.0-1.0), where 1.0 = 100% of capital
             Returns 0 if insufficient data or negative expectancy
         """
+        # Use incremental model's Kelly fraction if enabled
+        if self.use_incremental and self.incremental_model is not None:
+            return self.incremental_model.get_kelly_fraction()
+        
         total_trades = self.performance_metrics.get('total_trades', 0)
         
         # Need at least 20 trades for reliable Kelly calculation
