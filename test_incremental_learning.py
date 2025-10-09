@@ -341,6 +341,74 @@ def test_batch_vs_incremental():
         traceback.print_exc()
         return False
 
+def test_auto_model_selection():
+    """Test automatic model selection feature"""
+    print("\nTesting automatic model selection...")
+    try:
+        from ml_model import MLModel
+        
+        # Create model with auto-selection enabled
+        test_model_path = 'models/test_auto_select.pkl'
+        model = MLModel(test_model_path, auto_select_best=True)
+        
+        assert model.auto_select_best == True, "Auto-selection should be enabled"
+        assert model.incremental_model is not None, "Incremental model should be initialized"
+        
+        sample_indicators = {
+            'rsi': 60,
+            'macd': 0.5,
+            'macd_signal': 0.4,
+            'macd_diff': 0.1,
+            'stoch_k': 62,
+            'stoch_d': 60,
+            'bb_width': 0.045,
+            'volume_ratio': 1.4,
+            'momentum': 0.013,
+            'roc': 1.2,
+            'atr': 2.7,
+            'close': 103,
+            'bb_high': 108,
+            'bb_low': 98,
+            'bb_mid': 103,
+            'ema_12': 102,
+            'ema_26': 101,
+            'sma_20': 101.5,
+            'sma_50': 100
+        }
+        
+        # Test prediction with auto-selection
+        signal, confidence = model.predict(sample_indicators)
+        assert signal in ['BUY', 'SELL', 'HOLD'], f"Invalid signal: {signal}"
+        
+        # Record outcomes to populate metrics
+        for i in range(5):
+            profit = 0.01 + (i * 0.002)
+            model.record_outcome(sample_indicators, 'BUY', profit)
+        
+        # Check that both models received the outcomes
+        assert model.batch_metrics['total_trades'] == 5, "Batch metrics should have 5 trades"
+        assert model.incremental_metrics['total_trades'] == 5, "Incremental metrics should have 5 trades"
+        
+        print(f"  Auto-selection enabled: {model.auto_select_best}")
+        print(f"  Batch model trades: {model.batch_metrics['total_trades']}")
+        print(f"  Incremental model trades: {model.incremental_metrics['total_trades']}")
+        print(f"  Currently using: {'Incremental' if model.use_incremental else 'Batch'}")
+        print("✓ Auto model selection working")
+        
+        # Cleanup
+        if os.path.exists(test_model_path):
+            os.remove(test_model_path)
+        incr_path = test_model_path.replace('.pkl', '_incremental.pkl')
+        if os.path.exists(incr_path):
+            os.remove(incr_path)
+        
+        return True
+    except Exception as e:
+        print(f"✗ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 def run_all_tests():
     """Run all incremental learning tests"""
     print("=" * 60)
@@ -353,7 +421,8 @@ def run_all_tests():
         test_incremental_learning,
         test_incremental_model_persistence,
         test_ml_model_with_incremental,
-        test_batch_vs_incremental
+        test_batch_vs_incremental,
+        test_auto_model_selection
     ]
     
     results = []

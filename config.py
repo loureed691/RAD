@@ -50,6 +50,7 @@ class Config:
     RETRAIN_INTERVAL = int(os.getenv('RETRAIN_INTERVAL', '86400'))
     ML_MODEL_PATH = os.getenv('ML_MODEL_PATH', 'models/signal_model.pkl')
     USE_INCREMENTAL_LEARNING = os.getenv('USE_INCREMENTAL_LEARNING', 'false').lower() == 'true'
+    AUTO_SELECT_BEST_MODEL = os.getenv('AUTO_SELECT_BEST_MODEL', 'false').lower() == 'true'
     
     # Incremental Learning Parameters (River)
     INCREMENTAL_GRACE_PERIOD = int(os.getenv('INCREMENTAL_GRACE_PERIOD', '50'))

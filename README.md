@@ -4,15 +4,16 @@ A production-grade, fully automated, **self-learning and hyper-intelligent** KuC
 
 ## 🔄 NEW: Online/Incremental Learning with River ⭐⭐⭐⭐⭐ (LATEST!)
 
-**The bot now supports real-time incremental learning!** Revolutionary machine learning upgrade:
+**The bot now supports real-time incremental learning with automatic model selection!** Revolutionary machine learning upgrade:
 
 - **🎓 Learns from Every Trade** - Model updates immediately after each trade outcome
 - **⚡ No Retraining Delays** - Continuous adaptation without batch retraining cycles
 - **🧠 Concept Drift Detection** - ADWIN algorithm automatically detects market regime changes
 - **💾 Memory Efficient** - 90% less memory usage vs batch learning
 - **🎯 Always Current** - Model reflects the latest market behavior instantly
+- **🤖 Auto Model Selection** - Automatically switches to the best performing model (NEW!)
 
-**Expected Impact:** Better adaptation to changing markets, faster learning, lower resource usage
+**Expected Impact:** Better adaptation to changing markets, faster learning, lower resource usage, automatic optimization
 
 👉 **See [INCREMENTAL_LEARNING.md](INCREMENTAL_LEARNING.md) for complete guide** or run `python demo_incremental_learning.py` for interactive demo.
 
@@ -235,6 +236,7 @@ Key configuration parameters in `.env`:
 - **MAX_OPEN_POSITIONS**: Maximum concurrent positions (default: 3)
 - **RETRAIN_INTERVAL**: Seconds between ML model retraining (default: 86400 = 24 hours)
 - **USE_INCREMENTAL_LEARNING**: Enable online/incremental learning with River (default: false) - **NEW! ⭐**
+- **AUTO_SELECT_BEST_MODEL**: Automatically select best performing model (default: false) - **NEW! ⭐**
 - **INCREMENTAL_GRACE_PERIOD**: Samples before tree splitting (default: 50)
 - **INCREMENTAL_MAX_DEPTH**: Maximum tree depth (default: 10)
 - **INCREMENTAL_N_MODELS**: Number of models in ensemble (default: 10)

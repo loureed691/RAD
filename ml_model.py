@@ -29,7 +29,7 @@ from logger import Logger
 class MLModel:
     """Self-learning ML model for optimizing trading signals with modern gradient boosting ensemble (XGBoost/LightGBM/CatBoost)"""
     
-    def __init__(self, model_path: str = 'models/signal_model.pkl', use_incremental: bool = False):
+    def __init__(self, model_path: str = 'models/signal_model.pkl', use_incremental: bool = False, auto_select_best: bool = False):
         self.model_path = model_path
         self.model = None
         self.scaler = StandardScaler()
@@ -38,6 +38,8 @@ class MLModel:
         self.feature_importance = {}
         self.use_incremental = use_incremental
         self.incremental_model = None
+        self.auto_select_best = auto_select_best
+        self.batch_model = None  # Store batch model when auto-selecting
         self.performance_metrics = {
             'win_rate': 0.0,
             'avg_profit': 0.0,
@@ -48,11 +50,32 @@ class MLModel:
             'recent_trades': []  # Track last 20 trades for momentum
         }
         
+        # Metrics for auto-selection
+        self.batch_metrics = {
+            'win_rate': 0.0,
+            'accuracy': 0.0,
+            'total_trades': 0,
+            'avg_profit': 0.0
+        }
+        self.incremental_metrics = {
+            'win_rate': 0.0,
+            'accuracy': 0.0,
+            'total_trades': 0,
+            'avg_profit': 0.0
+        }
+        self.last_model_comparison = datetime.now()
+        self.comparison_interval = 3600  # Compare models every hour
+        
         # Create models directory if it doesn't exist
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
         
-        # Initialize incremental model if requested
-        if use_incremental:
+        # Initialize models based on configuration
+        if auto_select_best:
+            # Initialize both models for automatic selection
+            self.logger.info("🤖 Auto-selecting best model - initializing both batch and incremental models")
+            self._init_both_models()
+        elif use_incremental:
+            # Only initialize incremental model
             try:
                 from incremental_ml_model import IncrementalMLModel
                 self.incremental_model = IncrementalMLModel(model_path.replace('.pkl', '_incremental.pkl'))
@@ -63,6 +86,79 @@ class MLModel:
         
         # Load existing model if available
         self.load_model()
+    
+    def _init_both_models(self):
+        """Initialize both batch and incremental models for auto-selection"""
+        # Initialize batch model (self.model will be loaded in load_model)
+        self.batch_model = None  # Will store batch model reference
+        
+        # Initialize incremental model
+        try:
+            from incremental_ml_model import IncrementalMLModel
+            self.incremental_model = IncrementalMLModel(self.model_path.replace('.pkl', '_incremental.pkl'))
+            self.logger.info("✓ Incremental model initialized")
+        except ImportError:
+            self.logger.warning("River library not installed, auto-selection disabled")
+            self.auto_select_best = False
+            self.use_incremental = False
+    
+    def _select_best_model(self):
+        """Automatically select the best performing model based on recent performance"""
+        if not self.auto_select_best or self.incremental_model is None:
+            return
+        
+        # Only compare if enough time has passed and we have enough data
+        time_since_last = (datetime.now() - self.last_model_comparison).total_seconds()
+        if time_since_last < self.comparison_interval:
+            return
+        
+        # Get metrics from both models
+        batch_trades = self.batch_metrics.get('total_trades', 0)
+        incr_trades = self.incremental_metrics.get('total_trades', 0)
+        
+        # Need at least 10 trades from each model to compare
+        if batch_trades < 10 or incr_trades < 10:
+            return
+        
+        # Calculate composite score (weighted average of metrics)
+        batch_score = (
+            self.batch_metrics.get('win_rate', 0) * 0.4 +
+            self.batch_metrics.get('accuracy', 0) * 0.3 +
+            min(self.batch_metrics.get('avg_profit', 0) * 50, 1.0) * 0.3  # Normalize profit
+        )
+        
+        incr_score = (
+            self.incremental_metrics.get('win_rate', 0) * 0.4 +
+            self.incremental_metrics.get('accuracy', 0) * 0.3 +
+            min(self.incremental_metrics.get('avg_profit', 0) * 50, 1.0) * 0.3  # Normalize profit
+        )
+        
+        # Switch to better model (with 5% hysteresis to avoid frequent switching)
+        if self.use_incremental and batch_score > incr_score * 1.05:
+            self.use_incremental = False
+            self.logger.info(f"🔄 Switching to BATCH model (score: {batch_score:.3f} vs {incr_score:.3f})")
+        elif not self.use_incremental and incr_score > batch_score * 1.05:
+            self.use_incremental = True
+            self.logger.info(f"🔄 Switching to INCREMENTAL model (score: {incr_score:.3f} vs {batch_score:.3f})")
+        
+        self.last_model_comparison = datetime.now()
+    
+    def _update_model_metrics(self, model_type: str, metrics: Dict):
+        """Update metrics for a specific model type"""
+        if model_type == 'batch':
+            self.batch_metrics.update({
+                'win_rate': metrics.get('win_rate', 0),
+                'accuracy': metrics.get('accuracy', metrics.get('win_rate', 0)),  # Use win_rate as fallback
+                'total_trades': metrics.get('total_trades', 0),
+                'avg_profit': metrics.get('avg_profit', 0)
+            })
+        elif model_type == 'incremental':
+            self.incremental_metrics.update({
+                'win_rate': metrics.get('win_rate', 0),
+                'accuracy': metrics.get('accuracy', 0),
+                'total_trades': metrics.get('total_trades', 0),
+                'avg_profit': metrics.get('avg_profit', 0)
+            })
     
     def load_model(self):
         """Load trained model from disk"""
@@ -217,6 +313,10 @@ class MLModel:
             signal: 'BUY', 'SELL', or 'HOLD'
             confidence: probability of the prediction
         """
+        # Check if we should switch models (auto-selection)
+        if self.auto_select_best:
+            self._select_best_model()
+        
         # Use incremental model if enabled
         if self.use_incremental and self.incremental_model is not None:
             return self.incremental_model.predict(indicators)
@@ -250,6 +350,19 @@ class MLModel:
             signal: The signal that was generated ('BUY' or 'SELL')
             profit_loss: The profit or loss from the trade (percentage)
         """
+        # If auto-selecting, record outcome in both models
+        if self.auto_select_best:
+            # Record in batch model
+            self._record_batch_outcome(indicators, signal, profit_loss)
+            # Record in incremental model
+            if self.incremental_model is not None:
+                self.incremental_model.record_outcome(indicators, signal, profit_loss)
+                self._update_model_metrics('incremental', self.incremental_model.get_performance_metrics())
+            
+            # Update batch metrics
+            self._update_model_metrics('batch', self.performance_metrics)
+            return
+        
         # Use incremental learning if enabled
         if self.use_incremental and self.incremental_model is not None:
             self.incremental_model.record_outcome(indicators, signal, profit_loss)
@@ -257,6 +370,11 @@ class MLModel:
             self.performance_metrics = self.incremental_model.get_performance_metrics()
             return
         
+        # Batch learning
+        self._record_batch_outcome(indicators, signal, profit_loss)
+    
+    def _record_batch_outcome(self, indicators: Dict, signal: str, profit_loss: float):
+        """Record outcome for batch learning model"""
         # Determine label based on outcome with refined thresholds
         if profit_loss > 0.005:  # Profitable trade (>0.5%)
             label = 1 if signal == 'BUY' else 2

@@ -119,12 +119,42 @@ class Config:
     # ML Model settings
     ML_MODEL_PATH = 'models/signal_model.pkl'
     USE_INCREMENTAL_LEARNING = True  # Enable incremental learning
+    AUTO_SELECT_BEST_MODEL = True    # Automatically select best model
     
     # Incremental learning parameters
     INCREMENTAL_GRACE_PERIOD = 50    # Number of samples before splitting
     INCREMENTAL_MAX_DEPTH = 10       # Maximum tree depth
     INCREMENTAL_N_MODELS = 10        # Number of models in ensemble
 ```
+
+## Automatic Model Selection (NEW!)
+
+The bot can now automatically select the best performing model:
+
+```python
+# Enable auto-selection in .env
+AUTO_SELECT_BEST_MODEL=true
+
+# Or in code
+model = MLModel('models/signal_model.pkl', auto_select_best=True)
+```
+
+### How It Works
+
+1. **Initialize Both Models**: When auto-selection is enabled, both batch and incremental models are initialized
+2. **Record Outcomes**: Trade outcomes are recorded in both models simultaneously
+3. **Compare Performance**: Every hour, the system compares:
+   - Win rate (40% weight)
+   - Accuracy (30% weight)
+   - Average profit (30% weight)
+4. **Automatic Switching**: The system automatically switches to the better performing model with 5% hysteresis to prevent frequent switching
+
+### Benefits
+
+- **Best of Both Worlds**: Combines the stability of batch learning with the adaptability of incremental learning
+- **No Manual Intervention**: System automatically adapts to market conditions
+- **Seamless Switching**: No downtime when switching between models
+- **Performance-Based**: Always uses the model that's currently performing better
 
 ## Comparison: Batch vs Incremental Learning
 
@@ -151,6 +181,13 @@ class Config:
 - Market conditions change frequently
 - You want to minimize retraining overhead
 - You're trading in fast-moving markets
+
+### Use Auto-Selection When:
+- You're unsure which model performs better
+- Market conditions vary significantly over time
+- You want the system to adapt automatically
+- You want to maximize performance without manual tuning
+- You prefer a hands-off approach
 
 ## Testing
 
