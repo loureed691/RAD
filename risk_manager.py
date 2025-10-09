@@ -688,6 +688,184 @@ class RiskManager:
         
         return optimal_risk
     
+    def calculate_var(self, returns: List[float], confidence_level: float = 0.95) -> float:
+        """
+        Calculate Value at Risk (VaR) at specified confidence level
+        
+        Args:
+            returns: List of historical returns
+            confidence_level: Confidence level (default 95%)
+        
+        Returns:
+            VaR value (maximum expected loss at confidence level)
+        """
+        if not returns or len(returns) < 10:
+            return 0.0
+        
+        try:
+            # Sort returns in ascending order
+            sorted_returns = sorted(returns)
+            
+            # Calculate VaR at the specified percentile
+            index = int((1 - confidence_level) * len(sorted_returns))
+            var = abs(sorted_returns[index])
+            
+            return var
+        except Exception as e:
+            self.logger.error(f"Error calculating VaR: {e}")
+            return 0.0
+    
+    def calculate_cvar(self, returns: List[float], confidence_level: float = 0.95) -> float:
+        """
+        Calculate Conditional Value at Risk (CVaR/Expected Shortfall)
+        Average loss beyond VaR threshold
+        
+        Args:
+            returns: List of historical returns
+            confidence_level: Confidence level (default 95%)
+        
+        Returns:
+            CVaR value (average loss beyond VaR)
+        """
+        if not returns or len(returns) < 10:
+            return 0.0
+        
+        try:
+            # Sort returns in ascending order
+            sorted_returns = sorted(returns)
+            
+            # Calculate cutoff index for VaR
+            var_index = int((1 - confidence_level) * len(sorted_returns))
+            
+            # CVaR is the average of all losses beyond VaR
+            tail_losses = sorted_returns[:var_index + 1]
+            cvar = abs(np.mean(tail_losses)) if tail_losses else 0.0
+            
+            return cvar
+        except Exception as e:
+            self.logger.error(f"Error calculating CVaR: {e}")
+            return 0.0
+    
+    def get_risk_metrics(self, returns: List[float]) -> Dict:
+        """
+        Calculate comprehensive risk metrics including VaR and CVaR
+        
+        Args:
+            returns: List of historical returns
+        
+        Returns:
+            Dictionary with risk metrics
+        """
+        try:
+            var_95 = self.calculate_var(returns, 0.95)
+            var_99 = self.calculate_var(returns, 0.99)
+            cvar_95 = self.calculate_cvar(returns, 0.95)
+            cvar_99 = self.calculate_cvar(returns, 0.99)
+            
+            # Calculate other useful metrics
+            avg_return = np.mean(returns) if returns else 0.0
+            std_return = np.std(returns) if returns else 0.0
+            
+            return {
+                'var_95': var_95,
+                'var_99': var_99,
+                'cvar_95': cvar_95,
+                'cvar_99': cvar_99,
+                'avg_return': avg_return,
+                'std_return': std_return,
+                'sharpe_estimate': avg_return / std_return if std_return > 0 else 0.0
+            }
+        except Exception as e:
+            self.logger.error(f"Error calculating risk metrics: {e}")
+            return {}
+    
+    def detect_market_regime(self, returns: List[float], 
+                           volatility: float,
+                           trend_strength: float = 0.5) -> str:
+        """
+        Detect current market regime for regime-based position sizing
+        
+        Args:
+            returns: Recent returns
+            volatility: Current volatility measure
+            trend_strength: Trend strength indicator (0-1)
+        
+        Returns:
+            Market regime: 'bull_trending', 'bear_trending', 'high_volatility', 
+                          'low_volatility', 'ranging', 'neutral'
+        """
+        try:
+            if not returns or len(returns) < 5:
+                return 'neutral'
+            
+            # Calculate metrics
+            avg_return = np.mean(returns[-10:]) if len(returns) >= 10 else np.mean(returns)
+            recent_vol = np.std(returns[-10:]) if len(returns) >= 10 else np.std(returns)
+            
+            # Regime classification
+            if volatility > 0.06:
+                return 'high_volatility'
+            elif volatility < 0.015:
+                return 'low_volatility'
+            elif avg_return > 0.02 and trend_strength > 0.6:
+                return 'bull_trending'
+            elif avg_return < -0.02 and trend_strength > 0.6:
+                return 'bear_trending'
+            elif abs(avg_return) < 0.01 and trend_strength < 0.4:
+                return 'ranging'
+            else:
+                return 'neutral'
+                
+        except Exception as e:
+            self.logger.error(f"Error detecting market regime: {e}")
+            return 'neutral'
+    
+    def regime_based_position_sizing(self, base_size: float, regime: str, 
+                                    confidence: float) -> float:
+        """
+        Adjust position size based on market regime
+        
+        Args:
+            base_size: Base position size
+            regime: Detected market regime
+            confidence: Signal confidence
+        
+        Returns:
+            Adjusted position size
+        """
+        try:
+            # Regime-based multipliers
+            regime_multipliers = {
+                'bull_trending': 1.3,      # More aggressive in bull trends
+                'bear_trending': 0.6,      # Very conservative in bear trends
+                'high_volatility': 0.5,    # Reduce size in high volatility
+                'low_volatility': 1.2,     # Can be more aggressive in low volatility
+                'ranging': 0.8,            # Slightly conservative in ranging markets
+                'neutral': 1.0             # Standard sizing
+            }
+            
+            multiplier = regime_multipliers.get(regime, 1.0)
+            
+            # Further adjust based on confidence
+            if confidence > 0.8:
+                multiplier *= 1.1
+            elif confidence < 0.6:
+                multiplier *= 0.85
+            
+            adjusted_size = base_size * multiplier
+            
+            self.logger.debug(
+                f"Regime-based sizing: {regime} regime, "
+                f"multiplier={multiplier:.2f}, "
+                f"size: {base_size:.4f} → {adjusted_size:.4f}"
+            )
+            
+            return adjusted_size
+            
+        except Exception as e:
+            self.logger.error(f"Error in regime-based sizing: {e}")
+            return base_size
+    
     def update_drawdown(self, current_balance: float) -> float:
         """
         Update drawdown tracking and return risk adjustment factor
