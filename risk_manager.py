@@ -94,6 +94,10 @@ class RiskManager:
         total_risk = 0.0
         for pos in open_positions:
             # Risk per position = distance to stop loss * position value
+            # Guard against division by zero if entry_price is invalid
+            if pos.entry_price <= 0:
+                continue
+            
             if pos.side == 'long':
                 risk_distance = (pos.entry_price - pos.stop_loss) / pos.entry_price
             else:
@@ -306,6 +310,11 @@ class RiskManager:
         
         # Calculate risk amount
         risk_amount = balance * risk
+        
+        # Guard against invalid entry_price
+        if entry_price <= 0:
+            self.logger.error(f"Invalid entry_price: {entry_price}")
+            return 0.0
         
         # Calculate price distance to stop loss
         price_distance = abs(entry_price - stop_loss_price) / entry_price

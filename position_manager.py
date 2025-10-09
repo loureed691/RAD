@@ -201,12 +201,15 @@ class Position:
         
         # Calculate current P/L and initial target
         current_pnl = self.get_pnl(current_price)
-        initial_distance = abs(self.initial_take_profit - self.entry_price) / self.entry_price
+        # Guard against division by zero if entry_price is somehow invalid
+        initial_distance = abs(self.initial_take_profit - self.entry_price) / self.entry_price if self.entry_price > 0 else 0
         
         # Update profit velocity tracking
         now = datetime.now()
-        time_delta = (now - self.last_pnl_time).total_seconds() / 3600  # hours
-        if time_delta > 0:
+        time_delta_seconds = (now - self.last_pnl_time).total_seconds()
+        # Guard against division by zero - require at least 1 second elapsed
+        if time_delta_seconds > 0:
+            time_delta = time_delta_seconds / 3600  # hours
             pnl_change = current_pnl - self.last_pnl
             self.profit_velocity = pnl_change / time_delta  # % per hour
             self.last_pnl = current_pnl
@@ -256,7 +259,8 @@ class Position:
         # NEW: Profit acceleration - detect if profit is accelerating
         if time_delta > 0.1:  # At least 6 minutes between updates
             old_velocity = (self.last_pnl - 0) / max(time_delta, 0.1)
-            self.profit_acceleration = (self.profit_velocity - old_velocity) / time_delta
+            # Guard against division by zero (already checked above, but defensive)
+            self.profit_acceleration = (self.profit_velocity - old_velocity) / time_delta if time_delta > 0 else 0
             
             # If profit is accelerating rapidly, extend TP more
             if self.profit_acceleration > 0.02:  # Rapid acceleration
@@ -628,6 +632,10 @@ class Position:
         - We want to measure actual portfolio impact, not ROI on margin
         - Multiplying by leverage causes premature profit taking
         """
+        # Guard against division by zero
+        if self.entry_price <= 0:
+            return 0.0
+        
         if self.side == 'long':
             pnl = (current_price - self.entry_price) / self.entry_price
         else:
