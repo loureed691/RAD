@@ -593,6 +593,7 @@ class KuCoinClient:
             Order dict if successful, None otherwise
         """
         def _create_order():
+            nonlocal leverage
             try:
                 # Get current price first for margin checks (use HIGH priority for position-related ticker)
                 ticker = self.get_ticker(symbol, priority=APICallPriority.HIGH)
@@ -805,6 +806,7 @@ class KuCoinClient:
             reduce_only: If True, order only reduces position (safer exits)
         """
         def _create_order():
+            nonlocal leverage
             try:
                 # Validate and cap amount to exchange limits
                 validated_amount = self.validate_and_cap_amount(symbol, amount)
