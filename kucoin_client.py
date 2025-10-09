@@ -26,8 +26,6 @@ class KuCoinClient:
         
         # Initialize API call priority queue system
         # This ensures trading operations always execute before scanning operations
-        self._api_queue = queue.PriorityQueue()
-        self._api_lock = threading.Lock()
         self._pending_critical_calls = 0  # Track critical calls in progress
         self._critical_call_lock = threading.Lock()
         
