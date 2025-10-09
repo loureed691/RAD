@@ -42,6 +42,14 @@ All notable changes to the RAD KuCoin Futures Trading Bot will be documented in 
 
 ### Fixed
 
+#### Leverage Variable Scoping Error in Nested Functions
+- **Problem**: Bot was failing to create market/limit orders with error "cannot access local variable 'leverage' where it is not associated with a value", especially when closing positions (e.g., "Failed to create close order for ALICE/USDT:USDT")
+- **Root Cause**: In `create_market_order()` and `create_limit_order()` methods, the nested `_create_order()` function assigns to the `leverage` variable (e.g., `leverage = adjusted_leverage`). Due to Python's scoping rules, this causes `leverage` to be treated as a local variable throughout the entire nested function, even before the assignment. When code tries to use `leverage` before the assignment (e.g., passing it to `check_available_margin()` or `adjust_position_for_margin()`), it triggers an UnboundLocalError.
+- **Solution**: Added `nonlocal leverage` declaration at the beginning of `_create_order()` functions in both methods to explicitly indicate that `leverage` refers to the outer function's parameter, not a new local variable
+- **Impact**: Orders can now be created and closed successfully without UnboundLocalError. The fix ensures proper variable scoping in nested functions that modify outer scope variables.
+- **Files**: `kucoin_client.py` lines 596, 809
+- **Test**: Added `test_leverage_scoping_fix.py` to demonstrate the bug and verify the fix
+
 #### Isolated Margin Mode Error (Code 330006)
 - **Problem**: Bot was failing to create orders with error "Current mode is set to isolated margin. Please switch to cross margin before making further adjustments." (code: 330006)
 - **Root Cause**: When a position or account is already in isolated margin mode, attempting to set leverage or create orders fails even with the correct margin mode parameter
