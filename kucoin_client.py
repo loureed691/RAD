@@ -8,6 +8,7 @@ import queue
 from typing import List, Dict, Optional, Callable, Any
 from logger import Logger
 from enum import IntEnum
+from kucoin_websocket import KuCoinWebSocket
 
 class APICallPriority(IntEnum):
     """Priority levels for API calls - lower number = higher priority"""
@@ -19,8 +20,8 @@ class APICallPriority(IntEnum):
 class KuCoinClient:
     """Wrapper for KuCoin Futures API using ccxt with API call prioritization"""
     
-    def __init__(self, api_key: str, api_secret: str, api_passphrase: str):
-        """Initialize KuCoin client with priority queue system"""
+    def __init__(self, api_key: str, api_secret: str, api_passphrase: str, enable_websocket: bool = True):
+        """Initialize KuCoin client with priority queue system and WebSocket support"""
         self.logger = Logger.get_logger()
         self.orders_logger = Logger.get_orders_logger()
         
@@ -47,6 +48,24 @@ class KuCoinClient:
             except Exception as e:
                 # Some exchanges may not support this or it might already be set
                 self.logger.warning(f"Could not set position mode: {e}")
+            
+            # Initialize WebSocket for real-time market data
+            self.websocket = None
+            self.enable_websocket = enable_websocket
+            if enable_websocket:
+                try:
+                    self.websocket = KuCoinWebSocket(api_key, api_secret, api_passphrase)
+                    self.websocket.connect()
+                    if self.websocket.is_connected():
+                        self.logger.info("✅ WebSocket API: ENABLED (Real-time market data)")
+                        self.logger.info("   📊 Data Source: WebSocket for tickers & OHLCV")
+                        self.logger.info("   💼 Trading: REST API for orders & positions")
+                    else:
+                        self.logger.warning("⚠️  WebSocket connection failed, will use REST API only")
+                        self.websocket = None
+                except Exception as e:
+                    self.logger.warning(f"⚠️  Could not initialize WebSocket: {e}, will use REST API only")
+                    self.websocket = None
                 
         except Exception as e:
             self.logger.error(f"Failed to initialize KuCoin client: {e}")
@@ -166,6 +185,8 @@ class KuCoinClient:
     def get_ticker(self, symbol: str, priority: APICallPriority = APICallPriority.HIGH) -> Optional[Dict]:
         """Get ticker information for a symbol
         
+        Uses WebSocket data if available, falls back to REST API.
+        
         Args:
             symbol: Trading pair symbol
             priority: Priority level (HIGH for position monitoring, NORMAL for scanning)
@@ -173,6 +194,32 @@ class KuCoinClient:
         Returns:
             Ticker dict or None
         """
+        # Try WebSocket first if enabled and connected
+        if self.websocket and self.websocket.is_connected():
+            ticker = self.websocket.get_ticker(symbol)
+            if ticker:
+                self.logger.debug(f"Retrieved ticker for {symbol} from WebSocket")
+                return ticker
+            else:
+                # Subscribe to ticker if not already subscribed
+                if not self.websocket.has_ticker(symbol):
+                    self.logger.debug(f"Subscribing to ticker: {symbol}")
+                    self.websocket.subscribe_ticker(symbol)
+                    # Wait up to 500ms for ticker data, polling every 50ms
+                    timeout = 0.5
+                    interval = 0.05
+                    waited = 0.0
+                    ticker = None
+                    while waited < timeout:
+                        ticker = self.websocket.get_ticker(symbol)
+                        if ticker:
+                            return ticker
+                        time.sleep(interval)
+                        waited += interval
+                # Fall through to REST API if no WebSocket data
+                self.logger.debug(f"No WebSocket data for {symbol}, using REST API")
+        
+        # Fallback to REST API
         def _fetch():
             try:
                 ticker = self.exchange.fetch_ticker(symbol)
@@ -186,9 +233,41 @@ class KuCoinClient:
     def get_ohlcv(self, symbol: str, timeframe: str = '1h', limit: int = 100) -> List:
         """Get OHLCV data for a symbol with retry logic
         
+        Uses WebSocket data if available, falls back to REST API.
         This is typically used for SCANNING, so uses NORMAL priority by default.
         Will wait for critical trading operations to complete first.
+        
+        Args:
+            symbol: Trading pair symbol
+            timeframe: Timeframe (1h, 4h, 1d, etc.)
+            limit: Number of candles to retrieve
+            
+        Returns:
+            List of OHLCV candles
         """
+        # Try WebSocket first if enabled and connected
+        if self.websocket and self.websocket.is_connected():
+            ohlcv = self.websocket.get_ohlcv(symbol, timeframe, limit)
+            if ohlcv and len(ohlcv) >= min(50, limit):  # Ensure we have enough data
+                self.logger.debug(f"Retrieved {len(ohlcv)} candles for {symbol} {timeframe} from WebSocket")
+                return ohlcv
+            else:
+                # Subscribe to candles if not already subscribed
+                if not self.websocket.has_candles(symbol, timeframe):
+                    self.logger.debug(f"Subscribing to candles: {symbol} {timeframe}")
+                    self.websocket.subscribe_candles(symbol, timeframe)
+                    # Give it a moment to receive data
+                    time.sleep(0.5)
+                    ohlcv = self.websocket.get_ohlcv(symbol, timeframe, limit)
+                    if ohlcv and len(ohlcv) >= min(50, limit):
+                        return ohlcv
+                # Fall through to REST API if insufficient WebSocket data
+                if ohlcv:
+                    self.logger.debug(f"Insufficient WebSocket data for {symbol} (got {len(ohlcv)}, need {min(50, limit)}), using REST API")
+                else:
+                    self.logger.debug(f"No WebSocket data for {symbol} {timeframe}, using REST API")
+        
+        # Fallback to REST API
         def _fetch():
             max_retries = 3
             retry_delay = 1
@@ -200,7 +279,7 @@ class KuCoinClient:
                         self.logger.warning(f"Empty OHLCV data returned for {symbol}")
                         return []
                     
-                    self.logger.debug(f"Fetched {len(ohlcv)} candles for {symbol}")
+                    self.logger.debug(f"Fetched {len(ohlcv)} candles for {symbol} from REST API")
                     return ohlcv
                 except Exception as e:
                     if attempt < max_retries - 1:
@@ -1241,3 +1320,10 @@ class KuCoinClient:
         except Exception as e:
             self.logger.error(f"Error validating price slippage: {e}")
             return False, 0.0
+    
+    def close(self):
+        """Close connections and cleanup resources"""
+        if self.websocket:
+            self.logger.info("Closing WebSocket connection...")
+            self.websocket.disconnect()
+            self.websocket = None

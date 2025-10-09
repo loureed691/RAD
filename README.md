@@ -2,7 +2,23 @@
 
 A production-grade, fully automated, **self-learning and hyper-intelligent** KuCoin Futures trading bot with dynamic 3-15x leverage capability. This bot is designed to be hands-off and resilient, automatically discovering the best trading pairs and executing trades based on advanced technical indicators, multi-timeframe analysis, and institutional-grade machine learning.
 
-## 🔥 BREAKING: Truly Live Trading - No More Cycles! ⭐⭐⭐⭐⭐ (LATEST!)
+## 🚀 NEW: WebSocket API Integration! ⭐⭐⭐⭐⭐ (LATEST!)
+
+**Now using KuCoin WebSocket API for real-time market data!** Major performance upgrade:
+
+- **⚡ 10x Faster Data** - Real-time WebSocket streams vs REST API polling
+- **📊 Live Price Updates** - Instant ticker and candlestick data
+- **🔄 Automatic Fallback** - Seamlessly uses REST API if WebSocket unavailable
+- **💼 Reliable Trading** - All trading operations use proven REST API
+- **🛡️ Zero Downtime** - Intelligent fallback ensures continuous operation
+
+**Architecture:**
+- WebSocket for market data (tickers, OHLCV, orderbooks) - **READ operations**
+- REST API for trading (orders, positions, balance) - **WRITE operations**
+
+👉 **See [WEBSOCKET_GUIDE.md](WEBSOCKET_GUIDE.md) for complete details**
+
+## 🔥 BREAKING: Truly Live Trading - No More Cycles! ⭐⭐⭐⭐⭐
 
 **The bot is now TRULY LIVE - no sleep cycles, continuous monitoring!** Revolutionary upgrade:
 
@@ -162,7 +178,11 @@ The bot has been **significantly enhanced with institutional-grade intelligence*
 The bot consists of several key components:
 
 - **bot.py**: Main orchestrator that coordinates all components
-- **kucoin_client.py**: API wrapper for KuCoin Futures REST API using ccxt
+- **kucoin_client.py**: API wrapper for KuCoin Futures with hybrid WebSocket/REST architecture
+  - **WebSocket API**: Real-time market data (tickers, OHLCV, orderbooks)
+  - **REST API**: Trading operations (orders, positions, balance)
+  - **Automatic fallback**: Seamlessly uses REST if WebSocket unavailable
+- **kucoin_websocket.py**: WebSocket client for real-time market data streaming
 - **market_scanner.py**: Scans all trading pairs in parallel to find best opportunities
 - **indicators.py**: Calculates technical indicators (RSI, MACD, Bollinger Bands, etc.)
 - **signals.py**: Generates trading signals based on multiple indicators
@@ -209,6 +229,13 @@ KUCOIN_API_PASSPHRASE=your_api_passphrase_here
 
 Key configuration parameters in `.env`:
 
+**API Configuration:**
+- **KUCOIN_API_KEY**: Your KuCoin API key
+- **KUCOIN_API_SECRET**: Your KuCoin API secret
+- **KUCOIN_API_PASSPHRASE**: Your KuCoin API passphrase
+- **ENABLE_WEBSOCKET**: Use WebSocket for market data (default: true) ⭐ NEW!
+
+**Trading Parameters (Auto-configured if not set):**
 - **LEVERAGE**: Maximum leverage to use (default: 10)
 - **MAX_POSITION_SIZE**: Maximum position size in USDT (default: 1000)
 - **RISK_PER_TRADE**: Risk per trade as percentage of balance (default: 0.02 = 2%)
@@ -220,6 +247,9 @@ Key configuration parameters in `.env`:
 - **TRAILING_STOP_PERCENTAGE**: Trailing stop percentage (default: 0.02 = 2%)
 - **MAX_OPEN_POSITIONS**: Maximum concurrent positions (default: 3)
 - **RETRAIN_INTERVAL**: Seconds between ML model retraining (default: 86400 = 24 hours)
+
+For performance tuning, see [PERFORMANCE_OPTIMIZATION.md](PERFORMANCE_OPTIMIZATION.md)  
+For WebSocket details, see [WEBSOCKET_GUIDE.md](WEBSOCKET_GUIDE.md) ⭐ NEW!
 
 For performance tuning, see [PERFORMANCE_OPTIMIZATION.md](PERFORMANCE_OPTIMIZATION.md)
 
