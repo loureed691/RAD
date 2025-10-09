@@ -587,7 +587,7 @@ class Position:
                                     return True
             
             return False
-        except:
+        except (KeyError, ValueError, ZeroDivisionError, TypeError, pd.errors.EmptyDataError):
             return False
 
 
