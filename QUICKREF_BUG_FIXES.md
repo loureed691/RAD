@@ -67,7 +67,7 @@ with self._scan_lock:
     age = (datetime.now() - self._last_opportunity_update).total_seconds()
 
 # Validate freshness
-max_age = Config.CHECK_INTERVAL * 2
+max_age = Config.CHECK_INTERVAL * Config.STALE_DATA_MULTIPLIER
 if age > max_age:
     self.logger.warning(f"⚠️  Opportunities are stale (age: {int(age)}s > max: {int(max_age)}s), skipping")
     return
@@ -133,6 +133,10 @@ LIVE_LOOP_INTERVAL=0.1   # Less CPU usage
 # Adjust scan interval (affects max_age)
 CHECK_INTERVAL=30   # Faster scanning
 CHECK_INTERVAL=120  # Slower scanning
+
+# Adjust stale data threshold (default: 2)
+STALE_DATA_MULTIPLIER=3  # More tolerant of old data
+STALE_DATA_MULTIPLIER=1  # Stricter freshness requirement
 ```
 
 ---

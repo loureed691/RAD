@@ -246,7 +246,7 @@ CHECK_INTERVAL=120  # max_age = 240s
 ### Future Enhancements
 
 Consider adding:
-1. Configurable max age multiplier (currently hardcoded 2x)
+1. ✅ **COMPLETED**: Configurable max age multiplier (implemented as `Config.STALE_DATA_MULTIPLIER`, default: 2)
 2. Metrics/logging for opportunity age distribution
 3. Alerting when stale opportunities are frequent
 4. Performance profiling hooks for lock contention
