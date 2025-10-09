@@ -169,7 +169,21 @@ class KuCoinWebSocket:
     def _on_close(self, ws, close_status_code, close_msg):
         """Handle WebSocket connection closed"""
         self.connected = False
-        self.logger.warning(f"WebSocket connection closed: {close_status_code} - {close_msg}")
+        
+        # Log at appropriate level based on close code
+        # 1000 = Normal close (graceful disconnect)
+        # 1001 = Going away (e.g., server going down)
+        # 1006 = Abnormal close (no close frame)
+        # Other codes = Various error conditions
+        if close_status_code == 1000:
+            # Normal close - log at DEBUG level to reduce noise
+            self.logger.debug(f"WebSocket connection closed normally: {close_status_code} - {close_msg}")
+        elif close_status_code in (1001, None):
+            # Going away or unknown - log at INFO level
+            self.logger.info(f"WebSocket connection closed: {close_status_code} - {close_msg}")
+        else:
+            # Abnormal close - log at WARNING level
+            self.logger.warning(f"WebSocket connection closed unexpectedly: {close_status_code} - {close_msg}")
         
         # Attempt reconnection if enabled
         if self.should_reconnect:
