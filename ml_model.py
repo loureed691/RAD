@@ -11,10 +11,13 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier,
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.calibration import CalibratedClassifierCV
+from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
+from catboost import CatBoostClassifier
 from logger import Logger
 
 class MLModel:
-    """Self-learning ML model for optimizing trading signals with ensemble methods"""
+    """Self-learning ML model for optimizing trading signals with modern gradient boosting ensemble (XGBoost/LightGBM/CatBoost)"""
     
     def __init__(self, model_path: str = 'models/signal_model.pkl'):
         self.model_path = model_path
@@ -269,13 +272,13 @@ class MLModel:
         self.logger.debug(f"Recorded outcome: signal={signal}, P/L={profit_loss:.4f}, label={label}, Win rate: {self.performance_metrics.get('win_rate', 0):.2%}")
     
     def train(self, min_samples: int = 100):
-        """Train or retrain the model with ensemble methods for improved accuracy"""
+        """Train or retrain the model with modern gradient boosting ensemble (XGBoost/LightGBM/CatBoost) for improved accuracy and speed"""
         if len(self.training_data) < min_samples:
             self.logger.info(f"Not enough training data ({len(self.training_data)}/{min_samples})")
             return False
         
         try:
-            self.logger.info(f"Training ensemble model with {len(self.training_data)} samples...")
+            self.logger.info(f"Training modern gradient boosting ensemble with {len(self.training_data)} samples...")
             
             # Prepare data
             X = np.array([d['features'] for d in self.training_data])
@@ -290,35 +293,54 @@ class MLModel:
             X_train_scaled = self.scaler.fit_transform(X_train)
             X_test_scaled = self.scaler.transform(X_test)
             
-            # Create ensemble model with multiple algorithms for robustness
-            # GradientBoosting: Best for sequential error correction
-            gb_model = GradientBoostingClassifier(
-                n_estimators=150,
-                max_depth=6,
-                learning_rate=0.1,
-                min_samples_split=5,
-                min_samples_leaf=2,
+            # Create ensemble model with modern gradient boosting algorithms
+            # XGBoost: Fastest and most accurate gradient boosting with GPU support
+            xgb_model = XGBClassifier(
+                n_estimators=100,  # Reduced from 150 for faster training
+                max_depth=5,  # Reduced from 6 for regularization
+                learning_rate=0.15,  # Increased from 0.1 for faster convergence
                 subsample=0.8,
-                random_state=42
+                colsample_bytree=0.8,
+                tree_method='hist',  # Faster histogram-based algorithm
+                enable_categorical=False,
+                random_state=42,
+                n_jobs=-1,  # Use all CPU cores
+                verbosity=0  # Suppress warnings
             )
             
-            # RandomForest: Best for feature diversity
-            rf_model = RandomForestClassifier(
-                n_estimators=100,
-                max_depth=8,
-                min_samples_split=4,
-                min_samples_leaf=2,
-                random_state=42
+            # LightGBM: Fast gradient boosting with leaf-wise growth
+            lgb_model = LGBMClassifier(
+                n_estimators=100,  # Reduced from 150 for faster training
+                max_depth=5,
+                learning_rate=0.15,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                num_leaves=31,  # LightGBM-specific parameter
+                random_state=42,
+                n_jobs=-1,
+                verbosity=-1  # Suppress warnings
+            )
+            
+            # CatBoost: Handles categorical features natively, robust to overfitting
+            cat_model = CatBoostClassifier(
+                iterations=100,  # Reduced from 150 for faster training
+                depth=5,
+                learning_rate=0.15,
+                random_state=42,
+                thread_count=-1,  # Use all CPU cores
+                verbose=False  # Suppress output
             )
             
             # Use VotingClassifier for ensemble approach (soft voting for probabilities)
+            # Combine all three modern gradient boosting methods for maximum accuracy
             ensemble = VotingClassifier(
                 estimators=[
-                    ('gb', gb_model),
-                    ('rf', rf_model)
+                    ('xgb', xgb_model),
+                    ('lgb', lgb_model),
+                    ('cat', cat_model)
                 ],
                 voting='soft',  # Use probability averaging
-                weights=[2, 1]  # Give more weight to GradientBoosting (empirically better)
+                weights=[3, 2, 2]  # Give more weight to XGBoost (fastest and most reliable)
             )
             
             # Calibrate the ensemble for better probability estimates
@@ -329,10 +351,11 @@ class MLModel:
             train_score = self.model.score(X_train_scaled, y_train)
             test_score = self.model.score(X_test_scaled, y_test)
             
-            # Get feature importance from the base GradientBoosting model
+            # Get feature importance from the base XGBoost model
             try:
-                gb_estimator = ensemble.estimators_[0]  # Get GradientBoosting
-                if hasattr(gb_estimator, 'feature_importances_'):
+                # Access the base estimator through CalibratedClassifierCV
+                base_estimator = ensemble.estimators_[0]  # Get XGBoost from VotingClassifier
+                if hasattr(base_estimator, 'feature_importances_'):
                     feature_names = [
                         'rsi', 'macd', 'macd_signal', 'macd_diff', 'stoch_k', 'stoch_d',
                         'bb_width', 'volume_ratio', 'momentum', 'roc', 'atr',
@@ -342,16 +365,16 @@ class MLModel:
                         'rsi_momentum', 'volume_trend', 'volatility_regime', 'sentiment_score',
                         'momentum_accel', 'mtf_trend', 'breakout_potential', 'mean_reversion'
                     ]
-                    importances = gb_estimator.feature_importances_
+                    importances = base_estimator.feature_importances_
                     self.feature_importance = {name: float(imp) for name, imp in zip(feature_names, importances)}
                     
                     # Log top 5 features
                     top_features = sorted(self.feature_importance.items(), key=lambda x: x[1], reverse=True)[:5]
                     self.logger.info(f"Top features: {', '.join([f'{k}:{v:.3f}' for k, v in top_features])}")
             except Exception as e:
-                self.logger.warning(f"Could not extract feature importance: {e}")
+                self.logger.debug(f"Could not extract feature importance: {e}")
             
-            self.logger.info(f"Ensemble model trained - Train accuracy: {train_score:.3f}, Test accuracy: {test_score:.3f}")
+            self.logger.info(f"Modern gradient boosting ensemble trained - Train accuracy: {train_score:.3f}, Test accuracy: {test_score:.3f}")
             
             # Save model
             self.save_model()
