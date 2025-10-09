@@ -256,10 +256,25 @@ class ExecutionAlgorithms:
                 # Place limit order for visible amount
                 slice_amount = min(visible_amount, remaining_amount)
                 
-                order = self.client.create_limit_order(
-                    symbol, side, slice_amount, price, leverage,
-                    post_only=True  # Maker order for better fees
-                )
+                # Attempt to call create_limit_order with post_only, handle missing method or unsupported parameter
+                try:
+                    if hasattr(self.client, "create_limit_order"):
+                        try:
+                            order = self.client.create_limit_order(
+                                symbol, side, slice_amount, price, leverage,
+                                post_only=True  # Maker order for better fees
+                            )
+                        except TypeError as te:
+                            self.logger.error(
+                                f"create_limit_order does not accept 'post_only' parameter: {te}"
+                            )
+                            order = None
+                    else:
+                        self.logger.error("Client does not implement create_limit_order method.")
+                        order = None
+                except Exception as e:
+                    self.logger.error(f"Error calling create_limit_order: {e}")
+                    order = None
                 
                 if not order:
                     self.logger.warning("Failed to create iceberg slice, retrying...")
