@@ -119,7 +119,7 @@ class BacktestEngine:
             total_period = train_period_days + test_period_days
             
             start_idx = 0
-            while start_idx + min_train_samples < len(data):
+            while start_idx + train_period_days * 24 + test_period_days * 24 <= len(data):
                 # Define train and test windows
                 train_end_idx = min(start_idx + train_period_days * 24, len(data))  # Assuming hourly data
                 test_end_idx = min(train_end_idx + test_period_days * 24, len(data))
