@@ -288,41 +288,49 @@ class TradingBot:
     def update_open_positions(self):
         """Update existing open positions - called frequently for live monitoring"""
         # Update existing positions
-        for symbol, pnl, position in self.position_manager.update_positions():
-            try:
-                profit_icon = "📈" if pnl > 0 else "📉"
-                self.logger.info(f"{profit_icon} Position closed: {symbol}, P/L: {pnl:.2%}")
+        # CRITICAL FIX: Wrap generator iteration in try/except to handle generator exceptions
+        # Without this, if update_positions() raises during iteration (e.g., API errors),
+        # the entire update_open_positions() call fails and NO positions get updated
+        try:
+            for symbol, pnl, position in self.position_manager.update_positions():
+                try:
+                    profit_icon = "📈" if pnl > 0 else "📉"
+                    self.logger.info(f"{profit_icon} Position closed: {symbol}, P/L: {pnl:.2%}")
+                    
+                    # Record trade for analytics
+                    trade_duration = (datetime.now() - position.entry_time).total_seconds() / 60
+                    
+                    # DEFENSIVE: Ensure leverage is not zero (should never happen, but be safe)
+                    leverage = position.leverage if position.leverage > 0 else 1
+                    
+                    self.analytics.record_trade({
+                        'symbol': symbol,
+                        'side': position.side,
+                        'entry_price': position.entry_price,
+                        'exit_price': position.entry_price * (1 + pnl / leverage) if position.side == 'long' else position.entry_price * (1 - pnl / leverage),
+                        'pnl': pnl,
+                        'pnl_pct': pnl,
+                        'duration': trade_duration,
+                        'leverage': position.leverage
+                    })
+                    
+                    # Record outcome for ML model
+                    ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
+                    df = Indicators.calculate_all(ohlcv)
+                    indicators = Indicators.get_latest_indicators(df)
+                    
+                    signal = 'BUY' if position.side == 'long' else 'SELL'
+                    self.ml_model.record_outcome(indicators, signal, pnl)
+                    
+                    # Record outcome for risk manager (for streak tracking)
+                    self.risk_manager.record_trade_outcome(pnl)
                 
-                # Record trade for analytics
-                trade_duration = (datetime.now() - position.entry_time).total_seconds() / 60
-                
-                # DEFENSIVE: Ensure leverage is not zero (should never happen, but be safe)
-                leverage = position.leverage if position.leverage > 0 else 1
-                
-                self.analytics.record_trade({
-                    'symbol': symbol,
-                    'side': position.side,
-                    'entry_price': position.entry_price,
-                    'exit_price': position.entry_price * (1 + pnl / leverage) if position.side == 'long' else position.entry_price * (1 - pnl / leverage),
-                    'pnl': pnl,
-                    'pnl_pct': pnl,
-                    'duration': trade_duration,
-                    'leverage': position.leverage
-                })
-                
-                # Record outcome for ML model
-                ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
-                df = Indicators.calculate_all(ohlcv)
-                indicators = Indicators.get_latest_indicators(df)
-                
-                signal = 'BUY' if position.side == 'long' else 'SELL'
-                self.ml_model.record_outcome(indicators, signal, pnl)
-                
-                # Record outcome for risk manager (for streak tracking)
-                self.risk_manager.record_trade_outcome(pnl)
-            
-            except Exception as e:
-                self.logger.error(f"Error recording closed position {symbol}: {e}", exc_info=True)
+                except Exception as e:
+                    self.logger.error(f"Error recording closed position {symbol}: {e}", exc_info=True)
+        except Exception as e:
+            # Generator-level exception (e.g., API error fetching positions)
+            # Log and continue - position monitor will retry on next cycle
+            self.logger.error(f"Error during position update iteration: {e}", exc_info=True)
     
     def _background_scanner(self):
         """Background thread that continuously scans for opportunities"""
