@@ -381,12 +381,21 @@ class RiskManager:
         """
         # Check if we have too many open positions
         if current_positions >= self.max_open_positions:
+            self.logger.debug(
+                f"Cannot open position: max positions reached "
+                f"({current_positions}/{self.max_open_positions})"
+            )
             return False, f"Maximum positions reached ({self.max_open_positions})"
         
         # Check if we have sufficient balance
         if balance < min_balance:
+            self.logger.debug(f"Cannot open position: insufficient balance ${balance:.2f} < ${min_balance}")
             return False, f"Insufficient balance (${balance:.2f} < ${min_balance})"
         
+        self.logger.debug(
+            f"Position check passed: {current_positions}/{self.max_open_positions} positions, "
+            f"balance ${balance:.2f}"
+        )
         return True, "OK"
     
     def validate_trade(self, symbol: str, signal: str, confidence: float, 
@@ -399,11 +408,16 @@ class RiskManager:
         """
         # Check confidence threshold
         if confidence < min_confidence:
+            self.logger.debug(
+                f"Trade validation failed for {symbol}: "
+                f"confidence {confidence:.2f} < threshold {min_confidence:.2f}"
+            )
             return False, f"Confidence too low ({confidence:.2f} < {min_confidence})"
         
         # Additional validation can be added here
         # e.g., check for recent losses, market conditions, etc.
         
+        self.logger.debug(f"Trade validation passed for {symbol}: confidence {confidence:.2f} >= {min_confidence:.2f}")
         return True, "OK"
     
     def calculate_stop_loss_percentage(self, volatility: float) -> float:
@@ -614,6 +628,7 @@ class RiskManager:
             Tuple of (is_diversified, reason)
         """
         if not open_positions:
+            self.logger.debug(f"Diversification check passed for {new_symbol}: no existing positions")
             return True, "No existing positions"
         
         new_group = self.get_symbol_group(new_symbol)
@@ -637,12 +652,21 @@ class RiskManager:
             max_group_concentration = max(2, int(self.max_open_positions * 0.4))
         
         if current_count >= max_group_concentration:
+            self.logger.debug(
+                f"Diversification check failed for {new_symbol}: "
+                f"too many positions in {new_group} group ({current_count}/{max_group_concentration})"
+            )
             return False, f"Too many positions in {new_group} group ({current_count}/{max_group_concentration})"
         
         # Don't allow exact duplicate symbols
         if new_symbol in open_positions:
+            self.logger.debug(f"Diversification check failed: already have position in {new_symbol}")
             return False, f"Already have position in {new_symbol}"
         
+        self.logger.debug(
+            f"Diversification check passed for {new_symbol}: "
+            f"{new_group} group has {current_count}/{max_group_concentration} positions"
+        )
         return True, "Portfolio diversification OK"
     
     def calculate_kelly_criterion(self, win_rate: float, avg_win: float, 
