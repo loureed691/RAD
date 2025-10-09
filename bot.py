@@ -121,6 +121,7 @@ class TradingBot:
         # Position monitoring state - separate from scanning
         self._position_monitor_thread = None
         self._position_monitor_running = False
+        self._position_monitor_lock = threading.Lock()  # Lock for position monitor timing
         self._last_position_check = datetime.now()
         
         # Setup signal handlers for graceful shutdown
@@ -367,15 +368,19 @@ class TradingBot:
             try:
                 # Only update if we have positions
                 if self.position_manager.get_open_positions_count() > 0:
-                    time_since_last = (datetime.now() - self._last_position_check).total_seconds()
+                    # Thread-safe access to timing variable
+                    with self._position_monitor_lock:
+                        time_since_last = (datetime.now() - self._last_position_check).total_seconds()
                     
                     # Update positions at configured interval
                     if time_since_last >= Config.POSITION_UPDATE_INTERVAL:
                         self.update_open_positions()
-                        self._last_position_check = datetime.now()
+                        # Thread-safe update of timing variable
+                        with self._position_monitor_lock:
+                            self._last_position_check = datetime.now()
                 
                 # Short sleep to avoid CPU hogging but stay responsive
-                time.sleep(0.05)  # 50ms - very responsive for position monitoring
+                time.sleep(Config.LIVE_LOOP_INTERVAL)  # Use config constant for consistency
                 
             except Exception as e:
                 self.logger.error(f"❌ Error in position monitor: {e}", exc_info=True)
@@ -397,8 +402,17 @@ class TradingBot:
             self.logger.debug("No opportunities available from background scanner")
             return
         
-        age = (datetime.now() - self._last_opportunity_update).total_seconds()
+        # Thread-safe access to last update time
+        with self._scan_lock:
+            age = (datetime.now() - self._last_opportunity_update).total_seconds()
+        
         self.logger.info(f"📊 Processing {len(opportunities)} opportunities from background scanner (age: {int(age)}s)")
+        
+        # Validate opportunity age - reject if too old (stale data)
+        max_age = Config.CHECK_INTERVAL * 2  # Allow up to 2x the check interval
+        if age > max_age:
+            self.logger.warning(f"⚠️  Opportunities are stale (age: {int(age)}s > max: {int(max_age)}s), skipping")
+            return
         
         # Try to execute trades for top opportunities
         for opportunity in opportunities:
