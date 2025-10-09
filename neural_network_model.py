@@ -12,8 +12,10 @@ try:
     from tensorflow import keras
     from tensorflow.keras import layers, models, callbacks
     TENSORFLOW_AVAILABLE = True
+    KerasModel = keras.Model
 except ImportError:
     TENSORFLOW_AVAILABLE = False
+    KerasModel = object  # Fallback type
     Logger.get_logger().warning("TensorFlow not available. Neural network features disabled.")
 
 class NeuralNetworkModel:
@@ -35,7 +37,7 @@ class NeuralNetworkModel:
         # Load existing model if available
         self.load_model()
     
-    def create_model(self) -> Optional[keras.Model]:
+    def create_model(self) -> Optional[KerasModel]:
         """Create a neural network architecture optimized for trading signals"""
         if not TENSORFLOW_AVAILABLE:
             return None

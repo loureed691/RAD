@@ -798,9 +798,14 @@ class RiskManager:
             if not returns or len(returns) < 5:
                 return 'neutral'
             
-            # Calculate metrics
-            avg_return = np.mean(returns[-10:]) if len(returns) >= 10 else np.mean(returns)
-            recent_vol = np.std(returns[-10:]) if len(returns) >= 10 else np.std(returns)
+            # Calculate metrics - handle both list and numpy array inputs
+            if isinstance(returns, np.ndarray):
+                returns_list = returns.tolist()
+            else:
+                returns_list = returns
+            
+            avg_return = np.mean(returns_list[-10:]) if len(returns_list) >= 10 else np.mean(returns_list)
+            recent_vol = np.std(returns_list[-10:]) if len(returns_list) >= 10 else np.std(returns_list)
             
             # Regime classification
             if volatility > 0.06:
