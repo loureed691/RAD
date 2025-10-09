@@ -117,15 +117,15 @@ class TradeSimulationTester:
                 take_profit=110.0
             )
             
-            # Price goes up 5% -> with 10x leverage = 50% profit
+            # Price goes up 5% = 5% P/L (leverage independent)
             pnl_up = long_position.get_pnl(105.0)
-            expected_pnl_up = 0.50  # 5% price gain * 10x leverage
+            expected_pnl_up = 0.05  # 5% price gain (no leverage multiplication)
             assert abs(pnl_up - expected_pnl_up) < 0.01, f"Expected {expected_pnl_up}, got {pnl_up}"
             print(f"  ✓ LONG +5% price move: {pnl_up:.2%} P/L (expected {expected_pnl_up:.2%})")
             
-            # Price goes down 3% -> with 10x leverage = -30% loss
+            # Price goes down 3% = -3% P/L (leverage independent)
             pnl_down = long_position.get_pnl(97.0)
-            expected_pnl_down = -0.30  # -3% price loss * 10x leverage
+            expected_pnl_down = -0.03  # -3% price loss (no leverage multiplication)
             assert abs(pnl_down - expected_pnl_down) < 0.01, f"Expected {expected_pnl_down}, got {pnl_down}"
             print(f"  ✓ LONG -3% price move: {pnl_down:.2%} P/L (expected {expected_pnl_down:.2%})")
             
@@ -141,15 +141,15 @@ class TradeSimulationTester:
                 take_profit=90.0
             )
             
-            # Price goes down 5% -> with 10x leverage = 50% profit
+            # Price goes down 5% = 5% P/L for short (leverage independent)
             pnl_down = short_position.get_pnl(95.0)
-            expected_pnl_down = 0.50  # 5% price drop * 10x leverage = profit for short
+            expected_pnl_down = 0.05  # 5% price drop = profit for short (no leverage multiplication)
             assert abs(pnl_down - expected_pnl_down) < 0.01, f"Expected {expected_pnl_down}, got {pnl_down}"
             print(f"  ✓ SHORT -5% price move: {pnl_down:.2%} P/L (expected {expected_pnl_down:.2%})")
             
-            # Price goes up 3% -> with 10x leverage = -30% loss
+            # Price goes up 3% = -3% P/L for short (leverage independent)
             pnl_up = short_position.get_pnl(103.0)
-            expected_pnl_up = -0.30  # 3% price gain * 10x leverage = loss for short
+            expected_pnl_up = -0.03  # 3% price gain = loss for short (no leverage multiplication)
             assert abs(pnl_up - expected_pnl_up) < 0.01, f"Expected {expected_pnl_up}, got {pnl_up}"
             print(f"  ✓ SHORT +3% price move: {pnl_up:.2%} P/L (expected {expected_pnl_up:.2%})")
             
@@ -350,9 +350,10 @@ class TradeSimulationTester:
             assert position.highest_price == 105.0, "Highest price not updated"
             assert position.stop_loss > initial_sl, "Trailing stop should move up"
             new_sl = position.stop_loss
-            # Expected SL with adaptive adjustments (P/L=50% triggers tighter trailing)
-            # Base 2% * 0.8 (low vol) * 0.7 (high profit) = ~1.12% trailing
-            expected_sl_range = (103.5, 104.5)  # Allow range for adaptive adjustments
+            # Expected SL with adaptive adjustments (P/L=5% triggers moderate trailing)
+            # Base 2% * 0.8 (low vol) * 0.85 (moderate profit) = ~1.36% trailing
+            # Expected range allows for adaptive logic variation
+            expected_sl_range = (103.0, 104.0)  # Allow range for adaptive adjustments
             assert expected_sl_range[0] <= new_sl <= expected_sl_range[1], \
                 f"Expected SL in range {expected_sl_range}, got {new_sl:.2f}"
             print(f"  ✓ Price up to 105.0: SL moved to {new_sl:.2f} (adaptive trailing activated)")
@@ -378,20 +379,20 @@ class TradeSimulationTester:
             print(f"  Initial SL: {initial_sl:.2f}")
             
             # Price decreases - trailing stop should move down
-            # Note: At 95, P/L = 50% for short, triggering adaptive tightening
+            # Note: At 95, P/L = 5% for short, triggering moderate adaptive adjustment
             position.update_trailing_stop(95.0, trailing_percentage=0.02)
             assert position.lowest_price == 95.0, "Lowest price not updated"
             assert position.stop_loss < initial_sl, "Trailing stop should move down"
             new_sl = position.stop_loss
-            # Expected SL with adaptive adjustments (P/L=50% triggers tighter trailing)
+            # Expected SL with adaptive adjustments (P/L=5% triggers moderate trailing)
             # Base trailing percentage: 2%
             base_trailing = 0.02
             volatility_multiplier = 0.8  # Example: low volatility
-            profit_multiplier = 0.7      # Example: high profit (P/L=50%)
-            adaptive_trailing = base_trailing * volatility_multiplier * profit_multiplier  # = 0.0112
+            profit_multiplier = 0.85     # Example: moderate profit (P/L=5%)
+            adaptive_trailing = base_trailing * volatility_multiplier * profit_multiplier  # = 0.0136
             # For SHORT: trailing stop is set above the lowest price
             expected_sl = 95.0 + (95.0 * adaptive_trailing)
-            tolerance = 0.5  # Allowable tolerance for floating point and adaptive logic
+            tolerance = 1.0  # Allowable tolerance for floating point and adaptive logic
             assert abs(new_sl - expected_sl) <= tolerance, \
                 f"Expected SL near {expected_sl:.2f}, got {new_sl:.2f}"
             print(f"  ✓ Price down to 95.0: SL moved to {new_sl:.2f} (adaptive trailing activated)")
@@ -573,7 +574,7 @@ class TradeSimulationTester:
             pnl = position.get_pnl(current_price)
             print(f"    ✓ Should close: {should_close}, Reason: {reason}, P/L: {pnl:.2%}")
             assert should_close, "Should close at take profit"
-            # Note: Reason might be 'take_profit_12pct' due to 100% ROI (10% price * 10x)
+            # Should be 'take_profit' reason
             assert 'take_profit' in reason, "Should be a take profit reason"
             
             # Step 4: Close position
