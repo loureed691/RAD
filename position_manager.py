@@ -1096,10 +1096,15 @@ class PositionManager:
                 self.position_logger.debug(f"  Leverage: {position.leverage}x")
                 self.position_logger.debug(f"  Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
                 
-                # Get current price
-                ticker = self.client.get_ticker(symbol)
-                if not ticker:
-                    self.position_logger.warning(f"  ⚠ Failed to get ticker")
+                # Get current price with better error context
+                try:
+                    ticker = self.client.get_ticker(symbol)
+                    if not ticker:
+                        self.position_logger.warning(f"  ⚠ Failed to get ticker - API returned None")
+                        continue
+                except Exception as e:
+                    self.logger.warning(f"API error getting ticker for {symbol}: {type(e).__name__}: {e}")
+                    self.position_logger.warning(f"  ⚠ API error getting ticker: {type(e).__name__}")
                     continue
                 
                 # Bug fix: Safely access 'last' price
@@ -1121,8 +1126,25 @@ class PositionManager:
                 self.position_logger.debug(f"  Take Profit: {format_price(position.take_profit)}")
                 self.position_logger.debug(f"  Max Favorable Excursion: {position.max_favorable_excursion:.2%}")
                 
-                # Get market data for adaptive parameters
-                ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
+                # Get market data for adaptive parameters with better error handling
+                try:
+                    ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
+                except Exception as e:
+                    self.logger.warning(f"API error getting OHLCV for {symbol}: {type(e).__name__}: {e}")
+                    self.position_logger.debug(f"  Using simple trailing stop (OHLCV API error: {type(e).__name__})")
+                    # Fallback to simple update
+                    position.update_trailing_stop(current_price, self.trailing_stop_percentage)
+                    # Check if position should be closed
+                    should_close, reason = position.should_close(current_price)
+                    if should_close:
+                        self.position_logger.info(f"  ✓ Closing position: {reason}")
+                        pnl = self.close_position(symbol, reason)
+                        if pnl is not None:
+                            yield symbol, pnl, position
+                    else:
+                        self.position_logger.info(f"  ✓ Position still open and healthy")
+                    continue
+                
                 if ohlcv and len(ohlcv) >= 50:
                     from indicators import Indicators
                     df = Indicators.calculate_all(ohlcv)
@@ -1249,15 +1271,19 @@ class PositionManager:
                     self.position_logger.info(f"  ✓ Position still open and healthy")
                 
             except Exception as e:
-                self.logger.error(f"Error updating position {symbol}: {e}")
-                self.position_logger.error(f"  ✗ Error updating position: {e}")
+                # Improved error context - log exception type and traceback
+                self.logger.error(f"Error updating position {symbol}: {type(e).__name__}: {e}", exc_info=True)
+                self.position_logger.error(f"  ✗ Error updating position: {type(e).__name__}: {e}")
                 # Try simple update as fallback
                 try:
-                    position.update_trailing_stop(current_price, self.trailing_stop_percentage)
+                    # If we have current_price, attempt basic update
+                    if 'current_price' in locals():
+                        position.update_trailing_stop(current_price, self.trailing_stop_percentage)
+                        self.position_logger.info(f"  ✓ Fallback: Applied simple trailing stop update")
                 except Exception as fallback_error:
                     # Log the fallback error rather than silently ignoring it
-                    self.logger.error(f"Fallback update also failed for {symbol}: {fallback_error}")
-                    self.position_logger.error(f"  ✗ Fallback update failed: {fallback_error}")
+                    self.logger.error(f"Fallback update also failed for {symbol}: {type(fallback_error).__name__}: {fallback_error}")
+                    self.position_logger.error(f"  ✗ Fallback update failed: {type(fallback_error).__name__}")
         
         # Thread-safe check for remaining positions
         with self._positions_lock:
