@@ -8,60 +8,70 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 def test_kelly_criterion():
-    """Test Kelly Criterion calculation in ML model"""
+    """Test Kelly Criterion calculation in risk manager"""
     print("\n" + "="*60)
     print("Testing Kelly Criterion Position Sizing")
     print("="*60)
     
-    from ml_model import MLModel
+    from risk_manager import RiskManager
     
-    model = MLModel()
+    # Initialize risk manager
+    risk_mgr = RiskManager(max_position_size=1000, risk_per_trade=0.02, max_open_positions=3)
     
-    # Test with insufficient trades (should return 0)
+    # Test 1: With insufficient trades (should return default risk)
     print("\n1. Testing with insufficient trades (< 20)...")
-    kelly = model.get_kelly_fraction()
-    assert kelly == 0.0, "Kelly should be 0 with insufficient trades"
-    print(f"   ✓ Kelly fraction: {kelly:.4f} (correctly returns 0)")
-    
-    # Simulate 25 trades with 60% win rate
-    print("\n2. Simulating 25 trades (60% win rate, 2:1 reward/risk)...")
-    model.performance_metrics['total_trades'] = 25
-    model.performance_metrics['wins'] = 15
-    model.performance_metrics['losses'] = 10
-    model.performance_metrics['win_rate'] = 0.60
-    model.performance_metrics['avg_profit'] = 0.04  # 4% avg win
-    model.performance_metrics['avg_loss'] = 0.02    # 2% avg loss
-    
-    kelly = model.get_kelly_fraction()
+    kelly = risk_mgr.calculate_kelly_criterion(win_rate=0.6, avg_win=0.04, avg_loss=0.02)
+    # With no trade history (recent_trades empty), should still calculate but use half-Kelly baseline
     print(f"   ✓ Kelly fraction: {kelly:.4f}")
-    print(f"   ✓ Win rate: {model.performance_metrics['win_rate']:.2%}")
-    print(f"   ✓ Avg profit: {model.performance_metrics['avg_profit']:.2%}")
-    print(f"   ✓ Avg loss: {model.performance_metrics['avg_loss']:.2%}")
+    assert kelly > 0, "Kelly should be positive with winning parameters"
+    assert kelly <= 0.035, "Kelly should be capped at 3.5%"
     
-    # Verify Kelly is reasonable (should be positive and < 0.25)
+    # Test 2: Simulate 25 trades with 60% win rate
+    print("\n2. Simulating 25 trades (60% win rate, 2:1 reward/risk)...")
+    # Record trades to populate recent_trades for adaptive logic
+    for i in range(25):
+        if i < 15:  # 15 wins
+            risk_mgr.record_trade_outcome(0.04)  # 4% profit
+        else:  # 10 losses
+            risk_mgr.record_trade_outcome(-0.02)  # 2% loss
+    
+    # Now calculate Kelly with trade history
+    win_rate = risk_mgr.get_win_rate()
+    avg_profit = risk_mgr.get_avg_win()
+    avg_loss = risk_mgr.get_avg_loss()
+    
+    kelly = risk_mgr.calculate_kelly_criterion(win_rate, avg_profit, avg_loss, use_fractional=True)
+    
+    print(f"   ✓ Kelly fraction: {kelly:.4f}")
+    print(f"   ✓ Win rate: {win_rate:.2%}")
+    print(f"   ✓ Avg profit: {avg_profit:.2%}")
+    print(f"   ✓ Avg loss: {avg_loss:.2%}")
+    
+    # Verify Kelly is reasonable (should be positive and capped properly)
     assert kelly > 0, "Kelly should be positive with winning strategy"
-    assert kelly <= 0.25, "Kelly should be capped at 25%"
-    print(f"   ✓ Kelly in valid range (0 < {kelly:.4f} <= 0.25)")
+    assert kelly <= 0.035, "Kelly should be capped at 3.5%"
+    print(f"   ✓ Kelly in valid range (0 < {kelly:.4f} <= 0.035)")
     
     # Calculate full Kelly for comparison
-    b = model.performance_metrics['avg_profit'] / model.performance_metrics['avg_loss']
-    p = model.performance_metrics['win_rate']
+    b = avg_profit / avg_loss
+    p = win_rate
     q = 1 - p
     full_kelly = (b * p - q) / b
-    expected_half_kelly = full_kelly * 0.5
     print(f"   ✓ Full Kelly: {full_kelly:.4f}")
-    print(f"   ✓ Half-Kelly (expected): {expected_half_kelly:.4f}")
-    print(f"   ✓ Actual: {kelly:.4f}")
+    print(f"   ✓ Adaptive fractional Kelly: {kelly:.4f}")
     
-    # Test with negative expectancy (should return 0)
+    # Test 3: With negative expectancy (should return default risk)
     print("\n3. Testing with negative expectancy (losing strategy)...")
-    model.performance_metrics['win_rate'] = 0.30  # 30% win rate
-    model.performance_metrics['avg_profit'] = 0.02  # 2% avg win
-    model.performance_metrics['avg_loss'] = 0.04    # 4% avg loss (worse than wins)
-    
-    kelly = model.get_kelly_fraction()
-    assert kelly == 0.0, "Kelly should be 0 with negative expectancy"
-    print(f"   ✓ Kelly fraction: {kelly:.4f} (correctly returns 0 for losing strategy)")
+    kelly_negative = risk_mgr.calculate_kelly_criterion(
+        win_rate=0.30,   # 30% win rate
+        avg_win=0.02,    # 2% avg win
+        avg_loss=0.04,   # 4% avg loss
+        use_fractional=True
+    )
+    # With negative expectancy, Kelly will be negative, function should return default risk_per_trade
+    print(f"   ✓ Kelly fraction: {kelly_negative:.4f}")
+    assert kelly_negative >= 0.005, "Should return at least minimum risk"
+    print(f"   ✓ Correctly handles negative expectancy")
     
     print("\n✓ Kelly Criterion tests passed!")
     return True

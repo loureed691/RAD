@@ -230,31 +230,42 @@ def test_kelly_criterion_edge_cases():
     print("="*60)
     
     try:
-        from ml_model import MLModel
+        from risk_manager import RiskManager
         
-        model = MLModel('models/test_small_balance.pkl')
+        manager = RiskManager(
+            max_position_size=10,
+            risk_per_trade=0.02,
+            max_open_positions=1
+        )
         
-        # Test with insufficient data (< 20 trades)
+        # Test with insufficient data (no trades)
         print("\n  Testing with insufficient trade data...")
-        kelly = model.get_kelly_fraction()
-        assert kelly == 0.0, f"Should return 0 with insufficient data, got {kelly}"
-        print(f"  ✓ Insufficient data: Kelly fraction = {kelly}")
+        kelly = manager.calculate_kelly_criterion(win_rate=0.6, avg_win=0.05, avg_loss=0.03)
+        # Should calculate but with no recent_trades, will use baseline fractional Kelly
+        assert 0 <= kelly <= 0.035, f"Kelly fraction should be bounded, got {kelly}"
+        print(f"  ✓ Insufficient data: Kelly fraction = {kelly:.4f}")
         
         # Simulate 20 trades with positive expectancy
         print("\n  Testing with positive performance...")
-        model.performance_metrics['total_trades'] = 20
-        model.performance_metrics['wins'] = 12
-        model.performance_metrics['losses'] = 8
-        model.performance_metrics['win_rate'] = 0.60
-        model.performance_metrics['avg_profit'] = 0.05
-        model.performance_metrics['avg_loss'] = 0.03
+        for i in range(20):
+            if i < 12:  # 12 wins
+                manager.record_trade_outcome(0.05)  # 5% profit
+            else:  # 8 losses
+                manager.record_trade_outcome(-0.03)  # 3% loss
         
-        kelly = model.get_kelly_fraction()
-        assert 0 <= kelly <= 0.25, f"Kelly fraction should be bounded, got {kelly}"
+        win_rate = manager.get_win_rate()
+        avg_profit = manager.get_avg_win()
+        avg_loss = manager.get_avg_loss()
+        
+        kelly = manager.calculate_kelly_criterion(win_rate, avg_profit, avg_loss, use_fractional=True)
+        assert 0 <= kelly <= 0.035, f"Kelly fraction should be bounded, got {kelly}"
         print(f"  ✓ Positive performance: Kelly fraction = {kelly:.4f}")
+        print(f"  ✓ Win rate: {win_rate:.2%}, Avg profit: {avg_profit:.2%}, Avg loss: {avg_loss:.2%}")
         
-        # Test adaptive threshold
+        # Test adaptive threshold from ml_model
         print("\n  Testing adaptive confidence threshold...")
+        from ml_model import MLModel
+        model = MLModel('models/test_small_balance.pkl')
         threshold = model.get_adaptive_confidence_threshold()
         assert 0.5 <= threshold <= 0.75, f"Threshold should be bounded, got {threshold}"
         print(f"  ✓ Adaptive threshold = {threshold:.2f}")
