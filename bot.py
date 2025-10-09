@@ -64,7 +64,8 @@ class TradingBot:
         self.client = KuCoinClient(
             Config.API_KEY,
             Config.API_SECRET,
-            Config.API_PASSPHRASE
+            Config.API_PASSPHRASE,
+            enable_websocket=Config.ENABLE_WEBSOCKET
         )
         
         # Get balance and auto-configure trading parameters if not set in .env
@@ -637,6 +638,13 @@ class TradingBot:
             self.logger.info("💾 ML model saved successfully")
         except Exception as e:
             self.logger.error(f"Error saving ML model during shutdown: {e}")
+        
+        # Close WebSocket and API connections
+        try:
+            self.client.close()
+            self.logger.info("🔌 API connections closed")
+        except Exception as e:
+            self.logger.error(f"Error closing API connections: {e}")
         
         self.logger.info("=" * 60)
         self.logger.info("✅ BOT SHUTDOWN COMPLETE")

@@ -15,6 +15,9 @@ class Config:
     API_SECRET = os.getenv('KUCOIN_API_SECRET', '')
     API_PASSPHRASE = os.getenv('KUCOIN_API_PASSPHRASE', '')
     
+    # WebSocket Configuration
+    ENABLE_WEBSOCKET = os.getenv('ENABLE_WEBSOCKET', 'true').lower() in ('true', '1', 'yes')
+    
     # Trading Configuration - will be auto-configured if not set in .env
     LEVERAGE = None  # Will be set by auto_configure_from_balance()
     MAX_POSITION_SIZE = None  # Will be set by auto_configure_from_balance()
