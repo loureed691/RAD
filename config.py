@@ -35,6 +35,7 @@ class Config:
     MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))
     MAX_WORKERS = int(os.getenv('MAX_WORKERS', '20'))  # Number of parallel workers for market scanning
     CACHE_DURATION = int(os.getenv('CACHE_DURATION', '300'))  # Cache duration in seconds (default: 5 minutes)
+    STALE_DATA_MULTIPLIER = int(os.getenv('STALE_DATA_MULTIPLIER', '2'))  # Multiplier for CHECK_INTERVAL to determine max age for opportunity data
     
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
