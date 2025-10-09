@@ -58,15 +58,20 @@ class KuCoinClient:
         This ensures trading operations complete before scanning operations start.
         """
         if priority > APICallPriority.CRITICAL:
-            # Non-critical call - wait for any pending critical calls to complete
+            # Quick check first - if no critical calls, return immediately
+            with self._critical_call_lock:
+                if self._pending_critical_calls == 0:
+                    return
+            
+            # Critical calls ARE pending - wait for them to complete
             max_wait = 5.0  # Maximum 5 seconds wait
             start_time = time.time()
             
             while time.time() - start_time < max_wait:
+                time.sleep(0.01)  # 10ms sleep for better responsiveness (was 50ms)
                 with self._critical_call_lock:
                     if self._pending_critical_calls == 0:
                         break
-                time.sleep(0.05)  # Short sleep to avoid busy waiting
     
     def _track_critical_call(self, priority: APICallPriority, increment: bool):
         """Track critical API calls in progress"""

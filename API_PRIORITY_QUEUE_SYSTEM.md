@@ -66,15 +66,20 @@ def _wait_for_critical_calls(self, priority: APICallPriority):
     Wait if there are pending critical calls and current call is not critical.
     """
     if priority > APICallPriority.CRITICAL:
-        # Non-critical call - wait for any pending critical calls
+        # Quick check first - if no critical calls, return immediately
+        with self._critical_call_lock:
+            if self._pending_critical_calls == 0:
+                return
+        
+        # Critical calls ARE pending - wait for them to complete
         max_wait = 5.0  # Maximum 5 seconds wait
         start_time = time.time()
         
         while time.time() - start_time < max_wait:
+            time.sleep(0.01)  # 10ms sleep for better responsiveness
             with self._critical_call_lock:
                 if self._pending_critical_calls == 0:
                     break
-            time.sleep(0.05)  # Short sleep to avoid busy waiting
 ```
 
 #### 3. Thread-Safe Tracking
