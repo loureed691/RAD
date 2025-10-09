@@ -519,7 +519,7 @@ class Position:
                 distance_to_tp = (current_price - self.take_profit) / current_price
             
             # Exceptional profit levels - always take profit (no override)
-            if current_pnl >= 0.20:  # 20% ROI
+            if current_pnl >= 0.20:  # 20% price movement
                 return True, 'take_profit_20pct_exceptional'
             
             # Very high profit - take if TP is far (>2%)
@@ -546,17 +546,17 @@ class Position:
                 if drawdown_pct >= 0.299 and 0.03 <= current_pnl < 0.15:
                     return True, 'take_profit_momentum_loss'
             
-            # 10% ROI - take profit if TP is >2% away
+            # 10% price movement - take profit if TP is >2% away
             if current_pnl >= 0.10:
                 if distance_to_tp > 0.02:
                     return True, 'take_profit_10pct'
             
-            # 8% ROI - take profit if TP is >3% away
+            # 8% price movement - take profit if TP is >3% away
             if current_pnl >= 0.08:
                 if distance_to_tp > 0.03:
                     return True, 'take_profit_8pct'
             
-            # 5% ROI - take profit if TP is >5% away
+            # 5% price movement - take profit if TP is >5% away
             if current_pnl >= 0.05:
                 if distance_to_tp > 0.05:
                     return True, 'take_profit_5pct'
@@ -620,11 +620,18 @@ class Position:
         return False, ''
     
     def get_pnl(self, current_price: float) -> float:
-        """Calculate profit/loss percentage"""
+        """Calculate profit/loss percentage (price movement, not ROI on margin)
+        
+        Returns the percentage change in price, which represents the actual risk/reward
+        independent of leverage. This should NOT be multiplied by leverage because:
+        - Position sizing already accounts for leverage
+        - We want to measure actual portfolio impact, not ROI on margin
+        - Multiplying by leverage causes premature profit taking
+        """
         if self.side == 'long':
-            pnl = ((current_price - self.entry_price) / self.entry_price) * self.leverage
+            pnl = (current_price - self.entry_price) / self.entry_price
         else:
-            pnl = ((self.entry_price - current_price) / self.entry_price) * self.leverage
+            pnl = (self.entry_price - current_price) / self.entry_price
         return pnl
 
 class PositionManager:
@@ -998,7 +1005,7 @@ class PositionManager:
             # Calculate P/L
             pnl = position.get_pnl(current_price)
             position_value = position.amount * position.entry_price
-            pnl_usd = (pnl / position.leverage) * position_value if position.leverage > 0 else 0
+            pnl_usd = pnl * position_value
             
             # Calculate duration
             duration = datetime.now() - position.entry_time
@@ -1107,7 +1114,7 @@ class PositionManager:
                 # Calculate current P/L
                 current_pnl = position.get_pnl(current_price)
                 position_value = position.amount * position.entry_price
-                pnl_usd = (current_pnl / position.leverage) * position_value if position.leverage > 0 else 0
+                pnl_usd = current_pnl * position_value
                 
                 self.position_logger.info(f"  Current P/L: {current_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
                 self.position_logger.debug(f"  Stop Loss: {format_price(position.stop_loss)}")
