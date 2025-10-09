@@ -11,9 +11,18 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier,
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.calibration import CalibratedClassifierCV
-from xgboost import XGBClassifier
-from lightgbm import LGBMClassifier
-from catboost import CatBoostClassifier
+try:
+    from xgboost import XGBClassifier
+except ImportError:
+    XGBClassifier = None
+try:
+    from lightgbm import LGBMClassifier
+except ImportError:
+    LGBMClassifier = None
+try:
+    from catboost import CatBoostClassifier
+except ImportError:
+    CatBoostClassifier = None
 from logger import Logger
 
 class MLModel:
