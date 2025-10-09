@@ -502,7 +502,7 @@ class Position:
 
     def should_close(self, current_price: float) -> tuple[bool, str]:
         """Check if position should be closed"""
-        # Calculate current P/L percentage (with leverage)
+        # Calculate current P/L percentage
         current_pnl = self.get_pnl(current_price)
         
         # Update favorable excursion tracking for smarter profit taking
@@ -1222,7 +1222,7 @@ class PositionManager:
                     'side': position.side,
                     'entry_price': position.entry_price,
                     'current_price': current_price,
-                    'current_pnl_pct': current_pnl,  # Leveraged P&L
+                    'current_pnl_pct': current_pnl,  # P&L percentage
                     'peak_pnl_pct': position.max_favorable_excursion,
                     'leverage': position.leverage,
                     'entry_time': position.entry_time,
