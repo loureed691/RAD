@@ -9,6 +9,7 @@ from datetime import datetime
 from kucoin_client import KuCoinClient
 from logger import Logger
 from advanced_exit_strategy import AdvancedExitStrategy
+from volume_profile import VolumeProfile
 
 def format_price(price: float) -> str:
     """
@@ -91,6 +92,9 @@ class Position:
         self.breakeven_moved = False
         self.profit_acceleration = 0.0  # Rate of change of profit velocity
         self.partial_exits_taken = 0  # Track partial profit taking
+        
+        # Volume profile analyzer for smarter exits
+        self.volume_profile_analyzer = VolumeProfile()
     
     def move_to_breakeven(self, current_price: float, buffer: float = 0.001) -> bool:
         """
@@ -499,6 +503,93 @@ class Position:
             take_profit = (nearest_support * 1.005) if nearest_support else default_tp
         
         return stop_loss, take_profit
+    
+    def adjust_take_profit_with_volume_profile(self, current_price: float, df: pd.DataFrame) -> bool:
+        """
+        Adjust take profit using volume profile analysis for smarter exits
+        
+        Args:
+            current_price: Current market price
+            df: DataFrame with OHLCV data for volume profile calculation
+        
+        Returns:
+            bool: True if TP was adjusted, False otherwise
+        """
+        if not self.take_profit or df.empty or len(df) < 20:
+            return False
+        
+        try:
+            # Calculate volume profile
+            volume_profile = self.volume_profile_analyzer.calculate_volume_profile(df, num_bins=50)
+            
+            if not volume_profile or volume_profile.get('poc') is None:
+                return False
+            
+            # Get volume-based support/resistance
+            vol_sr = self.volume_profile_analyzer.get_support_resistance_from_volume(
+                current_price, volume_profile
+            )
+            
+            current_pnl = self.get_pnl(current_price)
+            
+            # For LONG: use volume-based resistance as TP target
+            if self.side == 'long' and vol_sr.get('resistance'):
+                resistance_price = vol_sr['resistance']
+                resistance_strength = vol_sr.get('resistance_strength', 0.5)
+                
+                # Only consider resistance above current price
+                if resistance_price > current_price and resistance_price > self.entry_price:
+                    potential_pnl = (resistance_price - self.entry_price) / self.entry_price
+                    
+                    # Only adjust if resistance offers good profit and is strong
+                    if potential_pnl > 0.02 and resistance_strength > 0.6:
+                        # If TP is way beyond strong resistance, bring it back to be more realistic
+                        # Only adjust if new TP would still be above current price
+                        new_tp = resistance_price * 0.98
+                        if self.take_profit > resistance_price * 1.15 and new_tp > current_price:
+                            self.take_profit = new_tp
+                            return True
+                        
+                        # If we're in good profit and approaching resistance, lock it in
+                        if current_pnl > 0.03:
+                            distance_to_resistance = (resistance_price - current_price) / current_price
+                            if distance_to_resistance < 0.02:  # Within 2% of resistance
+                                new_tp = resistance_price * 0.99
+                                if new_tp > current_price:
+                                    self.take_profit = new_tp
+                                    return True
+            
+            # For SHORT: use volume-based support as TP target
+            elif self.side == 'short' and vol_sr.get('support'):
+                support_price = vol_sr['support']
+                support_strength = vol_sr.get('support_strength', 0.5)
+                
+                # Only consider support below current price
+                if support_price < current_price and support_price < self.entry_price:
+                    potential_pnl = (self.entry_price - support_price) / self.entry_price
+                    
+                    # Only adjust if support offers good profit and is strong
+                    if potential_pnl > 0.02 and support_strength > 0.6:
+                        # If TP is way beyond strong support, bring it back to be more realistic
+                        # Only adjust if new TP would still be below current price
+                        new_tp = support_price * 1.02
+                        if self.take_profit < support_price * 0.85 and new_tp < current_price:
+                            self.take_profit = new_tp
+                            return True
+                        
+                        # If we're in good profit and approaching support, lock it in
+                        if current_pnl > 0.03:
+                            distance_to_support = (current_price - support_price) / current_price
+                            if distance_to_support < 0.02:  # Within 2% of support
+                                new_tp = support_price * 1.01
+                                if new_tp < current_price:
+                                    self.take_profit = new_tp
+                                    return True
+            
+            return False
+        except:
+            return False
+
 
     def should_close(self, current_price: float) -> tuple[bool, str]:
         """Check if position should be closed"""
