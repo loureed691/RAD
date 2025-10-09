@@ -218,10 +218,11 @@ All enhancements have been thoroughly tested:
 
 **Integration Tests (`test_volume_profile_integration.py`):**
 ```bash
-✓ Position TP adjustment (4/4 tests)
+✓ Position TP adjustment
 ✓ Signal scoring integration
 ✓ Error handling
 ✓ Feature compatibility
+4/4 integration tests passing
 ```
 
 **Existing Tests:**
