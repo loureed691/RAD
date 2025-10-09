@@ -266,8 +266,20 @@ class TradingBot:
         )
         leverage = min(leverage, Config.LEVERAGE)
         
-        # Get Kelly Criterion fraction from ML model (uses performance history)
-        kelly_fraction = self.ml_model.get_kelly_fraction()
+        # Get Kelly Criterion fraction from risk_manager (uses performance history with adaptive logic)
+        # Get performance metrics from risk_manager
+        win_rate = self.risk_manager.get_win_rate()
+        avg_profit = self.risk_manager.get_avg_win()
+        avg_loss = self.risk_manager.get_avg_loss()
+        total_trades = self.risk_manager.total_trades
+        
+        # Only use Kelly if we have sufficient trade history (20+ trades)
+        kelly_fraction = None
+        if total_trades >= 20 and win_rate > 0 and avg_profit > 0 and avg_loss > 0:
+            # Use risk_manager's superior adaptive Kelly implementation
+            kelly_fraction = self.risk_manager.calculate_kelly_criterion(
+                win_rate, avg_profit, avg_loss, use_fractional=True
+            )
         
         # Check drawdown and adjust risk
         risk_adjustment = self.risk_manager.update_drawdown(available_balance)
@@ -275,7 +287,7 @@ class TradingBot:
         # Calculate position size with Kelly Criterion if available
         position_size = self.risk_manager.calculate_position_size(
             available_balance, entry_price, stop_loss_price, leverage, 
-            kelly_fraction=kelly_fraction * risk_adjustment if kelly_fraction > 0 else None
+            kelly_fraction=kelly_fraction * risk_adjustment if kelly_fraction is not None else None
         )
         
         # Open position

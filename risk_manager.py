@@ -38,6 +38,13 @@ class RiskManager:
         self.recent_trades = []  # Last 10 trades for rolling performance
         self.max_recent_trades = 10
         
+        # Performance metrics for Kelly Criterion
+        self.total_trades = 0
+        self.wins = 0
+        self.losses = 0
+        self.total_profit = 0.0  # Sum of all winning trades
+        self.total_loss = 0.0    # Sum of all losing trades (as positive)
+        
         # Correlation tracking for portfolio diversification
         self.correlation_groups = {
             'major_coins': ['BTC', 'ETH'],
@@ -50,25 +57,58 @@ class RiskManager:
     
     def record_trade_outcome(self, pnl: float):
         """
-        Record trade outcome to track win/loss streaks
+        Record trade outcome to track win/loss streaks and performance metrics
         
         Args:
             pnl: Profit/loss percentage (positive for win, negative for loss)
         """
-        is_win = pnl > 0
+        is_win = pnl > 0.005  # Consider >0.5% as win
+        is_loss = pnl < -0.005  # Consider <-0.5% as loss
+        
+        # Track total trades
+        self.total_trades += 1
         
         # Update streaks
         if is_win:
             self.win_streak += 1
             self.loss_streak = 0
-        else:
+            self.wins += 1
+            self.total_profit += pnl
+        elif is_loss:
             self.loss_streak += 1
             self.win_streak = 0
+            self.losses += 1
+            self.total_loss += abs(pnl)
+        else:
+            # Breakeven trade - reset streaks but don't count in wins/losses
+            self.win_streak = 0
+            self.loss_streak = 0
         
         # Track recent trades (rolling window)
         self.recent_trades.append(pnl)
         if len(self.recent_trades) > self.max_recent_trades:
             self.recent_trades.pop(0)
+    
+    def get_win_rate(self) -> float:
+        """Calculate overall win rate"""
+        if self.total_trades == 0:
+            return 0.5
+        counted_trades = self.wins + self.losses
+        if counted_trades == 0:
+            return 0.5
+        return self.wins / counted_trades
+    
+    def get_avg_win(self) -> float:
+        """Calculate average win percentage"""
+        if self.wins == 0:
+            return 0.0
+        return self.total_profit / self.wins
+    
+    def get_avg_loss(self) -> float:
+        """Calculate average loss percentage (as positive number)"""
+        if self.losses == 0:
+            return 0.0
+        return self.total_loss / self.losses
     
     def get_recent_win_rate(self) -> float:
         """Calculate win rate from recent trades"""
