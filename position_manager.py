@@ -519,7 +519,7 @@ class Position:
                 distance_to_tp = (current_price - self.take_profit) / current_price
             
             # Exceptional profit levels - always take profit (no override)
-            if current_pnl >= 0.20:  # 20% ROI
+            if current_pnl >= 0.20:  # 20% price movement
                 return True, 'take_profit_20pct_exceptional'
             
             # Very high profit - take if TP is far (>2%)
@@ -546,17 +546,17 @@ class Position:
                 if drawdown_pct >= 0.299 and 0.03 <= current_pnl < 0.15:
                     return True, 'take_profit_momentum_loss'
             
-            # 10% ROI - take profit if TP is >2% away
+            # 10% price movement - take profit if TP is >2% away
             if current_pnl >= 0.10:
                 if distance_to_tp > 0.02:
                     return True, 'take_profit_10pct'
             
-            # 8% ROI - take profit if TP is >3% away
+            # 8% price movement - take profit if TP is >3% away
             if current_pnl >= 0.08:
                 if distance_to_tp > 0.03:
                     return True, 'take_profit_8pct'
             
-            # 5% ROI - take profit if TP is >5% away
+            # 5% price movement - take profit if TP is >5% away
             if current_pnl >= 0.05:
                 if distance_to_tp > 0.05:
                     return True, 'take_profit_5pct'
