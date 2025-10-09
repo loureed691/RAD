@@ -87,15 +87,19 @@ def verify_priority_fix():
         with open('bot.py', 'r') as f:
             bot_content = f.read()
         
-        scanner_method = bot_content[bot_content.find('def _background_scanner'):bot_content.find('def _background_scanner') + 2000]
-        first_while = scanner_method.find('while self._scan_thread_running')
-        before_loop = scanner_method[:first_while]
-        
-        if 'time.sleep' in before_loop:
-            print("  ✅ PASS: Scanner has startup delay")
-            checks_passed += 1
+        scanner_start = bot_content.find('def _background_scanner')
+        if scanner_start == -1:
+            print("  ❌ FAIL: def _background_scanner not found in bot.py")
         else:
-            print("  ❌ FAIL: Scanner missing startup delay")
+            scanner_method = bot_content[scanner_start:scanner_start + 2000]
+            first_while = scanner_method.find('while self._scan_thread_running')
+            before_loop = scanner_method[:first_while] if first_while != -1 else scanner_method
+            
+            if 'time.sleep' in before_loop:
+                print("  ✅ PASS: Scanner has startup delay")
+                checks_passed += 1
+            else:
+                print("  ❌ FAIL: Scanner missing startup delay")
     except Exception as e:
         print(f"  ❌ FAIL: Error checking scanner: {e}")
     print()
