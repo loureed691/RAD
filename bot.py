@@ -348,6 +348,11 @@ class TradingBot:
         """Background thread that continuously scans for opportunities"""
         self.logger.info("🔍 Background scanner thread started")
         
+        # Give position monitor thread a head start (additional safety measure)
+        # This ensures critical position monitoring API calls happen first
+        time.sleep(1)  # 1 second delay before first scan
+        self.logger.info("🔍 [Background] Beginning market scans (position monitor has priority)")
+        
         while self._scan_thread_running:
             try:
                 # Scan market for opportunities
@@ -529,19 +534,31 @@ class TradingBot:
         self.logger.info(f"💪 Leverage: {Config.LEVERAGE}x")
         self.logger.info(f"⚙️  Parallel workers: {Config.MAX_WORKERS} (market scanning)")
         self.logger.info("=" * 60)
-        self.logger.info("🔍 Starting background scanner thread for continuous market scanning...")
-        self.logger.info("👁️ Starting dedicated position monitor thread for fast position tracking...")
+        self.logger.info("🚨 THREAD START PRIORITY:")
+        self.logger.info("   1️⃣  Position Monitor (CRITICAL - starts first)")
+        self.logger.info("   2️⃣  Background Scanner (starts after with delay)")
         self.logger.info("=" * 60)
         
-        # Start background scanner thread
+        # CRITICAL: Start position monitor thread FIRST to ensure priority access to API
+        # This prevents API call collisions and ensures critical position monitoring
+        # happens before less critical market scanning
+        self.logger.info("👁️ Starting dedicated position monitor thread (PRIORITY: CRITICAL)...")
+        self._position_monitor_running = True
+        self._position_monitor_thread = threading.Thread(target=self._position_monitor, daemon=True, name="PositionMonitor")
+        self._position_monitor_thread.start()
+        
+        # Give position monitor a head start to establish priority
+        time.sleep(0.5)  # 500ms delay ensures position monitor is running first
+        
+        # Start background scanner thread AFTER position monitor
+        self.logger.info("🔍 Starting background scanner thread (PRIORITY: NORMAL)...")
         self._scan_thread_running = True
         self._scan_thread = threading.Thread(target=self._background_scanner, daemon=True, name="BackgroundScanner")
         self._scan_thread.start()
         
-        # Start dedicated position monitor thread
-        self._position_monitor_running = True
-        self._position_monitor_thread = threading.Thread(target=self._position_monitor, daemon=True, name="PositionMonitor")
-        self._position_monitor_thread.start()
+        self.logger.info("=" * 60)
+        self.logger.info("✅ Both threads started - Position Monitor has API priority")
+        self.logger.info("=" * 60)
         
         # Initialize timing for full cycles
         last_full_cycle = datetime.now()
@@ -582,6 +599,8 @@ class TradingBot:
         self.logger.info("🛑 SHUTTING DOWN BOT...")
         self.logger.info("=" * 60)
         
+        # IMPORTANT: Stop scanner first (less critical), then position monitor (critical)
+        # This ensures position monitor can complete any critical operations
         # Stop background scanner thread
         if self._scan_thread and self._scan_thread.is_alive():
             self.logger.info("⏳ Stopping background scanner thread...")
