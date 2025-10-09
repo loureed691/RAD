@@ -620,11 +620,18 @@ class Position:
         return False, ''
     
     def get_pnl(self, current_price: float) -> float:
-        """Calculate profit/loss percentage"""
+        """Calculate profit/loss percentage (price movement, not ROI on margin)
+        
+        Returns the percentage change in price, which represents the actual risk/reward
+        independent of leverage. This should NOT be multiplied by leverage because:
+        - Position sizing already accounts for leverage
+        - We want to measure actual portfolio impact, not ROI on margin
+        - Multiplying by leverage causes premature profit taking
+        """
         if self.side == 'long':
-            pnl = ((current_price - self.entry_price) / self.entry_price) * self.leverage
+            pnl = (current_price - self.entry_price) / self.entry_price
         else:
-            pnl = ((self.entry_price - current_price) / self.entry_price) * self.leverage
+            pnl = (self.entry_price - current_price) / self.entry_price
         return pnl
 
 class PositionManager:
@@ -998,7 +1005,7 @@ class PositionManager:
             # Calculate P/L
             pnl = position.get_pnl(current_price)
             position_value = position.amount * position.entry_price
-            pnl_usd = (pnl / position.leverage) * position_value if position.leverage > 0 else 0
+            pnl_usd = pnl * position_value
             
             # Calculate duration
             duration = datetime.now() - position.entry_time
@@ -1107,7 +1114,7 @@ class PositionManager:
                 # Calculate current P/L
                 current_pnl = position.get_pnl(current_price)
                 position_value = position.amount * position.entry_price
-                pnl_usd = (current_pnl / position.leverage) * position_value if position.leverage > 0 else 0
+                pnl_usd = current_pnl * position_value
                 
                 self.position_logger.info(f"  Current P/L: {current_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
                 self.position_logger.debug(f"  Stop Loss: {format_price(position.stop_loss)}")
