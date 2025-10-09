@@ -29,6 +29,13 @@ class KuCoinClient:
         self._pending_critical_calls = 0  # Track critical calls in progress
         self._critical_call_lock = threading.Lock()
         
+        # API rate limiting tracking
+        # KuCoin allows 40 private calls per 10 seconds = 4 calls/second
+        # We enforce a safer limit with explicit tracking
+        self._last_api_call_time = 0
+        self._api_call_lock = threading.Lock()
+        self._min_call_interval = 0.25  # 250ms = 4 calls/second (matches KuCoin limit)
+        
         try:
             self.exchange = ccxt.kucoinfutures({
                 'apiKey': api_key,
@@ -36,8 +43,14 @@ class KuCoinClient:
                 'password': api_passphrase,
                 'enableRateLimit': True,
             })
+            
+            # Override ccxt's default rate limit (75ms) with KuCoin's actual safe limit (250ms)
+            # ccxt's 75ms allows ~13 calls/sec but KuCoin only allows 4 calls/sec
+            self.exchange.rateLimit = 250  # 250ms between calls = 4 calls/second (safe for KuCoin)
+            
             self.logger.info("KuCoin Futures client initialized successfully")
             self.logger.info("✅ API Call Priority System: ENABLED (Trading operations have priority)")
+            self.logger.info(f"✅ Rate Limit Override: {self.exchange.rateLimit}ms between calls (4 calls/sec max)")
             
             # Set position mode to one-way (single position per symbol)
             # This prevents error 330011: "position mode does not match"
@@ -77,6 +90,24 @@ class KuCoinClient:
                 else:
                     self._pending_critical_calls = max(0, self._pending_critical_calls - 1)
     
+    def _enforce_rate_limit(self):
+        """
+        Enforce minimum time between API calls to prevent rate limiting.
+        KuCoin allows 40 private calls per 10 seconds (4 calls/sec).
+        We enforce 250ms minimum between calls for safety.
+        """
+        with self._api_call_lock:
+            current_time = time.time()
+            time_since_last = current_time - self._last_api_call_time
+            
+            if time_since_last < self._min_call_interval:
+                # Need to wait before making another call
+                sleep_time = self._min_call_interval - time_since_last
+                time.sleep(sleep_time)
+            
+            # Update last call time
+            self._last_api_call_time = time.time()
+    
     def _execute_with_priority(self, func: Callable, priority: APICallPriority, 
                                call_name: str, *args, **kwargs) -> Any:
         """
@@ -94,6 +125,9 @@ class KuCoinClient:
             # Log priority for critical operations
             if priority == APICallPriority.CRITICAL:
                 self.logger.debug(f"🔴 CRITICAL API call: {call_name}")
+            
+            # Enforce rate limit before making the call
+            self._enforce_rate_limit()
             
             # Execute the actual API call
             result = func(*args, **kwargs)
@@ -683,9 +717,11 @@ class KuCoinClient:
                 # Setting leverage on close can fail with error 330008 if all margin is in use
                 if not reduce_only:
                     # Switch to cross margin mode first (fixes error 330006)
+                    self._enforce_rate_limit()  # Explicit rate limiting before margin mode change
                     self.exchange.set_margin_mode('cross', symbol)
                     
                     # Set leverage with cross margin mode
+                    self._enforce_rate_limit()  # Explicit rate limiting before leverage change
                     self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
                 
                 # Build order parameters
@@ -694,6 +730,7 @@ class KuCoinClient:
                     params["reduceOnly"] = True
                 
                 # Create market order
+                self._enforce_rate_limit()  # Explicit rate limiting before order creation
                 order = self.exchange.create_order(
                     symbol=symbol,
                     type='market',
@@ -707,6 +744,7 @@ class KuCoinClient:
                 time.sleep(0.5)  # Brief pause to allow order to be processed
                 if order.get('id'):
                     try:
+                        self._enforce_rate_limit()  # Explicit rate limiting before order status fetch
                         filled_order = self.exchange.fetch_order(order['id'], symbol)
                         # Update order with filled details if available
                         if filled_order:
@@ -847,9 +885,11 @@ class KuCoinClient:
                 # Setting leverage on close can fail with error 330008 if all margin is in use
                 if not reduce_only:
                     # Switch to cross margin mode first (fixes error 330006)
+                    self._enforce_rate_limit()  # Explicit rate limiting before margin mode change
                     self.exchange.set_margin_mode('cross', symbol)
                     
                     # Set leverage with cross margin mode
+                    self._enforce_rate_limit()  # Explicit rate limiting before leverage change
                     self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
                 
                 # Build order parameters
@@ -860,6 +900,7 @@ class KuCoinClient:
                     params["reduceOnly"] = True
                 
                 # Create limit order with cross margin mode explicitly set
+                self._enforce_rate_limit()  # Explicit rate limiting before order creation
                 order = self.exchange.create_order(
                     symbol=symbol,
                     type='limit',
@@ -905,6 +946,7 @@ class KuCoinClient:
         """Cancel an order - CRITICAL priority for risk management"""
         def _cancel():
             try:
+                self._enforce_rate_limit()  # Explicit rate limiting before cancellation
                 self.exchange.cancel_order(order_id, symbol)
                 self.logger.info(f"Cancelled order {order_id} for {symbol}")
                 
@@ -1044,9 +1086,11 @@ class KuCoinClient:
                 validated_amount = self.validate_and_cap_amount(symbol, amount)
                 
                 # Switch to cross margin mode first
+                self._enforce_rate_limit()  # Explicit rate limiting before margin mode change
                 self.exchange.set_margin_mode('cross', symbol)
                 
                 # Set leverage with cross margin mode
+                self._enforce_rate_limit()  # Explicit rate limiting before leverage change
                 self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
                 
                 # Build order parameters
@@ -1058,6 +1102,7 @@ class KuCoinClient:
                     params["reduceOnly"] = True
                 
                 # Create stop-limit order
+                self._enforce_rate_limit()  # Explicit rate limiting before order creation
                 order = self.exchange.create_order(
                     symbol=symbol,
                     type='limit',
