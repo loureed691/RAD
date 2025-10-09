@@ -68,12 +68,12 @@ class OnlineLearner:
     
     def partial_fit(self, features_dict, label):
         """Update model immediately with new trade result"""
-        scaled = self.scaler.learn_one(features_dict)
-        self.model.learn_one(scaled, label)
+        scaled_features = self.scaler.learn_one(features_dict)
+        self.model.learn_one(scaled_features, label)
     
     def predict_proba_one(self, features_dict):
-        scaled = self.scaler.transform_one(features_dict)
-        return self.model.predict_proba_one(scaled)
+        scaled_features = self.scaler.transform_one(features_dict)
+        return self.model.predict_proba_one(scaled_features)
 
 # In bot.py, update after trade closes:
 def record_outcome(indicators, signal, pnl):
