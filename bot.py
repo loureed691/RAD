@@ -100,7 +100,12 @@ class TradingBot:
             Config.MAX_OPEN_POSITIONS
         )
         
-        self.ml_model = MLModel(Config.ML_MODEL_PATH)
+        self.ml_model = MLModel(Config.ML_MODEL_PATH, use_incremental=Config.USE_INCREMENTAL_LEARNING)
+        
+        if Config.USE_INCREMENTAL_LEARNING:
+            self.logger.info("🔄 Using incremental/online learning mode with River")
+        else:
+            self.logger.info("📚 Using batch learning mode with gradient boosting ensemble")
         
         # Advanced analytics module
         self.analytics = AdvancedAnalytics()

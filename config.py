@@ -49,6 +49,12 @@ class Config:
     # Machine Learning
     RETRAIN_INTERVAL = int(os.getenv('RETRAIN_INTERVAL', '86400'))
     ML_MODEL_PATH = os.getenv('ML_MODEL_PATH', 'models/signal_model.pkl')
+    USE_INCREMENTAL_LEARNING = os.getenv('USE_INCREMENTAL_LEARNING', 'false').lower() == 'true'
+    
+    # Incremental Learning Parameters (River)
+    INCREMENTAL_GRACE_PERIOD = int(os.getenv('INCREMENTAL_GRACE_PERIOD', '50'))
+    INCREMENTAL_MAX_DEPTH = int(os.getenv('INCREMENTAL_MAX_DEPTH', '10'))
+    INCREMENTAL_N_MODELS = int(os.getenv('INCREMENTAL_N_MODELS', '10'))
     
     @classmethod
     def auto_configure_from_balance(cls, available_balance: float):
