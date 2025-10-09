@@ -130,16 +130,25 @@ CHECK_INTERVAL=60               # Scan for new opportunities every 60s
 - Frequency: Every 1 second (when positions exist)
 - API calls: ~60 per minute (with positions)
 - Rate limit safe: Well within KuCoin limits (40 private calls per 10s = 240/min)
+- **NEW**: Explicit 250ms rate limiting enforced between all calls
 
 **Market Scanning:**
 - Frequency: Every 60 seconds
 - Parallel workers: 20 (configurable)
 - API calls: Batched and cached
+- **NEW**: All scanning calls respect 250ms minimum interval
 
 **Total API Usage:**
 - Position monitoring: ~60 calls/min
 - Market scanning: ~20-30 calls/min
 - **Total: ~80-90 calls/min** (within safe limits)
+- **NEW**: Global rate limiting ensures no bursts exceed 240 calls/min
+
+**Rate Limiting Improvements (see [API_RATE_LIMIT_FIX.md](API_RATE_LIMIT_FIX.md)):**
+- ccxt rate limit corrected: 75ms → 250ms
+- Explicit rate limiting: All API calls enforced to 250ms minimum
+- Thread-safe enforcement: Global tracking across all operations
+- Order operations: Rate limited between internal API calls
 
 ### Response Times
 
