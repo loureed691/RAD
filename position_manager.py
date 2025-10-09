@@ -723,6 +723,11 @@ class Position:
         - We want to measure actual portfolio impact, not ROI on margin
         - Multiplying by leverage causes premature profit taking
         """
+        # Validate current_price to prevent division by zero edge cases
+        if current_price <= 0 or self.entry_price <= 0:
+            # Return a large negative P&L to trigger stop loss
+            return -1.0
+        
         if self.side == 'long':
             pnl = (current_price - self.entry_price) / self.entry_price
         else:

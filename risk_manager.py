@@ -334,6 +334,15 @@ class RiskManager:
         Returns:
             Position size in contracts
         """
+        # Validate inputs - reject invalid prices
+        if entry_price <= 0 or stop_loss_price <= 0:
+            self.logger.error(f"Invalid prices: entry={entry_price}, stop_loss={stop_loss_price}")
+            return 0.0
+        
+        if balance <= 0:
+            self.logger.warning(f"Invalid balance: {balance}")
+            return 0.0
+        
         # Use Kelly Criterion if provided and valid, otherwise use standard risk
         if kelly_fraction is not None and kelly_fraction > 0:
             # Kelly suggests optimal fraction of capital to risk
