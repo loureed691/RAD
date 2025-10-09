@@ -65,6 +65,14 @@ class Position:
     def __init__(self, symbol: str, side: str, entry_price: float, 
                  amount: float, leverage: int, stop_loss: float, 
                  take_profit: Optional[float] = None):
+        # Validate critical parameters to prevent calculation errors
+        if entry_price <= 0:
+            raise ValueError(f"Invalid entry_price: {entry_price}. Must be > 0")
+        if amount <= 0:
+            raise ValueError(f"Invalid amount: {amount}. Must be > 0")
+        if leverage <= 0:
+            raise ValueError(f"Invalid leverage: {leverage}. Must be > 0")
+        
         self.symbol = symbol
         self.side = side  # 'long' or 'short'
         self.entry_price = entry_price

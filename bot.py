@@ -158,132 +158,137 @@ class TradingBot:
         Cached data from scanning is NEVER used for actual trading decisions.
         All market data, prices, and indicators are fetched in real-time.
         """
-        # Bug fix: Safely access opportunity dictionary with validation
-        symbol = opportunity.get('symbol')
-        signal = opportunity.get('signal')
-        confidence = opportunity.get('confidence')
-        
-        if not symbol or not signal or confidence is None:
-            self.logger.error(f"Invalid opportunity data: {opportunity}")
+        try:
+            # Bug fix: Safely access opportunity dictionary with validation
+            symbol = opportunity.get('symbol')
+            signal = opportunity.get('signal')
+            confidence = opportunity.get('confidence')
+            
+            if not symbol or not signal or confidence is None:
+                self.logger.error(f"Invalid opportunity data: {opportunity}")
+                return False
+            
+            # Check if we already have a position for this symbol
+            if self.position_manager.has_position(symbol):
+                self.logger.debug(f"Already have position for {symbol}, skipping")
+                return False
+            
+            # Get current balance
+            balance = self.client.get_balance()
+            
+            # Check if balance fetch was successful
+            if not balance or 'free' not in balance:
+                self.logger.error("Failed to fetch balance from exchange")
+                return False
+            
+            available_balance = float(balance.get('free', {}).get('USDT', 0))
+            
+            if available_balance <= 0:
+                self.logger.warning("💰 No available balance")
+                return False
+            
+            # Check portfolio diversification
+            open_position_symbols = list(self.position_manager.positions.keys())
+            is_diversified, div_reason = self.risk_manager.check_portfolio_diversification(
+                symbol, open_position_symbols
+            )
+            
+            if not is_diversified:
+                self.logger.info(f"Diversification check failed for {symbol}: {div_reason}")
+                return False
+            
+            # Check if we should open a position
+            current_positions = self.position_manager.get_open_positions_count()
+            should_open, reason = self.risk_manager.should_open_position(
+                current_positions, available_balance
+            )
+            
+            if not should_open:
+                self.logger.info(f"Not opening position: {reason}")
+                return False
+            
+            # Validate trade
+            is_valid, reason = self.risk_manager.validate_trade(
+                symbol, signal, confidence
+            )
+            
+            if not is_valid:
+                self.logger.info(f"Trade not valid: {reason}")
+                return False
+            
+            # Get market data for position sizing
+            ticker = self.client.get_ticker(symbol)
+            if not ticker:
+                return False
+            
+            # Bug fix: Safely access 'last' price with validation
+            entry_price = ticker.get('last')
+            if not entry_price or entry_price <= 0:
+                self.logger.warning(f"Invalid entry price for {symbol}: {entry_price}")
+                return False
+            
+            # Get volatility for stop loss calculation
+            ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
+            df = Indicators.calculate_all(ohlcv)
+            indicators = Indicators.get_latest_indicators(df)
+            volatility = indicators.get('bb_width', 0.03)
+            
+            # Get additional market context for smarter leverage calculation
+            momentum = indicators.get('momentum', 0.0)
+            
+            # Calculate trend strength from moving averages
+            close = indicators.get('close', entry_price)
+            sma_20 = indicators.get('sma_20', close)
+            sma_50 = indicators.get('sma_50', close)
+            
+            if sma_50 > 0 and not pd.isna(sma_50) and not pd.isna(sma_20):
+                trend_strength = abs(sma_20 - sma_50) / sma_50
+                trend_strength = min(trend_strength * 10, 1.0)  # Scale to 0-1
+            else:
+                trend_strength = 0.5
+            
+            # Detect market regime for leverage adjustment
+            market_regime = self.scanner.signal_generator.detect_market_regime(df)
+            
+            # Calculate support/resistance levels for intelligent profit targeting
+            support_resistance = Indicators.calculate_support_resistance(df, lookback=50)
+            
+            # Calculate stop loss
+            stop_loss_percentage = self.risk_manager.calculate_stop_loss_percentage(volatility)
+            
+            if signal == 'BUY':
+                stop_loss_price = entry_price * (1 - stop_loss_percentage)
+            else:
+                stop_loss_price = entry_price * (1 + stop_loss_percentage)
+            
+            # Calculate safe leverage with enhanced multi-factor analysis
+            leverage = self.risk_manager.get_max_leverage(
+                volatility, confidence, momentum, trend_strength, market_regime
+            )
+            leverage = min(leverage, Config.LEVERAGE)
+            
+            # Get Kelly Criterion fraction from ML model (uses performance history)
+            kelly_fraction = self.ml_model.get_kelly_fraction()
+            
+            # Check drawdown and adjust risk
+            risk_adjustment = self.risk_manager.update_drawdown(available_balance)
+            
+            # Calculate position size with Kelly Criterion if available
+            position_size = self.risk_manager.calculate_position_size(
+                available_balance, entry_price, stop_loss_price, leverage, 
+                kelly_fraction=kelly_fraction * risk_adjustment if kelly_fraction > 0 else None
+            )
+            
+            # Open position
+            success = self.position_manager.open_position(
+                symbol, signal, position_size, leverage, stop_loss_percentage
+            )
+            
+            return success
+            
+        except Exception as e:
+            self.logger.error(f"❌ Error executing trade for {opportunity.get('symbol', 'UNKNOWN')}: {e}", exc_info=True)
             return False
-        
-        # Check if we already have a position for this symbol
-        if self.position_manager.has_position(symbol):
-            self.logger.debug(f"Already have position for {symbol}, skipping")
-            return False
-        
-        # Get current balance
-        balance = self.client.get_balance()
-        
-        # Check if balance fetch was successful
-        if not balance or 'free' not in balance:
-            self.logger.error("Failed to fetch balance from exchange")
-            return False
-        
-        available_balance = float(balance.get('free', {}).get('USDT', 0))
-        
-        if available_balance <= 0:
-            self.logger.warning("💰 No available balance")
-            return False
-        
-        # Check portfolio diversification
-        open_position_symbols = list(self.position_manager.positions.keys())
-        is_diversified, div_reason = self.risk_manager.check_portfolio_diversification(
-            symbol, open_position_symbols
-        )
-        
-        if not is_diversified:
-            self.logger.info(f"Diversification check failed for {symbol}: {div_reason}")
-            return False
-        
-        # Check if we should open a position
-        current_positions = self.position_manager.get_open_positions_count()
-        should_open, reason = self.risk_manager.should_open_position(
-            current_positions, available_balance
-        )
-        
-        if not should_open:
-            self.logger.info(f"Not opening position: {reason}")
-            return False
-        
-        # Validate trade
-        is_valid, reason = self.risk_manager.validate_trade(
-            symbol, signal, confidence
-        )
-        
-        if not is_valid:
-            self.logger.info(f"Trade not valid: {reason}")
-            return False
-        
-        # Get market data for position sizing
-        ticker = self.client.get_ticker(symbol)
-        if not ticker:
-            return False
-        
-        # Bug fix: Safely access 'last' price with validation
-        entry_price = ticker.get('last')
-        if not entry_price or entry_price <= 0:
-            self.logger.warning(f"Invalid entry price for {symbol}: {entry_price}")
-            return False
-        
-        # Get volatility for stop loss calculation
-        ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
-        df = Indicators.calculate_all(ohlcv)
-        indicators = Indicators.get_latest_indicators(df)
-        volatility = indicators.get('bb_width', 0.03)
-        
-        # Get additional market context for smarter leverage calculation
-        momentum = indicators.get('momentum', 0.0)
-        
-        # Calculate trend strength from moving averages
-        close = indicators.get('close', entry_price)
-        sma_20 = indicators.get('sma_20', close)
-        sma_50 = indicators.get('sma_50', close)
-        
-        if sma_50 > 0 and not pd.isna(sma_50) and not pd.isna(sma_20):
-            trend_strength = abs(sma_20 - sma_50) / sma_50
-            trend_strength = min(trend_strength * 10, 1.0)  # Scale to 0-1
-        else:
-            trend_strength = 0.5
-        
-        # Detect market regime for leverage adjustment
-        market_regime = self.scanner.signal_generator.detect_market_regime(df)
-        
-        # Calculate support/resistance levels for intelligent profit targeting
-        support_resistance = Indicators.calculate_support_resistance(df, lookback=50)
-        
-        # Calculate stop loss
-        stop_loss_percentage = self.risk_manager.calculate_stop_loss_percentage(volatility)
-        
-        if signal == 'BUY':
-            stop_loss_price = entry_price * (1 - stop_loss_percentage)
-        else:
-            stop_loss_price = entry_price * (1 + stop_loss_percentage)
-        
-        # Calculate safe leverage with enhanced multi-factor analysis
-        leverage = self.risk_manager.get_max_leverage(
-            volatility, confidence, momentum, trend_strength, market_regime
-        )
-        leverage = min(leverage, Config.LEVERAGE)
-        
-        # Get Kelly Criterion fraction from ML model (uses performance history)
-        kelly_fraction = self.ml_model.get_kelly_fraction()
-        
-        # Check drawdown and adjust risk
-        risk_adjustment = self.risk_manager.update_drawdown(available_balance)
-        
-        # Calculate position size with Kelly Criterion if available
-        position_size = self.risk_manager.calculate_position_size(
-            available_balance, entry_price, stop_loss_price, leverage, 
-            kelly_fraction=kelly_fraction * risk_adjustment if kelly_fraction > 0 else None
-        )
-        
-        # Open position
-        success = self.position_manager.open_position(
-            symbol, signal, position_size, leverage, stop_loss_percentage
-        )
-        
-        return success
     
     def update_open_positions(self):
         """Update existing open positions - called frequently for live monitoring"""
@@ -301,6 +306,7 @@ class TradingBot:
                     trade_duration = (datetime.now() - position.entry_time).total_seconds() / 60
                     
                     # DEFENSIVE: Ensure leverage is not zero (should never happen, but be safe)
+                    # This protects the exit_price calculation from division by zero
                     leverage = position.leverage if position.leverage > 0 else 1
                     
                     self.analytics.record_trade({
