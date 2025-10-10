@@ -355,20 +355,29 @@ class KuCoinWebSocket:
     
     def _subscribe_ticker(self, kucoin_symbol: str):
         """Internal method to subscribe to ticker"""
-        try:
-            sub_msg = {
-                "id": str(int(time.time() * 1000)),
-                "type": "subscribe",
-                "topic": f"/contractMarket/ticker:{kucoin_symbol}",
-                "privateChannel": False,
-                "response": True
-            }
-            self.ws.send(json.dumps(sub_msg))
-            self.logger.info(f"📊 Subscribed to ticker: {kucoin_symbol}")
-            return True
-        except Exception as e:
-            self.logger.error(f"Error subscribing to ticker {kucoin_symbol}: {e}")
-            return False
+        max_retries = 3
+        retry_delay = 1
+        
+        for attempt in range(max_retries):
+            try:
+                sub_msg = {
+                    "id": str(int(time.time() * 1000)),
+                    "type": "subscribe",
+                    "topic": f"/contractMarket/ticker:{kucoin_symbol}",
+                    "privateChannel": False,
+                    "response": True
+                }
+                self.ws.send(json.dumps(sub_msg))
+                self.logger.info(f"📊 Subscribed to ticker: {kucoin_symbol}")
+                return True
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    self.logger.warning(f"Error subscribing to ticker {kucoin_symbol} (attempt {attempt + 1}/{max_retries}): {e}")
+                    time.sleep(retry_delay)
+                else:
+                    self.logger.error(f"Failed to subscribe to ticker {kucoin_symbol} after {max_retries} attempts: {e}")
+                    return False
+        return False
     
     def subscribe_candles(self, symbol: str, timeframe: str = '1h'):
         """
@@ -397,20 +406,29 @@ class KuCoinWebSocket:
     
     def _subscribe_candles(self, kucoin_symbol: str, kucoin_tf: str):
         """Internal method to subscribe to candles"""
-        try:
-            sub_msg = {
-                "id": str(int(time.time() * 1000)),
-                "type": "subscribe",
-                "topic": f"/contractMarket/candle:{kucoin_symbol}_{kucoin_tf}",
-                "privateChannel": False,
-                "response": True
-            }
-            self.ws.send(json.dumps(sub_msg))
-            self.logger.info(f"📈 Subscribed to candles: {kucoin_symbol} {kucoin_tf}")
-            return True
-        except Exception as e:
-            self.logger.error(f"Error subscribing to candles {kucoin_symbol}: {e}")
-            return False
+        max_retries = 3
+        retry_delay = 1
+        
+        for attempt in range(max_retries):
+            try:
+                sub_msg = {
+                    "id": str(int(time.time() * 1000)),
+                    "type": "subscribe",
+                    "topic": f"/contractMarket/candle:{kucoin_symbol}_{kucoin_tf}",
+                    "privateChannel": False,
+                    "response": True
+                }
+                self.ws.send(json.dumps(sub_msg))
+                self.logger.info(f"📈 Subscribed to candles: {kucoin_symbol} {kucoin_tf}")
+                return True
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    self.logger.warning(f"Error subscribing to candles {kucoin_symbol} (attempt {attempt + 1}/{max_retries}): {e}")
+                    time.sleep(retry_delay)
+                else:
+                    self.logger.error(f"Failed to subscribe to candles {kucoin_symbol} after {max_retries} attempts: {e}")
+                    return False
+        return False
     
     def get_ticker(self, symbol: str) -> Optional[Dict]:
         """
