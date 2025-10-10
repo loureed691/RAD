@@ -393,14 +393,9 @@ class KuCoinClient:
         Returns:
             Ticker dict or None
         """
-        # Check if client is closing
+        # Check if client is closing (only check during shutdown, not exchange availability)
         if getattr(self, '_closing', False):
             self.logger.debug(f"Skipping get_ticker({symbol}) - client is closing")
-            return None
-        
-        # Check if exchange is available
-        if not hasattr(self, 'exchange') or self.exchange is None:
-            self.logger.warning(f"Exchange client not available for get_ticker({symbol})")
             return None
         
         # Try WebSocket first if enabled and connected
@@ -461,14 +456,9 @@ class KuCoinClient:
         Returns:
             List of OHLCV candles
         """
-        # Check if client is closing
+        # Check if client is closing (only check during shutdown, not exchange availability)
         if getattr(self, '_closing', False):
             self.logger.debug(f"Skipping get_ohlcv({symbol}) - client is closing")
-            return []
-        
-        # Check if exchange is available
-        if not hasattr(self, 'exchange') or self.exchange is None:
-            self.logger.warning(f"Exchange client not available for get_ohlcv({symbol})")
             return []
         
         # Try WebSocket first if enabled and connected
