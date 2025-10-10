@@ -555,6 +555,57 @@ def test_close_position_with_limit_order():
         print(f"  ✗ Test error: {e}")
         return False
 
+def test_error_300009_handling():
+    """Test that error code 300009 'No open positions to close' is handled gracefully"""
+    print("\nTesting error 300009 handling...")
+    try:
+        import ccxt
+        with patch('ccxt.kucoinfutures') as mock_exchange_class:
+            mock_exchange = Mock()
+            mock_exchange_class.return_value = mock_exchange
+            mock_exchange.set_position_mode = Mock()
+            mock_exchange.set_margin_mode = Mock()
+            mock_exchange.set_leverage = Mock()
+            mock_exchange.load_markets = Mock(return_value={
+                'BTC-USDT': {
+                    'limits': {
+                        'amount': {'min': 1, 'max': 10000},
+                        'cost': {'min': 10, 'max': 1000000}
+                    }
+                }
+            })
+            mock_exchange.fetch_ticker = Mock(return_value={
+                'last': 50000,
+                'bid': 49990,
+                'ask': 50010
+            })
+            
+            # Simulate the 300009 error when trying to close a non-existent position
+            mock_exchange.create_order = Mock(
+                side_effect=ccxt.InvalidOrder('kucoinfutures {"msg":"No open positions to close.","code":"300009"}')
+            )
+            
+            client = KuCoinClient('key', 'secret', 'pass')
+            
+            # Try to create a reduce_only order (close position)
+            # This should handle the 300009 error gracefully and return a success response
+            order = client.create_market_order(
+                'BTC-USDT', 'sell', 1.0, leverage=10, reduce_only=True
+            )
+            
+            # Should return a dict indicating the position is already closed
+            assert order is not None, "Should return a response (not None)"
+            assert order.get('status') == 'closed', "Should indicate position is closed"
+            assert 'already closed' in order.get('info', '').lower(), "Should mention position already closed"
+            
+            print("  ✓ Error 300009 handled gracefully as success")
+            return True
+    except Exception as e:
+        print(f"  ✗ Test error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 def main():
     """Run all enhanced trading methods tests"""
     print("=" * 60)
@@ -573,6 +624,7 @@ def main():
         test_position_scaling_out,
         test_position_target_modification,
         test_close_position_with_limit_order,
+        test_error_300009_handling,
     ]
     
     results = []

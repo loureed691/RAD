@@ -174,6 +174,15 @@ class KuCoinClient:
                 return None
                 
             except ccxt.InvalidOrder as e:
+                # Check for "No open positions to close" error (code 300009)
+                # This is actually a success case for reduce_only orders
+                if '300009' in str(e) or 'no open positions to close' in str(e).lower():
+                    self.logger.info(
+                        f"Position already closed for {operation_name} (code 300009). "
+                        f"Treating as success."
+                    )
+                    return {'status': 'closed', 'info': 'Position already closed'}
+                
                 # Don't retry - order parameters are invalid
                 self.logger.error(
                     f"Invalid order parameters for {operation_name}: {str(e)}"
@@ -215,8 +224,16 @@ class KuCoinClient:
                 error_str = str(e).lower()
                 
                 # Check for specific KuCoin error codes
+                # 300009 - "No open positions to close" - treat as success for reduce_only orders
+                if '300009' in str(e) or 'no open positions to close' in error_str:
+                    self.logger.info(
+                        f"Position already closed for {operation_name} (code 300009). "
+                        f"Treating as success."
+                    )
+                    return {'status': 'closed', 'info': 'Position already closed'}
+                
                 # 400 errors - usually permanent (bad request)
-                if '400' in error_str or 'invalid' in error_str:
+                elif '400' in error_str or 'invalid' in error_str:
                     self.logger.error(
                         f"Invalid request for {operation_name}: {str(e)}"
                     )
