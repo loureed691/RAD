@@ -1191,23 +1191,35 @@ class PositionManager:
                 self.position_logger.debug(f"  Leverage: {position.leverage}x")
                 self.position_logger.debug(f"  Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
                 
-                # Get current price with better error context
-                try:
-                    ticker = self.client.get_ticker(symbol)
-                    if not ticker:
-                        self.position_logger.warning(f"  ⚠ Failed to get ticker - API returned None")
-                        continue
-                except Exception as e:
-                    self.logger.warning(f"API error getting ticker for {symbol}: {type(e).__name__}: {e}")
-                    self.position_logger.warning(f"  ⚠ API error getting ticker: {type(e).__name__}")
-                    continue
+                # Get current price with retry logic - NEVER skip position monitoring
+                current_price = None
+                ticker = None
                 
-                # Bug fix: Safely access 'last' price
-                current_price = ticker.get('last')
+                # Try to get ticker with retries (max 3 attempts)
+                for attempt in range(3):
+                    try:
+                        ticker = self.client.get_ticker(symbol)
+                        if ticker:
+                            current_price = ticker.get('last')
+                            if current_price and current_price > 0:
+                                break  # Got valid price, exit retry loop
+                            else:
+                                self.position_logger.debug(f"  Attempt {attempt + 1}: Invalid price in ticker: {current_price}")
+                        else:
+                            self.position_logger.debug(f"  Attempt {attempt + 1}: API returned None")
+                    except Exception as e:
+                        self.position_logger.debug(f"  Attempt {attempt + 1}: API error: {type(e).__name__}")
+                    
+                    # Wait before retry (exponential backoff: 0.5s, 1s, 2s)
+                    if attempt < 2:  # Don't wait after last attempt
+                        time.sleep(0.5 * (2 ** attempt))
+                
+                # If all retries failed, use last known price from position entry as fallback
+                # This ensures we NEVER skip a position - we always check close conditions
                 if not current_price or current_price <= 0:
-                    self.logger.warning(f"Invalid price for {symbol}: {current_price}, skipping")
-                    self.position_logger.warning(f"  ⚠ Invalid price: {current_price}")
-                    continue
+                    current_price = position.entry_price  # Use entry price as safe fallback
+                    self.logger.warning(f"All ticker retries failed for {symbol}, using entry price {current_price} as fallback")
+                    self.position_logger.warning(f"  ⚠ Using entry price as fallback - close conditions checked with stale data")
                 
                 self.position_logger.info(f"  Current Price: {format_price(current_price)}")
                 
