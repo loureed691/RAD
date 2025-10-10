@@ -603,24 +603,26 @@ class TradingBot:
         # IMPORTANT: Stop scanner first (less critical), then position monitor (critical)
         # This ensures position monitor can complete any critical operations
         # Stop background scanner thread
-        if self._scan_thread and self._scan_thread.is_alive():
-            self.logger.info("⏳ Stopping background scanner thread...")
-            self._scan_thread_running = False
-            self._scan_thread.join(timeout=5)  # Wait up to 5 seconds for thread to stop
+        if self._scan_thread:
+            self._scan_thread_running = False  # Always set flag to False to stop any running thread
             if self._scan_thread.is_alive():
-                self.logger.warning("⚠️  Background scanner thread did not stop gracefully")
-            else:
-                self.logger.info("✅ Background scanner thread stopped")
+                self.logger.info("⏳ Stopping background scanner thread...")
+                self._scan_thread.join(timeout=5)  # Wait up to 5 seconds for thread to stop
+                if self._scan_thread.is_alive():
+                    self.logger.warning("⚠️  Background scanner thread did not stop gracefully")
+                else:
+                    self.logger.info("✅ Background scanner thread stopped")
         
         # Stop position monitor thread
-        if self._position_monitor_thread and self._position_monitor_thread.is_alive():
-            self.logger.info("⏳ Stopping position monitor thread...")
-            self._position_monitor_running = False
-            self._position_monitor_thread.join(timeout=5)  # Wait up to 5 seconds for thread to stop
+        if self._position_monitor_thread:
+            self._position_monitor_running = False  # Always set flag to False to stop any running thread
             if self._position_monitor_thread.is_alive():
-                self.logger.warning("⚠️  Position monitor thread did not stop gracefully")
-            else:
-                self.logger.info("✅ Position monitor thread stopped")
+                self.logger.info("⏳ Stopping position monitor thread...")
+                self._position_monitor_thread.join(timeout=5)  # Wait up to 5 seconds for thread to stop
+                if self._position_monitor_thread.is_alive():
+                    self.logger.warning("⚠️  Position monitor thread did not stop gracefully")
+                else:
+                    self.logger.info("✅ Position monitor thread stopped")
         
         # Close all positions if configured to do so
         if getattr(Config, "CLOSE_POSITIONS_ON_SHUTDOWN", False):
