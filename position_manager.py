@@ -715,19 +715,28 @@ class Position:
         return False, ''
     
     def get_pnl(self, current_price: float) -> float:
-        """Calculate profit/loss percentage (price movement, not ROI on margin)
+        """Calculate profit/loss percentage (price movement only, without leverage)
         
-        Returns the percentage change in price, which represents the actual risk/reward
-        independent of leverage. This should NOT be multiplied by leverage because:
-        - Position sizing already accounts for leverage
-        - We want to measure actual portfolio impact, not ROI on margin
-        - Multiplying by leverage causes premature profit taking
+        Returns the percentage change in price. This is the base price movement
+        that should be multiplied by leverage for the actual ROI.
+        
+        Note: This returns unleveraged price change. For actual P/L USD calculation,
+        multiply by position_value * leverage.
         """
         if self.side == 'long':
             pnl = (current_price - self.entry_price) / self.entry_price
         else:
             pnl = (self.entry_price - current_price) / self.entry_price
         return pnl
+    
+    def get_leveraged_pnl(self, current_price: float) -> float:
+        """Calculate actual ROI including leverage effect
+        
+        Returns the actual return on investment considering leverage.
+        For a 3x leveraged position with 1% price move, this returns 3%.
+        """
+        base_pnl = self.get_pnl(current_price)
+        return base_pnl * self.leverage
 
 class PositionManager:
     """Manage open positions with trailing stops and advanced exit strategies"""
@@ -1097,16 +1106,17 @@ class PositionManager:
             
             self.position_logger.info(f"  Exit Price: {format_price(current_price)}")
             
-            # Calculate P/L
-            pnl = position.get_pnl(current_price)
+            # Calculate P/L (with leverage for accurate ROI)
+            pnl = position.get_pnl(current_price)  # Base price change %
+            leveraged_pnl = position.get_leveraged_pnl(current_price)  # Actual ROI %
             position_value = position.amount * position.entry_price
-            pnl_usd = pnl * position_value
+            pnl_usd = pnl * position_value * position.leverage  # USD P/L with leverage
             
             # Calculate duration
             duration = datetime.now() - position.entry_time
             duration_mins = duration.total_seconds() / 60
             
-            self.position_logger.info(f"  P/L: {pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
+            self.position_logger.info(f"  P/L: {leveraged_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
             self.position_logger.info(f"  Duration: {duration_mins:.1f} minutes")
             self.position_logger.info(f"  Max Favorable Excursion: {position.max_favorable_excursion:.2%}")
             
@@ -1223,12 +1233,13 @@ class PositionManager:
                 
                 self.position_logger.info(f"  Current Price: {format_price(current_price)}")
                 
-                # Calculate current P/L
-                current_pnl = position.get_pnl(current_price)
+                # Calculate current P/L (with leverage for accurate ROI)
+                current_pnl = position.get_pnl(current_price)  # Base price change %
+                leveraged_pnl = position.get_leveraged_pnl(current_price)  # Actual ROI %
                 position_value = position.amount * position.entry_price
-                pnl_usd = current_pnl * position_value
+                pnl_usd = current_pnl * position_value * position.leverage  # USD P/L with leverage
                 
-                self.position_logger.info(f"  Current P/L: {current_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
+                self.position_logger.info(f"  Current P/L: {leveraged_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
                 self.position_logger.debug(f"  Stop Loss: {format_price(position.stop_loss)}")
                 self.position_logger.debug(f"  Take Profit: {format_price(position.take_profit)}")
                 self.position_logger.debug(f"  Max Favorable Excursion: {position.max_favorable_excursion:.2%}")
