@@ -55,6 +55,15 @@ class KuCoinWebSocket:
         self._token = None
         self._connect_id = None
         
+        # Error tracking for deduplication
+        self._last_error = None
+        self._error_count = 0
+        self._last_error_time = 0
+        
+        # Reconnection backoff
+        self._reconnect_attempts = 0
+        self._max_reconnect_delay = 300  # 5 minutes max
+        
         self.logger.info("🔌 KuCoin WebSocket client initialized")
     
     def connect(self):
@@ -151,12 +160,34 @@ class KuCoinWebSocket:
             
             if msg_type == 'welcome':
                 self.logger.debug("Received welcome message")
+                # Reset reconnection attempts on successful connection
+                self._reconnect_attempts = 0
             elif msg_type == 'ack':
                 self.logger.debug(f"Subscription acknowledged: {data.get('id')}")
             elif msg_type == 'message':
                 self._handle_data_message(data)
             elif msg_type == 'pong':
                 self.logger.debug("Received pong")
+            elif msg_type == 'error':
+                # Handle error messages from KuCoin WebSocket
+                error_code = data.get('code')
+                error_msg = data.get('data', 'Unknown error')
+                topic = data.get('topic', 'N/A')
+                
+                # Log error with full details
+                error_str = f"WebSocket error - Code: {error_code}, Topic: {topic}, Message: {error_msg}"
+                
+                # Deduplicate repeated errors - only log if different from last error
+                current_time = time.time()
+                if error_str != self._last_error or (current_time - self._last_error_time) > 60:
+                    if self._error_count > 0:
+                        self.logger.warning(f"Previous error repeated {self._error_count} times")
+                    self.logger.warning(error_str)
+                    self._last_error = error_str
+                    self._last_error_time = current_time
+                    self._error_count = 0
+                else:
+                    self._error_count += 1
             else:
                 self.logger.debug(f"Received message type: {msg_type}")
         except Exception as e:
@@ -164,17 +195,37 @@ class KuCoinWebSocket:
     
     def _on_error(self, ws, error):
         """Handle WebSocket error"""
-        self.logger.error(f"WebSocket error: {error}")
+        error_str = str(error)
+        
+        # Deduplicate repeated connection errors
+        current_time = time.time()
+        if error_str != self._last_error or (current_time - self._last_error_time) > 60:
+            if self._error_count > 0:
+                self.logger.error(f"Previous error repeated {self._error_count} times (last: {self._last_error})")
+            self.logger.error(f"WebSocket error: {error}")
+            self._last_error = error_str
+            self._last_error_time = current_time
+            self._error_count = 0
+        else:
+            self._error_count += 1
     
     def _on_close(self, ws, close_status_code, close_msg):
         """Handle WebSocket connection closed"""
         self.connected = False
+        
+        # Log closure details
+        if self._error_count > 0:
+            self.logger.warning(f"WebSocket closing after {self._error_count} repeated errors")
         self.logger.warning(f"WebSocket connection closed: {close_status_code} - {close_msg}")
         
         # Attempt reconnection if enabled
         if self.should_reconnect:
-            self.logger.info("Attempting to reconnect WebSocket in 5 seconds...")
-            time.sleep(5)
+            # Calculate exponential backoff delay
+            self._reconnect_attempts += 1
+            delay = min(5 * (2 ** (self._reconnect_attempts - 1)), self._max_reconnect_delay)
+            
+            self.logger.info(f"Attempting to reconnect WebSocket in {delay} seconds (attempt #{self._reconnect_attempts})...")
+            time.sleep(delay)
             self.connect()
     
     def _start_ping(self):
