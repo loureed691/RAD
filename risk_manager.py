@@ -347,6 +347,11 @@ class RiskManager:
         # Calculate risk amount
         risk_amount = balance * risk
         
+        # Validate entry_price to prevent division by zero
+        if entry_price <= 0:
+            self.logger.error(f"Invalid entry_price: {entry_price}. Cannot calculate position size.")
+            return 0.0
+        
         # Calculate price distance to stop loss
         price_distance = abs(entry_price - stop_loss_price) / entry_price
         

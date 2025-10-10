@@ -81,7 +81,9 @@ class Indicators:
             df['bb_high'] = bb.bollinger_hband()
             df['bb_mid'] = bb.bollinger_mavg()
             df['bb_low'] = bb.bollinger_lband()
-            df['bb_width'] = (df['bb_high'] - df['bb_low']) / df['bb_mid']
+            # Handle potential division by zero - replace 0 with NaN, then fillna with default
+            df['bb_width'] = (df['bb_high'] - df['bb_low']) / df['bb_mid'].replace(0, np.nan)
+            df['bb_width'] = df['bb_width'].replace([np.inf, -np.inf], np.nan).fillna(0.03)
             
             # ATR (Average True Range)
             df['atr'] = AverageTrueRange(df['high'], df['low'], df['close']).average_true_range()
