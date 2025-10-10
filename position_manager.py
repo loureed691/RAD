@@ -380,20 +380,22 @@ class Position:
             if new_take_profit > self.take_profit:
                 # Critical fix: Don't move TP further away when price is approaching it
                 # For LONG: TP is above current price, so check if price is getting close
+                # IMPORTANT: Check progress to INITIAL TP, not current TP, to prevent TP from
+                # continuously moving away as it gets extended
+                
                 # Edge case: if current_price == take_profit, allow extension
                 if current_price == self.take_profit:
                     # At take profit exactly - allow extension if beneficial
                     self.take_profit = new_take_profit
                 elif current_price < self.take_profit:
                     # Price hasn't reached TP yet
-                    # Calculate how close: be very conservative to prevent TP from moving away
-                    distance_to_tp = self.take_profit - current_price
-                    progress_pct = (current_price - self.entry_price) / (self.take_profit - self.entry_price) if self.take_profit > self.entry_price else 0
+                    # Calculate progress to INITIAL TP (prevents TP from moving away)
+                    progress_pct = (current_price - self.entry_price) / (self.initial_take_profit - self.entry_price) if self.initial_take_profit > self.entry_price else 0
                     
-                    if progress_pct < 0.7:  # Less than 70% of way to TP - allow extension
+                    if progress_pct < 0.7:  # Less than 70% of way to INITIAL TP - allow extension
                         self.take_profit = new_take_profit
                     else:
-                        # Close to TP (70%+) - don't allow extension to prevent moving TP away
+                        # Close to INITIAL TP (70%+) - don't allow extension to prevent moving TP away
                         # This is the critical fix for "bot doesn't sell" issue
                         pass  # Keep TP at current value
                 else:
@@ -408,20 +410,22 @@ class Position:
             if new_take_profit < self.take_profit:
                 # Critical fix: Don't move TP further away when price is approaching it
                 # For SHORT: TP is below current price, so check if price is getting close
+                # IMPORTANT: Check progress to INITIAL TP, not current TP, to prevent TP from
+                # continuously moving away as it gets extended
+                
                 # Edge case: if current_price == take_profit, allow extension
                 if current_price == self.take_profit:
                     # At take profit exactly - allow extension if beneficial
                     self.take_profit = new_take_profit
                 elif current_price > self.take_profit:
                     # Price hasn't reached TP yet
-                    # Calculate how close: be very conservative to prevent TP from moving away
-                    distance_to_tp = current_price - self.take_profit
-                    progress_pct = (self.entry_price - current_price) / (self.entry_price - self.take_profit) if self.entry_price > self.take_profit else 0
+                    # Calculate progress to INITIAL TP (prevents TP from moving away)
+                    progress_pct = (self.entry_price - current_price) / (self.entry_price - self.initial_take_profit) if self.entry_price > self.initial_take_profit else 0
                     
-                    if progress_pct < 0.7:  # Less than 70% of way to TP - allow extension
+                    if progress_pct < 0.7:  # Less than 70% of way to INITIAL TP - allow extension
                         self.take_profit = new_take_profit
                     else:
-                        # Close to TP (70%+) - don't allow extension to prevent moving TP away
+                        # Close to INITIAL TP (70%+) - don't allow extension to prevent moving TP away
                         # This is the critical fix for "bot doesn't sell" issue
                         pass  # Keep TP at current value
                 else:
