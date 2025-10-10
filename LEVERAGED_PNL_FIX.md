@@ -53,15 +53,25 @@ current_pnl = self.get_leveraged_pnl(current_price)  # Leveraged ROI
 
 ### Also Updated Stalled Position Checks (lines 666, 683)
 
-**Before:**
+**IMPORTANT NOTE:** This section describes a fix from commit 530027e that had a bug which was corrected in this PR.
+
+**Original (before 530027e):**
 ```python
 if time_in_trade >= 4.0 and current_pnl < 0.02:  # 4 hours with < 2% profit
 ```
 
-**After:**
+**After 530027e (BUG - double leveraging):**
 ```python
 if time_in_trade >= 4.0 and current_pnl < 0.02 * self.leverage:  # 4 hours with < 2% ROI
 ```
+This was WRONG because `current_pnl` was already leveraged ROI from `get_leveraged_pnl()`, so multiplying by leverage again created a threshold of 20% for 10x leverage instead of 2%.
+
+**After this PR (FIXED):**
+```python
+# current_pnl is already leveraged ROI, so check against 2% ROI directly
+if time_in_trade >= 4.0 and current_pnl < 0.02:  # 4 hours with < 2% ROI
+```
+Now correctly checks for 2% ROI regardless of leverage level.
 
 ## Impact
 
@@ -116,15 +126,46 @@ To verify the fix is working in production:
 4. Stop loss should trigger at expected loss levels (e.g., 30% with 10x leverage)
 
 ## Files Modified
-- `position_manager.py` - Updated `should_close()` method
+- `position_manager.py` - Updated `should_close()` method, `close_position()` logging, `scale_out_position()` calculation and return value, `update_positions()` advanced exit strategy input, and `sync_positions_from_exchange()` logging
 - `test_leveraged_pnl_fix.py` - New comprehensive test suite
+- `test_scale_out_leveraged_pnl.py` - Test for scale_out_position leveraged P&L
+- `test_comprehensive_leveraged_pnl.py` - Comprehensive test demonstrating all fixes
 
-## Commit
-- Hash: 530027e
-- Message: "Fix position closing: use leveraged P&L for ROI thresholds"
+## Commits
+- Hash: 530027e - Message: "Fix position closing: use leveraged P&L for ROI thresholds"
+- Hash: 93a5fd4 - Message: "Fix leveraged P&L in close_position, scale_out_position, and logging"
+
+## Additional Fixes (93a5fd4)
+
+Beyond the initial `should_close()` fix, the following issues were also corrected:
+
+### 1. **close_position logging** (lines 1156, 1164)
+- **Before:** Logged unleveraged P&L in orders logger and main logger
+- **After:** Logs leveraged P&L (ROI) for accurate reporting
+- **Impact:** Users now see correct ROI percentages in logs
+
+### 2. **scale_out_position return value** (lines 1813-1830)
+- **Before:** Calculated and returned only unleveraged P&L
+- **After:** Calculates and returns leveraged P&L (ROI)
+- **Impact:** Partial position closes now report correct ROI
+
+### 3. **Advanced exit strategy input** (line 1348)
+- **Before:** Passed unleveraged P&L despite comment saying "Leveraged P&L"
+- **After:** Correctly passes leveraged P&L to advanced exit strategy
+- **Impact:** Exit strategies now make decisions based on actual ROI
+
+### 4. **Partial exit logging** (line 1389)
+- **Before:** Logged unleveraged P&L from scale_out_position
+- **After:** Logs leveraged P&L returned from scale_out_position
+- **Impact:** Consistent reporting of ROI for partial exits
+
+### 5. **Position sync logging** (line 890)
+- **Before:** Logged unleveraged P&L for synced positions
+- **After:** Logs leveraged P&L for synced positions
+- **Impact:** Synced position logs now show accurate ROI
 
 ---
 
 **Status:** ✅ FIXED AND TESTED
 
-This critical bug fix ensures positions close at the correct profit/loss levels that users expect when trading with leverage.
+This critical bug fix ensures positions close at the correct profit/loss levels that users expect when trading with leverage. All position closing logic, orders, and logging now use correctly calculated leveraged P&L (ROI) instead of unleveraged price movement.
