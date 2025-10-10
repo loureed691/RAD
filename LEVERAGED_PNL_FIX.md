@@ -53,15 +53,25 @@ current_pnl = self.get_leveraged_pnl(current_price)  # Leveraged ROI
 
 ### Also Updated Stalled Position Checks (lines 666, 683)
 
-**Before:**
+**IMPORTANT NOTE:** This section describes a fix from commit 530027e that had a bug which was corrected in this PR.
+
+**Original (before 530027e):**
 ```python
 if time_in_trade >= 4.0 and current_pnl < 0.02:  # 4 hours with < 2% profit
 ```
 
-**After:**
+**After 530027e (BUG - double leveraging):**
 ```python
 if time_in_trade >= 4.0 and current_pnl < 0.02 * self.leverage:  # 4 hours with < 2% ROI
 ```
+This was WRONG because `current_pnl` was already leveraged ROI from `get_leveraged_pnl()`, so multiplying by leverage again created a threshold of 20% for 10x leverage instead of 2%.
+
+**After this PR (FIXED):**
+```python
+# current_pnl is already leveraged ROI, so check against 2% ROI directly
+if time_in_trade >= 4.0 and current_pnl < 0.02:  # 4 hours with < 2% ROI
+```
+Now correctly checks for 2% ROI regardless of leverage level.
 
 ## Impact
 

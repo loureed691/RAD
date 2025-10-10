@@ -663,8 +663,8 @@ class Position:
             
             # Smart stop loss: tighten stop if position has been open for a while with no progress
             time_in_trade = (datetime.now() - self.entry_time).total_seconds() / 3600  # hours
-            # Use leveraged P&L for ROI checks (2% ROI, not 2% price movement)
-            if time_in_trade >= 4.0 and current_pnl < 0.02 * self.leverage:  # 4 hours with < 2% ROI
+            # current_pnl is already leveraged ROI, so check against 2% ROI directly
+            if time_in_trade >= 4.0 and current_pnl < 0.02:  # 4 hours with < 2% ROI
                 # Calculate a tighter stop loss for stalled positions
                 tighter_stop = self.entry_price * 0.99  # 1% below entry
                 if current_price <= tighter_stop:
@@ -681,8 +681,8 @@ class Position:
             
             # Smart stop loss: tighten stop if position has been open for a while with no progress
             time_in_trade = (datetime.now() - self.entry_time).total_seconds() / 3600  # hours
-            # Use leveraged P&L for ROI checks (2% ROI, not 2% price movement)
-            if time_in_trade >= 4.0 and current_pnl < 0.02 * self.leverage:  # 4 hours with < 2% ROI
+            # current_pnl is already leveraged ROI, so check against 2% ROI directly
+            if time_in_trade >= 4.0 and current_pnl < 0.02:  # 4 hours with < 2% ROI
                 # Calculate a tighter stop loss for stalled positions
                 tighter_stop = self.entry_price * 1.01  # 1% above entry
                 if current_price >= tighter_stop:
