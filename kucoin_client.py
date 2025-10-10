@@ -1265,9 +1265,17 @@ class KuCoinClient:
         """
         try:
             positions = self.get_open_positions()
+            if not positions:
+                self.logger.warning(f"No open positions found on exchange when trying to close {symbol}")
+                return False
+            
             for pos in positions:
                 if pos['symbol'] == symbol:
                     contracts = float(pos['contracts'])
+                    if contracts == 0:
+                        self.logger.warning(f"Position {symbol} has 0 contracts, skipping close")
+                        return False
+                    
                     side = 'sell' if pos['side'] == 'long' else 'buy'
                     
                     # Extract leverage from position data (multi-source)
@@ -1300,9 +1308,12 @@ class KuCoinClient:
                                 f"Leverage not found for {symbol} when closing, defaulting to 10x"
                             )
                     
+                    # Try to close the position - use market order for reliability
+                    # Market orders are more reliable for closing positions than limit orders
+                    order = None
                     if use_limit:
                         # Get current market price
-                        ticker = self.get_ticker(symbol)
+                        ticker = self.get_ticker(symbol, priority=APICallPriority.CRITICAL)
                         if not ticker:
                             self.logger.error(f"Could not get ticker for {symbol}, falling back to market order")
                             order = self.create_market_order(symbol, side, abs(contracts), leverage, reduce_only=True)
@@ -1314,22 +1325,38 @@ class KuCoinClient:
                             else:
                                 limit_price = current_price * (1 + slippage_tolerance)
                             
+                            # Try limit order first
                             order = self.create_limit_order(
                                 symbol, side, abs(contracts), limit_price, leverage,
                                 reduce_only=True
                             )
+                            
+                            # If limit order fails, fallback to market order immediately
+                            if not order:
+                                self.logger.warning(f"Limit order failed for {symbol}, using market order")
+                                order = self.create_market_order(symbol, side, abs(contracts), leverage, reduce_only=True)
                     else:
+                        # Use market order directly - most reliable for closing
                         order = self.create_market_order(symbol, side, abs(contracts), leverage, reduce_only=True)
                     
                     if order:
-                        self.logger.info(f"Closed position for {symbol} with {leverage}x leverage")
+                        self.logger.info(f"Successfully closed position for {symbol} ({side} {abs(contracts)} contracts at {leverage}x leverage)")
+                        # Verify the position is actually closed
+                        time.sleep(0.5)  # Brief pause for order processing
+                        updated_positions = self.get_open_positions()
+                        still_open = any(p['symbol'] == symbol and float(p.get('contracts', 0)) > 0 for p in updated_positions)
+                        if still_open:
+                            self.logger.warning(f"Position {symbol} may still be open after close order - will retry on next update")
                         return True
                     else:
                         self.logger.error(f"Failed to create close order for {symbol}")
                         return False
+            
+            # Position not found in exchange positions
+            self.logger.warning(f"Position {symbol} not found in exchange positions (may already be closed)")
             return False
         except Exception as e:
-            self.logger.error(f"Error closing position: {e}")
+            self.logger.error(f"Error closing position {symbol}: {e}", exc_info=True)
             return False
     
     def create_stop_limit_order(self, symbol: str, side: str, amount: float,

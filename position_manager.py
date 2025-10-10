@@ -1110,21 +1110,41 @@ class PositionManager:
             self.position_logger.info(f"  Duration: {duration_mins:.1f} minutes")
             self.position_logger.info(f"  Max Favorable Excursion: {position.max_favorable_excursion:.2%}")
             
-            # Close position on exchange
+            # Close position on exchange with retry logic
             self.position_logger.info(f"  Closing position on exchange...")
-            success = self.client.close_position(symbol)
+            max_retries = 3
+            success = False
+            for attempt in range(max_retries):
+                success = self.client.close_position(symbol)
+                if success:
+                    break
+                else:
+                    if attempt < max_retries - 1:
+                        self.position_logger.warning(f"  ⚠ Close attempt {attempt + 1} failed, retrying...")
+                        import time
+                        time.sleep(1)  # Brief pause before retry
+                    else:
+                        self.position_logger.error(f"  ✗ Failed to close position on exchange after {max_retries} attempts")
+            
             if not success:
-                self.position_logger.error(f"  ✗ Failed to close position on exchange")
+                self.logger.error(f"CRITICAL: Failed to close position {symbol} after {max_retries} attempts. Position may still be open on exchange.")
                 return None
             
             self.position_logger.info(f"  ✓ Position closed on exchange")
             
             # Log SL/TP trigger to orders logger if applicable
-            if reason in ['stop_loss', 'take_profit']:
+            if reason in ['stop_loss', 'stop_loss_stalled_position', 'take_profit', 
+                         'take_profit_5pct', 'take_profit_8pct', 'take_profit_10pct',
+                         'take_profit_15pct_far_tp', 'take_profit_20pct_exceptional',
+                         'take_profit_momentum_loss', 'take_profit_major_retracement',
+                         'emergency_profit_protection']:
                 from logger import Logger
                 orders_logger = Logger.get_orders_logger()
                 orders_logger.info("=" * 80)
-                orders_logger.info(f"{'STOP LOSS' if reason == 'stop_loss' else 'TAKE PROFIT'} TRIGGERED: {symbol}")
+                
+                # Determine if this is a stop loss or take profit
+                is_stop_loss = 'stop_loss' in reason.lower()
+                orders_logger.info(f"{'STOP LOSS' if is_stop_loss else 'TAKE PROFIT'} TRIGGERED: {symbol}")
                 orders_logger.info("-" * 80)
                 orders_logger.info(f"  Symbol: {symbol}")
                 orders_logger.info(f"  Position Side: {position.side.upper()}")
@@ -1132,12 +1152,14 @@ class PositionManager:
                 orders_logger.info(f"  Exit Price: {format_price(current_price)}")
                 orders_logger.info(f"  Amount: {position.amount} contracts")
                 orders_logger.info(f"  Leverage: {position.leverage}x")
-                if reason == 'stop_loss':
+                if is_stop_loss:
                     orders_logger.info(f"  Stop Loss Price: {format_price(position.stop_loss)}")
                     orders_logger.info(f"  Trigger: Price {'fell below' if position.side == 'long' else 'rose above'} stop loss")
+                    orders_logger.info(f"  Stop Loss Type: {reason}")
                 else:
-                    orders_logger.info(f"  Take Profit Price: {format_price(position.take_profit)}")
-                    orders_logger.info(f"  Trigger: Price {'rose above' if position.side == 'long' else 'fell below'} take profit")
+                    if position.take_profit:
+                        orders_logger.info(f"  Take Profit Price: {format_price(position.take_profit)}")
+                    orders_logger.info(f"  Trigger: {reason.replace('_', ' ').title()}")
                 orders_logger.info(f"  P/L: {pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
                 orders_logger.info(f"  Duration: {duration_mins:.1f} minutes")
                 orders_logger.info(f"  Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
