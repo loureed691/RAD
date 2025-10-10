@@ -1333,21 +1333,42 @@ class PositionManager:
                 }
                 
                 # Check comprehensive exit signal (includes breakeven+, momentum reversal, profit lock, etc.)
-                should_exit_advanced, exit_reason, suggested_stop = self.advanced_exit_strategy.get_comprehensive_exit_signal(
+                should_exit_advanced, exit_reason, suggested_action = self.advanced_exit_strategy.get_comprehensive_exit_signal(
                     position_data, market_data
                 )
                 
                 if should_exit_advanced:
                     self.position_logger.info(f"  🚨 Advanced exit signal: {exit_reason}")
                 
-                # Update stop loss if breakeven+ suggests a new level
-                if suggested_stop is not None and suggested_stop != position.stop_loss:
-                    old_stop = position.stop_loss
-                    position.stop_loss = suggested_stop
-                    self.logger.info(f"🔒 Updated {symbol} stop loss: {old_stop:.2f} -> {suggested_stop:.2f} ({exit_reason})")
-                    self.position_logger.info(f"  🔒 Stop loss adjusted: {old_stop:.2f} -> {suggested_stop:.2f} ({exit_reason})")
+                # Handle the suggested_action based on context:
+                # - If should_exit_advanced is True: suggested_action is scale percentage (1.0 for full)
+                # - If should_exit_advanced is False and suggested_action is not None: it's a new stop loss price
                 
-                # If advanced strategy says exit, do it
+                # Update stop loss if breakeven+ suggests a new level (not exiting)
+                if not should_exit_advanced and suggested_action is not None and isinstance(suggested_action, (int, float)):
+                    # Check if it's a stop loss price (typically close to entry price)
+                    # vs a scale percentage (0 < x <= 1.0)
+                    if 0 < suggested_action <= 1.0:
+                        # This is a partial exit scale percentage
+                        scale_pct = suggested_action
+                        amount_to_close = position.amount * scale_pct
+                        self.position_logger.info(f"  📊 Partial exit signal: {exit_reason} ({scale_pct*100:.0f}%)")
+                        pnl = self.scale_out_position(symbol, amount_to_close, exit_reason)
+                        if pnl is not None:
+                            # Note: Don't yield here for partial exits, position still exists
+                            self.logger.info(
+                                f"Partial exit: {symbol}, closed {scale_pct*100:.0f}%, "
+                                f"P/L: {pnl:.2%}, Reason: {exit_reason}"
+                            )
+                    else:
+                        # This is a new stop loss price
+                        if suggested_action != position.stop_loss:
+                            old_stop = position.stop_loss
+                            position.stop_loss = suggested_action
+                            self.logger.info(f"🔒 Updated {symbol} stop loss: {old_stop:.2f} -> {suggested_action:.2f} ({exit_reason})")
+                            self.position_logger.info(f"  🔒 Stop loss adjusted: {old_stop:.2f} -> {suggested_action:.2f} ({exit_reason})")
+                
+                # If advanced strategy says exit (full exit), do it
                 if should_exit_advanced:
                     self.position_logger.info(f"  ✓ Closing position: {exit_reason}")
                     pnl = self.close_position(symbol, exit_reason)
@@ -1750,9 +1771,12 @@ class PositionManager:
                 self.logger.warning(f"Invalid price for {symbol}: {current_price}")
                 return None
             
-            # Close partial position with correct leverage
+            # Close partial position with correct leverage (mark as critical)
             side = 'sell' if position.side == 'long' else 'buy'
-            order = self.client.create_market_order(symbol, side, amount_to_close, position.leverage, reduce_only=True)
+            order = self.client.create_market_order(
+                symbol, side, amount_to_close, position.leverage, 
+                reduce_only=True, is_critical=True
+            )
             
             if not order:
                 return None
