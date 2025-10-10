@@ -881,13 +881,14 @@ class PositionManager:
                     f"SL: {stop_loss:.2f}, TP: {take_profit:.2f}"
                 )
                 
-                # Calculate current P/L
-                pnl = position.get_pnl(current_price)
+                # Calculate current P/L (use leveraged P/L for accurate ROI reporting)
+                pnl = position.get_pnl(current_price)  # Base price change %
+                leveraged_pnl = position.get_leveraged_pnl(current_price)  # Actual ROI %
                 
                 self.logger.info(
                     f"Synced {side} position: {symbol} @ {format_price(entry_price)}, "
                     f"Current: {format_price(current_price)}, Amount: {abs(contracts)}, "
-                    f"Leverage: {leverage}x, P/L: {pnl:.2%}, "
+                    f"Leverage: {leverage}x, P/L: {leveraged_pnl:.2%}, "
                     f"Stop Loss: {format_price(stop_loss)}, Take Profit: {format_price(take_profit)}"
                 )
             
@@ -1153,7 +1154,7 @@ class PositionManager:
                 else:
                     orders_logger.info(f"  Take Profit Price: {format_price(position.take_profit)}")
                     orders_logger.info(f"  Trigger: Price {'rose above' if position.side == 'long' else 'fell below'} take profit")
-                orders_logger.info(f"  P/L: {pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
+                orders_logger.info(f"  P/L: {leveraged_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
                 orders_logger.info(f"  Duration: {duration_mins:.1f} minutes")
                 orders_logger.info(f"  Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                 orders_logger.info("=" * 80)
@@ -1161,7 +1162,7 @@ class PositionManager:
             
             self.logger.info(
                 f"Closed {position.side} position: {symbol} @ {format_price(current_price)}, "
-                f"Entry: {format_price(position.entry_price)}, P/L: {pnl:.2%}, Reason: {reason}"
+                f"Entry: {format_price(position.entry_price)}, P/L: {leveraged_pnl:.2%}, Reason: {reason}"
             )
             
             self.position_logger.info(f"✓ Position closed successfully at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -1338,14 +1339,15 @@ class PositionManager:
                 
                 # Check if position should be closed
                 # First check advanced exit strategies
-                current_pnl = position.get_pnl(current_price)
+                current_pnl = position.get_pnl(current_price)  # Base price change %
+                leveraged_pnl = position.get_leveraged_pnl(current_price)  # Actual ROI %
                 
                 # Prepare data for advanced exit strategy
                 position_data = {
                     'side': position.side,
                     'entry_price': position.entry_price,
                     'current_price': current_price,
-                    'current_pnl_pct': current_pnl,  # Leveraged P&L
+                    'current_pnl_pct': leveraged_pnl,  # Leveraged P&L (ROI)
                     'peak_pnl_pct': position.max_favorable_excursion,
                     'leverage': position.leverage,
                     'entry_time': position.entry_time,
@@ -1381,12 +1383,12 @@ class PositionManager:
                         scale_pct = suggested_action
                         amount_to_close = position.amount * scale_pct
                         self.position_logger.info(f"  📊 Partial exit signal: {exit_reason} ({scale_pct*100:.0f}%)")
-                        pnl = self.scale_out_position(symbol, amount_to_close, exit_reason)
-                        if pnl is not None:
+                        leveraged_pnl_result = self.scale_out_position(symbol, amount_to_close, exit_reason)
+                        if leveraged_pnl_result is not None:
                             # Note: Don't yield here for partial exits, position still exists
                             self.logger.info(
                                 f"Partial exit: {symbol}, closed {scale_pct*100:.0f}%, "
-                                f"P/L: {pnl:.2%}, Reason: {exit_reason}"
+                                f"P/L: {leveraged_pnl_result:.2%}, Reason: {exit_reason}"
                             )
                     else:
                         # This is a new stop loss price
@@ -1809,8 +1811,9 @@ class PositionManager:
             if not order:
                 return None
             
-            # Calculate P/L for closed portion
-            pnl = position.get_pnl(current_price)
+            # Calculate P/L for closed portion (use leveraged P/L for accurate ROI)
+            pnl = position.get_pnl(current_price)  # Base price change %
+            leveraged_pnl = position.get_leveraged_pnl(current_price)  # Actual ROI %
             
             # Thread-safe position update
             with self._positions_lock:
@@ -1824,10 +1827,10 @@ class PositionManager:
             
             self.logger.info(
                 f"Scaled out of {symbol}: closed {amount_to_close} contracts "
-                f"(P/L: {pnl:.2%}), remaining: {position.amount}, Reason: {reason}"
+                f"(P/L: {leveraged_pnl:.2%}), remaining: {position.amount}, Reason: {reason}"
             )
             
-            return pnl
+            return leveraged_pnl
             
         except Exception as e:
             self.logger.error(f"Error scaling out of position {symbol}: {e}")
