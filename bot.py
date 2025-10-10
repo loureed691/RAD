@@ -204,7 +204,9 @@ class TradingBot:
         )
         
         if not should_open:
-            self.logger.info(f"Not opening position: {reason}")
+            # Enhanced logging for position limit rejection
+            self.logger.info(f"❌ Cannot open position for {symbol}: {reason}")
+            self.logger.debug(f"   Current positions: {current_positions}/{Config.MAX_OPEN_POSITIONS}")
             return False
         
         # Validate trade
@@ -213,7 +215,9 @@ class TradingBot:
         )
         
         if not is_valid:
-            self.logger.info(f"Trade not valid: {reason}")
+            # Enhanced logging for trade rejection to help diagnose issues
+            self.logger.info(f"❌ Trade rejected for {symbol}: {reason}")
+            self.logger.debug(f"   Signal: {signal}, Confidence: {confidence:.2%}")
             return False
         
         # Get market data for position sizing
@@ -438,6 +442,7 @@ class TradingBot:
         max_age = Config.CHECK_INTERVAL * Config.STALE_DATA_MULTIPLIER  # Allow up to configurable multiple of the check interval
         if age > max_age:
             self.logger.warning(f"⚠️  Opportunities are stale (age: {int(age)}s > max: {int(max_age)}s), skipping")
+            self.logger.debug(f"   Consider increasing STALE_DATA_MULTIPLIER (current: {Config.STALE_DATA_MULTIPLIER})")
             return
         
         # Try to execute trades for top opportunities
@@ -455,7 +460,8 @@ class TradingBot:
                 self.logger.info(
                     f"🔎 Evaluating opportunity: {opportunity.get('symbol', 'UNKNOWN')} - "
                     f"Score: {opportunity.get('score', 0):.1f}, Signal: {opportunity.get('signal', 'UNKNOWN')}, "
-                    f"Confidence: {opportunity.get('confidence', 0):.2f}"
+                    f"Confidence: {opportunity.get('confidence', 0):.2%} "
+                    f"(threshold: {Config.MIN_TRADE_CONFIDENCE:.2%})"
                 )
                 
                 success = self.execute_trade(opportunity)

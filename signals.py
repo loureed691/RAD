@@ -16,7 +16,10 @@ class SignalGenerator:
         self.logger = Logger.get_logger()
         self.strategy_logger = Logger.get_strategy_logger()
         self.market_regime = 'neutral'  # 'trending', 'ranging', 'neutral'
-        self.adaptive_threshold = 0.55
+        # Import Config to use configurable thresholds
+        from config import Config
+        # Use configurable threshold from Config, fallback to 0.50 if not set
+        self.adaptive_threshold = getattr(Config, 'MIN_SIGNAL_CONFIDENCE', 0.50)
         self.pattern_recognizer = PatternRecognition()
         self.volume_profile_analyzer = VolumeProfile()
     
@@ -448,12 +451,18 @@ class SignalGenerator:
             reasons['equal_signals'] = 'buy and sell signals balanced'
         
         # Adaptive threshold based on market regime
+        # Use configurable base threshold, with regime-based adjustments
+        base_threshold = self.adaptive_threshold  # From Config.MIN_SIGNAL_CONFIDENCE
+        
         if self.market_regime == 'trending':
-            min_confidence = 0.52  # Lower threshold in trending markets
+            # Lower threshold in trending markets (easier to trade)
+            min_confidence = base_threshold * 0.96  # -4% from base
         elif self.market_regime == 'ranging':
-            min_confidence = 0.58  # Higher threshold in ranging markets
+            # Higher threshold in ranging markets (harder to trade)
+            min_confidence = base_threshold * 1.04  # +4% from base
         else:
-            min_confidence = self.adaptive_threshold
+            # Neutral market uses base threshold
+            min_confidence = base_threshold
         
         # Require minimum confidence threshold
         if confidence < min_confidence:

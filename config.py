@@ -38,7 +38,12 @@ class Config:
     MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))
     MAX_WORKERS = int(os.getenv('MAX_WORKERS', '20'))  # Number of parallel workers for market scanning
     CACHE_DURATION = int(os.getenv('CACHE_DURATION', '300'))  # Cache duration in seconds (default: 5 minutes)
-    STALE_DATA_MULTIPLIER = int(os.getenv('STALE_DATA_MULTIPLIER', '2'))  # Multiplier for CHECK_INTERVAL to determine max age for opportunity data
+    STALE_DATA_MULTIPLIER = int(os.getenv('STALE_DATA_MULTIPLIER', '3'))  # Increased from 2 to 3 to reduce false rejections
+    
+    # Trading Signal Thresholds (CONFIGURABLE)
+    # These were reduced from 0.55/0.60 to allow more trades in normal market conditions
+    MIN_SIGNAL_CONFIDENCE = float(os.getenv('MIN_SIGNAL_CONFIDENCE', '0.50'))  # Signal generation threshold
+    MIN_TRADE_CONFIDENCE = float(os.getenv('MIN_TRADE_CONFIDENCE', '0.55'))  # Trade execution threshold
     
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')

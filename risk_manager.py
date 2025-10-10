@@ -390,16 +390,24 @@ class RiskManager:
         return True, "OK"
     
     def validate_trade(self, symbol: str, signal: str, confidence: float, 
-                      min_confidence: float = 0.6) -> tuple[bool, str]:
+                      min_confidence: float = None) -> tuple[bool, str]:
         """
         Validate if a trade should be executed
+        
+        Uses configurable MIN_TRADE_CONFIDENCE from Config if not specified.
+        Default is 0.55 (55%) which filters weak signals while allowing normal trading.
         
         Returns:
             Tuple of (is_valid, reason)
         """
+        # Use Config threshold if not specified
+        if min_confidence is None:
+            from config import Config
+            min_confidence = getattr(Config, 'MIN_TRADE_CONFIDENCE', 0.55)
+        
         # Check confidence threshold
         if confidence < min_confidence:
-            return False, f"Confidence too low ({confidence:.2f} < {min_confidence})"
+            return False, f"Confidence too low ({confidence:.2f} < {min_confidence:.2f})"
         
         # Additional validation can be added here
         # e.g., check for recent losses, market conditions, etc.
