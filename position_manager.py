@@ -1752,7 +1752,7 @@ class PositionManager:
             
             # Close partial position with correct leverage
             side = 'sell' if position.side == 'long' else 'buy'
-            order = self.client.create_market_order(symbol, side, amount_to_close, position.leverage)
+            order = self.client.create_market_order(symbol, side, amount_to_close, position.leverage, reduce_only=True)
             
             if not order:
                 return None
