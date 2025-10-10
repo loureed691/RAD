@@ -157,8 +157,16 @@ class KuCoinWebSocket:
                 self._handle_data_message(data)
             elif msg_type == 'pong':
                 self.logger.debug("Received pong")
+            elif msg_type == 'error':
+                # Only log error messages at WARNING level if they contain meaningful info
+                error_code = data.get('code')
+                error_msg = data.get('data', 'Unknown error')
+                if error_code or error_msg != 'Unknown error':
+                    self.logger.warning(f"WebSocket error message: {error_code} - {error_msg}")
             else:
-                self.logger.debug(f"Received message type: {msg_type}")
+                # Only log truly unknown message types
+                if msg_type:
+                    self.logger.debug(f"Received message type: {msg_type}")
         except Exception as e:
             self.logger.error(f"Error processing WebSocket message: {e}")
     

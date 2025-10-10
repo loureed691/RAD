@@ -30,6 +30,7 @@ class KuCoinClient:
         # This ensures trading operations always execute before scanning operations
         self._pending_critical_calls = 0  # Track critical calls in progress
         self._critical_call_lock = threading.Lock()
+        self._closing = False  # Flag to indicate client is shutting down
         
         try:
             self.exchange = ccxt.kucoinfutures({
@@ -392,6 +393,11 @@ class KuCoinClient:
         Returns:
             Ticker dict or None
         """
+        # Check if client is closing (only check during shutdown, not exchange availability)
+        if getattr(self, '_closing', False):
+            self.logger.debug(f"Skipping get_ticker({symbol}) - client is closing")
+            return None
+        
         # Try WebSocket first if enabled and connected
         if self.websocket and self.websocket.is_connected():
             ticker = self.websocket.get_ticker(symbol)
@@ -450,6 +456,11 @@ class KuCoinClient:
         Returns:
             List of OHLCV candles
         """
+        # Check if client is closing (only check during shutdown, not exchange availability)
+        if getattr(self, '_closing', False):
+            self.logger.debug(f"Skipping get_ohlcv({symbol}) - client is closing")
+            return []
+        
         # Try WebSocket first if enabled and connected
         if self.websocket and self.websocket.is_connected():
             ohlcv = self.websocket.get_ohlcv(symbol, timeframe, limit)
@@ -1609,5 +1620,13 @@ class KuCoinClient:
         """Close connections and cleanup resources"""
         if self.websocket:
             self.logger.info("Closing WebSocket connection...")
-            self.websocket.disconnect()
-            self.websocket = None
+            try:
+                self.websocket.disconnect()
+            except Exception as e:
+                self.logger.warning(f"Error disconnecting WebSocket: {e}")
+            finally:
+                self.websocket = None
+        
+        # Mark the exchange as closed to prevent further API calls
+        if hasattr(self, 'exchange'):
+            self._closing = True
