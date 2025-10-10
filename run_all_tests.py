@@ -15,12 +15,15 @@ TEST_SUITES = [
     ("Core Components", "test_bot.py", 12),
     ("Strategy Optimizations", "test_strategy_optimizations.py", 5),
     ("Adaptive Stops", "test_adaptive_stops.py", 9),
-    ("Logger Enhancements", "test_logger_enhancements.py", 7),
-    ("Advanced Features", "test_advanced_features.py", 6),
     ("Live Trading", "test_live_trading.py", 6),
     ("Trade Simulation", "test_trade_simulation.py", 20),
     ("Enhanced Trading Methods", "test_enhanced_trading_methods.py", 10),
     ("Smart Profit Taking", "test_smart_profit_taking.py", 10),
+    ("Thread Safety", "test_thread_safety.py", 3),
+    ("Real World Simulation", "test_real_world_simulation.py", 2),
+    ("Small Balance Support", "test_small_balance_support.py", 8),
+    ("Risk Management", "test_risk_management.py", 5),
+    ("Comprehensive Advanced", "test_comprehensive_advanced.py", 9),
 ]
 
 def print_header():
