@@ -380,11 +380,7 @@ class Position:
             if new_take_profit > self.take_profit:
                 # Critical fix: Don't move TP further away when price is approaching it
                 # For LONG: TP is above current price, so check if price is getting close
-                # Edge case: if current_price == take_profit, allow extension
-                if current_price == self.take_profit:
-                    # At take profit exactly - allow extension if beneficial
-                    self.take_profit = new_take_profit
-                elif current_price < self.take_profit:
+                if current_price < self.take_profit:
                     # Price hasn't reached TP yet
                     # Calculate how close: be very conservative to prevent TP from moving away
                     distance_to_tp = self.take_profit - current_price
@@ -408,11 +404,7 @@ class Position:
             if new_take_profit < self.take_profit:
                 # Critical fix: Don't move TP further away when price is approaching it
                 # For SHORT: TP is below current price, so check if price is getting close
-                # Edge case: if current_price == take_profit, allow extension
-                if current_price == self.take_profit:
-                    # At take profit exactly - allow extension if beneficial
-                    self.take_profit = new_take_profit
-                elif current_price > self.take_profit:
+                if current_price > self.take_profit:
                     # Price hasn't reached TP yet
                     # Calculate how close: be very conservative to prevent TP from moving away
                     distance_to_tp = current_price - self.take_profit
