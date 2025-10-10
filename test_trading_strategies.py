@@ -119,15 +119,17 @@ class TestTradingStrategies(unittest.TestCase):
         )
         self.assertIsNone(scale_pct)  # No target hit yet
         
-        # Note: Current implementation returns first matching target
-        # At 6% profit, it still returns first target (2%) at 25%
-        # This is by design - partial exits happen incrementally
+        # Note: Current implementation returns only the first matching target
+        # At 6% profit, it still returns the first target (2%) at 25%
+        # This is intentional: partial exits are triggered incrementally, not progressively.
         scale_pct, reason = exit_strategy.profit_target_scaling(
             0.06, 50000.0, 53000.0, 'long'
         )
         self.assertIsNotNone(scale_pct)
-        # Returns first target that matches
+        # Only the first target is matched, even if higher targets are reached
         self.assertEqual(scale_pct, 0.25)
+        # Ensure higher targets are not matched at this profit level
+        self.assertNotEqual(scale_pct, 0.5)
     
     def test_momentum_reversal_exit(self):
         """Test that momentum reversal triggers exit"""
