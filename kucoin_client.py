@@ -99,7 +99,8 @@ class KuCoinClient:
     
     def _handle_api_error(self, func: Callable, max_retries: int = 3, 
                           exponential_backoff: bool = True, 
-                          operation_name: str = "API call") -> Any:
+                          operation_name: str = "API call",
+                          is_critical: bool = False) -> Any:
         """
         Handle API errors with retry logic and exponential backoff.
         
@@ -108,6 +109,7 @@ class KuCoinClient:
             max_retries: Maximum number of retry attempts
             exponential_backoff: If True, use exponential backoff (1s, 2s, 4s, etc.)
             operation_name: Name of the operation for logging
+            is_critical: If True, uses more aggressive retry for critical operations (closing positions, etc.)
             
         Returns:
             Result from func if successful, None if all retries failed
@@ -122,7 +124,11 @@ class KuCoinClient:
         """
         last_exception = None
         
-        for attempt in range(max_retries):
+        # For critical operations (closing positions), use more retries
+        # to ensure trades are executed even with transient errors
+        effective_retries = max_retries * 3 if is_critical else max_retries
+        
+        for attempt in range(effective_retries):
             try:
                 result = func()
                 
@@ -146,16 +152,16 @@ class KuCoinClient:
                 # Cap maximum delay at 30 seconds
                 delay = min(delay, 30)
                 
-                if attempt < max_retries - 1:
+                if attempt < effective_retries - 1:
                     self.logger.warning(
                         f"Rate limit exceeded for {operation_name} "
-                        f"(attempt {attempt + 1}/{max_retries}). "
+                        f"(attempt {attempt + 1}/{effective_retries}). "
                         f"Waiting {delay}s before retry... Error: {str(e)}"
                     )
                     time.sleep(delay)
                 else:
                     self.logger.error(
-                        f"Rate limit exceeded for {operation_name} after {max_retries} attempts. "
+                        f"Rate limit exceeded for {operation_name} after {effective_retries} attempts. "
                         f"Error: {str(e)}"
                     )
                     
@@ -190,16 +196,16 @@ class KuCoinClient:
                     
                 delay = min(delay, 30)
                 
-                if attempt < max_retries - 1:
+                if attempt < effective_retries - 1:
                     self.logger.warning(
                         f"Network error for {operation_name} "
-                        f"(attempt {attempt + 1}/{max_retries}). "
+                        f"(attempt {attempt + 1}/{effective_retries}). "
                         f"Waiting {delay}s before retry... Error: {str(e)}"
                     )
                     time.sleep(delay)
                 else:
                     self.logger.error(
-                        f"Network error for {operation_name} after {max_retries} attempts. "
+                        f"Network error for {operation_name} after {effective_retries} attempts. "
                         f"Error: {str(e)}"
                     )
                     
@@ -230,16 +236,16 @@ class KuCoinClient:
                         delay = 2
                     delay = min(delay, 30)
                     
-                    if attempt < max_retries - 1:
+                    if attempt < effective_retries - 1:
                         self.logger.warning(
                             f"Rate limit error for {operation_name} "
-                            f"(attempt {attempt + 1}/{max_retries}). "
+                            f"(attempt {attempt + 1}/{effective_retries}). "
                             f"Waiting {delay}s before retry... Error: {str(e)}"
                         )
                         time.sleep(delay)
                     else:
                         self.logger.error(
-                            f"Rate limit error for {operation_name} after {max_retries} attempts. "
+                            f"Rate limit error for {operation_name} after {effective_retries} attempts. "
                             f"Error: {str(e)}"
                         )
                         
@@ -251,16 +257,16 @@ class KuCoinClient:
                         delay = 2
                     delay = min(delay, 30)
                     
-                    if attempt < max_retries - 1:
+                    if attempt < effective_retries - 1:
                         self.logger.warning(
                             f"Server error for {operation_name} "
-                            f"(attempt {attempt + 1}/{max_retries}). "
+                            f"(attempt {attempt + 1}/{effective_retries}). "
                             f"Waiting {delay}s before retry... Error: {str(e)}"
                         )
                         time.sleep(delay)
                     else:
                         self.logger.error(
-                            f"Server error for {operation_name} after {max_retries} attempts. "
+                            f"Server error for {operation_name} after {effective_retries} attempts. "
                             f"Error: {str(e)}"
                         )
                 else:
@@ -282,7 +288,7 @@ class KuCoinClient:
         # All retries exhausted
         if last_exception:
             self.logger.error(
-                f"Failed {operation_name} after {max_retries} attempts. "
+                f"Failed {operation_name} after {effective_retries} attempts. "
                 f"Last error: {type(last_exception).__name__}: {str(last_exception)}"
             )
         
@@ -857,7 +863,8 @@ class KuCoinClient:
     
     def create_market_order(self, symbol: str, side: str, amount: float, 
                            leverage: int = 10, max_slippage: float = 0.01,
-                           validate_depth: bool = True, reduce_only: bool = False) -> Optional[Dict]:
+                           validate_depth: bool = True, reduce_only: bool = False,
+                           is_critical: bool = False) -> Optional[Dict]:
         """Create a market order with leverage and slippage protection
         
         🔴 CRITICAL PRIORITY: This order operation executes BEFORE any scanning operations.
@@ -870,6 +877,7 @@ class KuCoinClient:
             max_slippage: Maximum acceptable slippage (default 1%)
             validate_depth: Check order book depth before large orders
             reduce_only: If True, order only reduces position (for closing positions)
+            is_critical: If True, uses more aggressive retry for critical operations
         
         Returns:
             Order dict if successful, None otherwise
@@ -992,7 +1000,8 @@ class KuCoinClient:
                 _place_order, 
                 max_retries=3,
                 exponential_backoff=True,
-                operation_name=f"create_market_order({symbol}, {side})"
+                operation_name=f"create_market_order({symbol}, {side})",
+                is_critical=is_critical or reduce_only  # Closing positions is critical
             )
             
             if not order:
@@ -1082,7 +1091,7 @@ class KuCoinClient:
     
     def create_limit_order(self, symbol: str, side: str, amount: float, 
                           price: float, leverage: int = 10, post_only: bool = False,
-                          reduce_only: bool = False) -> Optional[Dict]:
+                          reduce_only: bool = False, is_critical: bool = False) -> Optional[Dict]:
         """Create a limit order with leverage.
         
         🔴 CRITICAL PRIORITY: This order operation executes BEFORE any scanning operations.
@@ -1097,6 +1106,7 @@ class KuCoinClient:
             leverage: Leverage to use
             post_only: If True, ensures order is a maker order (reduces fees)
             reduce_only: If True, order only reduces position (safer exits)
+            is_critical: If True, uses more aggressive retry for critical operations
         """
         def _create_order():
             nonlocal leverage
@@ -1170,7 +1180,8 @@ class KuCoinClient:
                 _place_order,
                 max_retries=3,
                 exponential_backoff=True,
-                operation_name=f"create_limit_order({symbol}, {side})"
+                operation_name=f"create_limit_order({symbol}, {side})",
+                is_critical=is_critical or reduce_only  # Closing positions is critical
             )
             
             if not order:
@@ -1252,85 +1263,124 @@ class KuCoinClient:
         return self._execute_with_priority(_fetch, APICallPriority.HIGH, 'get_open_positions')
     
     def close_position(self, symbol: str, use_limit: bool = False, 
-                      slippage_tolerance: float = 0.002) -> bool:
+                      slippage_tolerance: float = 0.002, max_close_retries: int = 5) -> bool:
         """Close a position with optional limit order for better execution
+        
+        This method will retry multiple times to ensure the position is closed,
+        as closing positions is a critical operation that should not fail due to
+        transient network issues or rate limits.
         
         Args:
             symbol: Trading pair symbol
             use_limit: If True, uses limit order instead of market order
             slippage_tolerance: Maximum acceptable slippage (default 0.2%)
+            max_close_retries: Maximum number of retries for the entire close operation (default 5)
         
         Returns:
             True if position closed successfully, False otherwise
         """
-        try:
-            positions = self.get_open_positions()
-            for pos in positions:
-                if pos['symbol'] == symbol:
-                    contracts = float(pos['contracts'])
-                    side = 'sell' if pos['side'] == 'long' else 'buy'
-                    
-                    # Extract leverage from position data (multi-source)
-                    # 1. Try CCXT unified 'leverage' field
-                    leverage = pos.get('leverage')
-                    if leverage is not None:
-                        try:
-                            leverage = int(leverage)
-                        except (ValueError, TypeError):
-                            self.logger.warning(
-                                f"Invalid leverage value '{leverage}' for {symbol}, defaulting to 10x"
-                            )
-                            leverage = 10
-                    else:
-                        # 2. Try KuCoin-specific 'realLeverage' in raw info
-                        info = pos.get('info', {})
-                        real_leverage = info.get('realLeverage')
-                        if real_leverage is not None:
+        for close_attempt in range(max_close_retries):
+            try:
+                positions = self.get_open_positions()
+                position_found = False
+                
+                for pos in positions:
+                    if pos['symbol'] == symbol:
+                        position_found = True
+                        contracts = float(pos['contracts'])
+                        side = 'sell' if pos['side'] == 'long' else 'buy'
+                        
+                        # Extract leverage from position data (multi-source)
+                        # 1. Try CCXT unified 'leverage' field
+                        leverage = pos.get('leverage')
+                        if leverage is not None:
                             try:
-                                leverage = int(real_leverage)
+                                leverage = int(leverage)
                             except (ValueError, TypeError):
                                 self.logger.warning(
-                                    f"Invalid realLeverage value '{real_leverage}' for {symbol}, defaulting to 10x"
+                                    f"Invalid leverage value '{leverage}' for {symbol}, defaulting to 10x"
                                 )
                                 leverage = 10
                         else:
-                            # 3. Default to 10x with warning
-                            leverage = 10
-                            self.logger.warning(
-                                f"Leverage not found for {symbol} when closing, defaulting to 10x"
-                            )
-                    
-                    if use_limit:
-                        # Get current market price
-                        ticker = self.get_ticker(symbol)
-                        if not ticker:
-                            self.logger.error(f"Could not get ticker for {symbol}, falling back to market order")
-                            order = self.create_market_order(symbol, side, abs(contracts), leverage, reduce_only=True)
-                        else:
-                            current_price = ticker['last']
-                            # Set limit price with slippage tolerance
-                            if side == 'sell':
-                                limit_price = current_price * (1 - slippage_tolerance)
+                            # 2. Try KuCoin-specific 'realLeverage' in raw info
+                            info = pos.get('info', {})
+                            real_leverage = info.get('realLeverage')
+                            if real_leverage is not None:
+                                try:
+                                    leverage = int(real_leverage)
+                                except (ValueError, TypeError):
+                                    self.logger.warning(
+                                        f"Invalid realLeverage value '{real_leverage}' for {symbol}, defaulting to 10x"
+                                    )
+                                    leverage = 10
                             else:
-                                limit_price = current_price * (1 + slippage_tolerance)
-                            
-                            order = self.create_limit_order(
-                                symbol, side, abs(contracts), limit_price, leverage,
-                                reduce_only=True
+                                # 3. Default to 10x with warning
+                                leverage = 10
+                                self.logger.warning(
+                                    f"Leverage not found for {symbol} when closing, defaulting to 10x"
+                                )
+                        
+                        if use_limit:
+                            # Get current market price
+                            ticker = self.get_ticker(symbol)
+                            if not ticker:
+                                self.logger.error(f"Could not get ticker for {symbol}, falling back to market order")
+                                order = self.create_market_order(symbol, side, abs(contracts), leverage, reduce_only=True, is_critical=True)
+                            else:
+                                current_price = ticker['last']
+                                # Set limit price with slippage tolerance
+                                if side == 'sell':
+                                    limit_price = current_price * (1 - slippage_tolerance)
+                                else:
+                                    limit_price = current_price * (1 + slippage_tolerance)
+                                
+                                order = self.create_limit_order(
+                                    symbol, side, abs(contracts), limit_price, leverage,
+                                    reduce_only=True, is_critical=True
+                                )
+                        else:
+                            order = self.create_market_order(symbol, side, abs(contracts), leverage, reduce_only=True, is_critical=True)
+                        
+                        if order:
+                            self.logger.info(f"Closed position for {symbol} with {leverage}x leverage")
+                            return True
+                        else:
+                            self.logger.error(
+                                f"Failed to create close order for {symbol} "
+                                f"(attempt {close_attempt + 1}/{max_close_retries})"
                             )
-                    else:
-                        order = self.create_market_order(symbol, side, abs(contracts), leverage, reduce_only=True)
+                            # If order creation failed, retry the entire close operation
+                            if close_attempt < max_close_retries - 1:
+                                retry_delay = min(2 ** close_attempt, 10)  # Exponential backoff, capped at 10s
+                                self.logger.warning(
+                                    f"Retrying close_position for {symbol} in {retry_delay}s..."
+                                )
+                                time.sleep(retry_delay)
+                            continue
+                
+                # If position not found, it may have already been closed
+                if not position_found:
+                    self.logger.info(f"Position {symbol} not found (may already be closed)")
+                    return True
                     
-                    if order:
-                        self.logger.info(f"Closed position for {symbol} with {leverage}x leverage")
-                        return True
-                    else:
-                        self.logger.error(f"Failed to create close order for {symbol}")
-                        return False
-            return False
-        except Exception as e:
-            self.logger.error(f"Error closing position: {e}")
-            return False
+            except Exception as e:
+                self.logger.error(
+                    f"Error closing position {symbol} "
+                    f"(attempt {close_attempt + 1}/{max_close_retries}): {e}"
+                )
+                if close_attempt < max_close_retries - 1:
+                    retry_delay = min(2 ** close_attempt, 10)  # Exponential backoff, capped at 10s
+                    self.logger.warning(
+                        f"Retrying close_position for {symbol} in {retry_delay}s..."
+                    )
+                    time.sleep(retry_delay)
+        
+        # All retries exhausted
+        self.logger.error(
+            f"Failed to close position {symbol} after {max_close_retries} attempts. "
+            f"Position may still be open!"
+        )
+        return False
     
     def create_stop_limit_order(self, symbol: str, side: str, amount: float,
                                stop_price: float, limit_price: float, 
