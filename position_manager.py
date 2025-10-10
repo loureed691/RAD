@@ -718,10 +718,11 @@ class Position:
         """Calculate profit/loss percentage (price movement only, without leverage)
         
         Returns the percentage change in price. This is the base price movement
-        that should be multiplied by leverage for the actual ROI.
+        that should be multiplied by leverage to get the leveraged ROI (return on investment).
         
-        Note: This returns unleveraged price change. For actual P/L USD calculation,
-        multiply by position_value * leverage.
+        Note: This returns the unleveraged price change. To calculate the actual P/L in USD,
+        multiply the result by leverage to get the leveraged P/L percentage, then multiply by position_value:
+            pnl_usd = get_pnl(current_price) * leverage * position_value
         """
         if self.side == 'long':
             pnl = (current_price - self.entry_price) / self.entry_price
