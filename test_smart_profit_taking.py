@@ -28,7 +28,7 @@ def test_roi_based_profit_taking():
     # Price at 50250 gives 5% ROI with 10x leverage
     current_price = 50250.0
     should_close, reason = position.should_close(current_price)
-    pnl = position.get_pnl(current_price)
+    pnl = position.get_leveraged_pnl(current_price)
     
     print(f"   Entry: ${position.entry_price:,.0f}")
     print(f"   Current: ${current_price:,.0f}")
@@ -55,7 +55,7 @@ def test_roi_based_profit_taking():
     # Price at 3024 gives 8% ROI with 10x leverage
     current_price2 = 3024.0
     should_close2, reason2 = position2.should_close(current_price2)
-    pnl2 = position2.get_pnl(current_price2)
+    pnl2 = position2.get_leveraged_pnl(current_price2)
     
     print(f"   Entry: ${position2.entry_price:,.0f}")
     print(f"   Current: ${current_price2:,.0f}")
@@ -82,7 +82,7 @@ def test_roi_based_profit_taking():
     # Price at 0.4925 gives 15% ROI with 10x leverage (short)
     current_price3 = 0.4925
     should_close3, reason3 = position3.should_close(current_price3)
-    pnl3 = position3.get_pnl(current_price3)
+    pnl3 = position3.get_leveraged_pnl(current_price3)
     
     print(f"   Entry: ${position3.entry_price:.4f}")
     print(f"   Current: ${current_price3:.4f}")
@@ -109,7 +109,7 @@ def test_roi_based_profit_taking():
     # Price at 408 gives 20% ROI with 10x leverage
     current_price4 = 408.0
     should_close4, reason4 = position4.should_close(current_price4)
-    pnl4 = position4.get_pnl(current_price4)
+    pnl4 = position4.get_leveraged_pnl(current_price4)
     
     print(f"   Entry: ${position4.entry_price:,.0f}")
     print(f"   Current: ${current_price4:,.0f}")
@@ -144,13 +144,13 @@ def test_momentum_loss_detection():
     
     # Simulate position reaching 15% ROI
     peak_price = 50750.0
-    position.max_favorable_excursion = position.get_pnl(peak_price)
+    position.max_favorable_excursion = position.get_leveraged_pnl(peak_price)
     print(f"   Peak PNL at ${peak_price:,.0f}: {position.max_favorable_excursion:.2%}")
     
     # Now price retraces to 50525 (10.5% ROI, 30% below peak)
     # TP is only 0.94% away, so 10% check won't trigger
     current_price = 50525.0
-    current_pnl = position.get_pnl(current_price)
+    current_pnl = position.get_leveraged_pnl(current_price)
     should_close, reason = position.should_close(current_price)
     
     profit_drawdown = position.max_favorable_excursion - current_pnl
@@ -179,13 +179,13 @@ def test_momentum_loss_detection():
     
     # Simulate position reaching 10% ROI
     peak_price2 = 2970.0
-    position2.max_favorable_excursion = position2.get_pnl(peak_price2)
+    position2.max_favorable_excursion = position2.get_leveraged_pnl(peak_price2)
     print(f"   Peak PNL at ${peak_price2:,.0f}: {position2.max_favorable_excursion:.2%}")
     
     # Now price retraces to 2985 (5% ROI, 50% below peak)
     # Distance to TP: (2985 - 2850) / 2985 = 4.52%, < 5% so won't trigger
     current_price2 = 2985.0
-    current_pnl2 = position2.get_pnl(current_price2)
+    current_pnl2 = position2.get_leveraged_pnl(current_price2)
     should_close2, reason2 = position2.should_close(current_price2)
     
     profit_drawdown2 = position2.max_favorable_excursion - current_pnl2
@@ -223,7 +223,7 @@ def test_conservative_tp_extensions():
     
     # Position has 15% ROI (750 price gain / 10x leverage = 15%)
     current_price = 50750.0
-    current_pnl = position.get_pnl(current_price)
+    current_pnl = position.get_leveraged_pnl(current_price)
     print(f"   Entry: ${position.entry_price:,.0f}")
     print(f"   Current: ${current_price:,.0f}")
     print(f"   Current PNL: {current_pnl:.2%}")
@@ -259,7 +259,7 @@ def test_conservative_tp_extensions():
     
     # Position has 10% ROI
     current_price2 = 3030.0
-    current_pnl2 = position2.get_pnl(current_price2)
+    current_pnl2 = position2.get_leveraged_pnl(current_price2)
     print(f"   Entry: ${position2.entry_price:,.0f}")
     print(f"   Current: ${current_price2:,.0f}")
     print(f"   Current PNL: {current_pnl2:.2%}")
@@ -294,7 +294,7 @@ def test_conservative_tp_extensions():
     
     # Position has 5% ROI
     current_price3 = 100.5
-    current_pnl3 = position3.get_pnl(current_price3)
+    current_pnl3 = position3.get_leveraged_pnl(current_price3)
     print(f"   Entry: ${position3.entry_price:,.0f}")
     print(f"   Current: ${current_price3:,.2f}")
     print(f"   Current PNL: {current_pnl3:.2%}")
@@ -453,7 +453,7 @@ def test_short_position_profit_taking():
     # Price at 49500 gives 10% ROI for short
     current_price = 49500.0
     should_close, reason = position.should_close(current_price)
-    pnl = position.get_pnl(current_price)
+    pnl = position.get_leveraged_pnl(current_price)
     
     print(f"   Entry: ${position.entry_price:,.0f}")
     print(f"   Current: ${current_price:,.0f}")
@@ -479,12 +479,12 @@ def test_short_position_profit_taking():
     
     # Reached peak at 2940 (20% ROI)
     peak_price = 2940.0
-    position2.max_favorable_excursion = position2.get_pnl(peak_price)
+    position2.max_favorable_excursion = position2.get_leveraged_pnl(peak_price)
     
     # Now at 2982 (6% ROI, 70% drawdown from peak)
     current_price2 = 2982.0
     should_close2, reason2 = position2.should_close(current_price2)
-    pnl2 = position2.get_pnl(current_price2)
+    pnl2 = position2.get_leveraged_pnl(current_price2)
     
     print(f"   Peak PNL: {position2.max_favorable_excursion:.2%}")
     print(f"   Current PNL: {pnl2:.2%}")

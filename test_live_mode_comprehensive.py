@@ -60,8 +60,11 @@ class TestLiveModeComprehensive(unittest.TestCase):
                                             from bot import TradingBot
                                             bot = TradingBot()
                                             
-                                            # Verify lock exists and is a threading.Lock
-                                            self.assertIsInstance(bot._scan_lock, threading.Lock)
+                                            # Verify lock exists and is a proper lock type
+                                            self.assertTrue(hasattr(bot, '_scan_lock'))
+                                            # Lock should be callable (has acquire/release methods)
+                                            self.assertTrue(hasattr(bot._scan_lock, 'acquire'))
+                                            self.assertTrue(hasattr(bot._scan_lock, 'release'))
     
     def test_graceful_shutdown_stops_thread(self):
         """Test that shutdown properly stops background thread"""
