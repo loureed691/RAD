@@ -593,8 +593,10 @@ class Position:
 
     def should_close(self, current_price: float) -> tuple[bool, str]:
         """Check if position should be closed"""
-        # Calculate current P/L percentage (price movement, not ROI on margin)
-        current_pnl = self.get_pnl(current_price)
+        # Calculate current P/L percentage
+        # CRITICAL FIX: Use leveraged P&L to check ROI-based thresholds (20% profit = 20% ROI, not 20% price movement)
+        # This ensures positions close at the correct profit/loss levels the user expects
+        current_pnl = self.get_leveraged_pnl(current_price)
         
         # Update favorable excursion tracking for smarter profit taking
         if current_pnl > self.max_favorable_excursion:
@@ -661,7 +663,8 @@ class Position:
             
             # Smart stop loss: tighten stop if position has been open for a while with no progress
             time_in_trade = (datetime.now() - self.entry_time).total_seconds() / 3600  # hours
-            if time_in_trade >= 4.0 and current_pnl < 0.02:  # 4 hours with < 2% profit
+            # Use leveraged P&L for ROI checks (2% ROI, not 2% price movement)
+            if time_in_trade >= 4.0 and current_pnl < 0.02 * self.leverage:  # 4 hours with < 2% ROI
                 # Calculate a tighter stop loss for stalled positions
                 tighter_stop = self.entry_price * 0.99  # 1% below entry
                 if current_price <= tighter_stop:
@@ -678,7 +681,8 @@ class Position:
             
             # Smart stop loss: tighten stop if position has been open for a while with no progress
             time_in_trade = (datetime.now() - self.entry_time).total_seconds() / 3600  # hours
-            if time_in_trade >= 4.0 and current_pnl < 0.02:  # 4 hours with < 2% profit
+            # Use leveraged P&L for ROI checks (2% ROI, not 2% price movement)
+            if time_in_trade >= 4.0 and current_pnl < 0.02 * self.leverage:  # 4 hours with < 2% ROI
                 # Calculate a tighter stop loss for stalled positions
                 tighter_stop = self.entry_price * 1.01  # 1% above entry
                 if current_price >= tighter_stop:
