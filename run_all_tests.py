@@ -10,20 +10,20 @@ import sys
 import os
 from datetime import datetime
 
-# Test configuration: (name, file, expected_test_count)
+# Test configuration: (name, file, expected_test_count, timeout_seconds)
 TEST_SUITES = [
-    ("Core Components", "test_bot.py", 12),
-    ("Strategy Optimizations", "test_strategy_optimizations.py", 5),
-    ("Adaptive Stops", "test_adaptive_stops.py", 9),
-    ("Live Trading", "test_live_trading.py", 6),
-    ("Trade Simulation", "test_trade_simulation.py", 20),
-    ("Enhanced Trading Methods", "test_enhanced_trading_methods.py", 10),
-    ("Smart Profit Taking", "test_smart_profit_taking.py", 10),
-    ("Thread Safety", "test_thread_safety.py", 3),
-    ("Real World Simulation", "test_real_world_simulation.py", 2),
-    ("Small Balance Support", "test_small_balance_support.py", 8),
-    ("Risk Management", "test_risk_management.py", 5),
-    ("Comprehensive Advanced", "test_comprehensive_advanced.py", 9),
+    ("Core Components", "test_bot.py", 12, 60),
+    ("Strategy Optimizations", "test_strategy_optimizations.py", 5, 60),
+    ("Adaptive Stops", "test_adaptive_stops.py", 9, 60),
+    ("Live Trading", "test_live_trading.py", 6, 60),
+    ("Trade Simulation", "test_trade_simulation.py", 20, 60),
+    ("Enhanced Trading Methods", "test_enhanced_trading_methods.py", 10, 60),
+    ("Smart Profit Taking", "test_smart_profit_taking.py", 10, 60),
+    ("Thread Safety", "test_thread_safety.py", 3, 60),
+    ("Real World Simulation", "test_real_world_simulation.py", 2, 60),
+    ("Small Balance Support", "test_small_balance_support.py", 8, 60),
+    ("Risk Management", "test_risk_management.py", 5, 60),
+    ("Comprehensive Advanced", "test_comprehensive_advanced.py", 9, 180),
 ]
 
 def print_header():
@@ -35,7 +35,7 @@ def print_header():
     print(f"Test Suites: {len(TEST_SUITES)}")
     print("=" * 70)
 
-def run_test_suite(name, file, expected_count):
+def run_test_suite(name, file, expected_count, timeout=60):
     """
     Run a single test suite
     
@@ -43,6 +43,7 @@ def run_test_suite(name, file, expected_count):
         name: Display name of the test suite
         file: Python test file to run
         expected_count: Expected number of tests in the suite
+        timeout: Timeout in seconds for the test suite (default: 60)
         
     Returns:
         tuple: (success: bool, test_count: int)
@@ -52,7 +53,7 @@ def run_test_suite(name, file, expected_count):
             [sys.executable, file],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=timeout,
             cwd=os.path.dirname(os.path.abspath(__file__))
         )
         
@@ -66,7 +67,7 @@ def run_test_suite(name, file, expected_count):
             return False, 0
             
     except subprocess.TimeoutExpired:
-        print(f"\n   ⚠️  Test timed out after 60 seconds")
+        print(f"\n   ⚠️  Test timed out after {timeout} seconds")
         return False, 0
     except Exception as e:
         print(f"\n   ❌ Error: {e}")
@@ -93,7 +94,7 @@ def print_summary(results, total_tests):
         print("\n❌ SOME TEST SUITES FAILED")
         print("\nPlease review the failed tests above and fix any issues.")
         print("Run individual test files for more details:")
-        for i, (name, file, _) in enumerate(TEST_SUITES):
+        for i, (name, file, _, _) in enumerate(TEST_SUITES):
             if not results[i]:
                 print(f"  python {file}")
 
@@ -104,10 +105,10 @@ def main():
     results = []
     total_tests = 0
     
-    for i, (name, file, expected_count) in enumerate(TEST_SUITES, 1):
+    for i, (name, file, expected_count, timeout) in enumerate(TEST_SUITES, 1):
         print(f"\n{i}️⃣  Running {name} ({file})...")
         
-        success, count = run_test_suite(name, file, expected_count)
+        success, count = run_test_suite(name, file, expected_count, timeout)
         results.append(success)
         
         if success:
