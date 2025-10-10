@@ -203,8 +203,9 @@ class Position:
         if not self.take_profit:
             return
         
-        # Calculate current P/L and initial target
-        current_pnl = self.get_pnl(current_price)
+        # Calculate current P/L (leveraged ROI) and initial target
+        # Use leveraged PNL for consistency with should_close() and profit-based logic
+        current_pnl = self.get_leveraged_pnl(current_price)
         initial_distance = abs(self.initial_take_profit - self.entry_price) / self.entry_price
         
         # Update profit velocity tracking

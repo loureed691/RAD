@@ -32,7 +32,7 @@ class Config:
     
     # Bot Parameters
     CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '60'))
-    POSITION_UPDATE_INTERVAL = float(os.getenv('POSITION_UPDATE_INTERVAL', '1.0'))  # Minimum time between position API calls (seconds) - faster for responsive trailing stops
+    POSITION_UPDATE_INTERVAL = int(float(os.getenv('POSITION_UPDATE_INTERVAL', '1.0')))  # Minimum time between position API calls (seconds) - faster for responsive trailing stops
     LIVE_LOOP_INTERVAL = float(os.getenv('LIVE_LOOP_INTERVAL', '0.05'))  # Main loop sleep interval for live monitoring (seconds) - reduced for faster response
     TRAILING_STOP_PERCENTAGE = float(os.getenv('TRAILING_STOP_PERCENTAGE', '0.02'))
     MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))

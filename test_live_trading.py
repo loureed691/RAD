@@ -23,11 +23,11 @@ class TestLiveTrading(unittest.TestCase):
         # Position updates should be more frequent than opportunity scans
         self.assertLess(Config.POSITION_UPDATE_INTERVAL, Config.CHECK_INTERVAL)
         
-        # Position update interval should be frequent for live monitoring (3 seconds default)
+        # Position update interval should be frequent for live monitoring (1 second default)
         self.assertLessEqual(Config.POSITION_UPDATE_INTERVAL, 10)
         
-        # Default should be 3 seconds for responsive trailing stops
-        self.assertEqual(Config.POSITION_UPDATE_INTERVAL, 3)
+        # Default should be 1 second for very responsive trailing stops
+        self.assertEqual(Config.POSITION_UPDATE_INTERVAL, 1)
         
     @patch('bot.Config.validate')  # Mock config validation
     @patch('bot.KuCoinClient')
@@ -64,9 +64,9 @@ class TestLiveTrading(unittest.TestCase):
         
     def test_continuous_monitoring_logic(self):
         """Test the logic for continuous position monitoring"""
-        # Simulate timing logic with new faster default
+        # Simulate timing logic with current faster default
         check_interval = 60  # Full cycle every 60 seconds
-        position_update_interval = 3  # Position updates every 3 seconds (new default)
+        position_update_interval = 1  # Position updates every 1 second (current default)
         
         last_full_cycle = datetime.now() - timedelta(seconds=30)
         current_time = datetime.now()
@@ -90,7 +90,7 @@ class TestLiveTrading(unittest.TestCase):
         
     def test_responsive_sleep_intervals(self):
         """Test that sleep intervals allow responsive monitoring"""
-        position_update_interval = 3  # New faster default
+        position_update_interval = 1  # Current faster default
         check_interval = 60
         
         # Simulate being halfway through the cycle
@@ -98,16 +98,16 @@ class TestLiveTrading(unittest.TestCase):
         remaining_time = check_interval - time_since_last_cycle
         sleep_time = min(position_update_interval, remaining_time)
         
-        # Should sleep for position update interval (3s)
-        self.assertEqual(sleep_time, 3)
+        # Should sleep for position update interval (1s)
+        self.assertEqual(sleep_time, 1)
         
-        # Simulate being near end of cycle
-        time_since_last_cycle = 58
+        # Simulate being near end of cycle (only 1s left)
+        time_since_last_cycle = 59
         remaining_time = check_interval - time_since_last_cycle
         sleep_time = min(position_update_interval, remaining_time)
         
-        # Should sleep for only remaining time (2s)
-        self.assertEqual(sleep_time, 2)
+        # Should sleep for only remaining time (1s)
+        self.assertEqual(sleep_time, 1)
         
     @patch('bot.TradingBot.update_open_positions')
     @patch('bot.TradingBot.run_cycle')
@@ -119,8 +119,8 @@ class TestLiveTrading(unittest.TestCase):
         # Should have multiple position updates per full cycle
         self.assertGreater(position_updates_per_cycle, 1)
         
-        # With new default settings (60s / 3s), should get 20 updates per cycle
-        self.assertGreaterEqual(position_updates_per_cycle, 15)
+        # With new default settings (60s / 1s), should get 60 updates per cycle
+        self.assertGreaterEqual(position_updates_per_cycle, 50)
 
 if __name__ == '__main__':
     unittest.main()
