@@ -79,17 +79,17 @@ class Config:
             cls.LEVERAGE = int(cls._LEVERAGE_OVERRIDE)
             logger.info(f"📌 Using user-defined LEVERAGE: {cls.LEVERAGE}x")
         else:
-            # Smart leverage based on balance (smaller accounts = lower leverage for safety)
+            # Smart leverage based on balance - MORE CONSERVATIVE (smaller accounts = lower leverage for safety)
             if available_balance < 100:
-                cls.LEVERAGE = 5  # Micro account - very conservative
+                cls.LEVERAGE = 4  # Micro account - very conservative (was 5)
             elif available_balance < 1000:
-                cls.LEVERAGE = 7  # Small account - conservative
+                cls.LEVERAGE = 6  # Small account - conservative (was 7)
             elif available_balance < 10000:
-                cls.LEVERAGE = 10  # Medium account - balanced
+                cls.LEVERAGE = 8  # Medium account - balanced (was 10)
             elif available_balance < 100000:
-                cls.LEVERAGE = 12  # Large account - moderate-aggressive
+                cls.LEVERAGE = 10  # Large account - moderate (was 12)
             else:
-                cls.LEVERAGE = 15  # Very large account - aggressive
+                cls.LEVERAGE = 12  # Very large account - moderate-aggressive (was 15)
             logger.info(f"🤖 Auto-configured LEVERAGE: {cls.LEVERAGE}x (balance: ${available_balance:.2f})")
         
         if cls._MAX_POSITION_SIZE_OVERRIDE:
