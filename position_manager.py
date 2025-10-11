@@ -601,9 +601,20 @@ class Position:
         # This ensures positions close at the correct profit/loss levels the user expects
         current_pnl = self.get_leveraged_pnl(current_price)
         
+        # PRIORITY CHECK: Regular stop loss price level check
+        # Check this FIRST so that when the stop loss price is hit, it returns 'stop_loss'
+        # rather than an emergency stop reason (which should only trigger if stop loss fails)
+        if self.side == 'long':
+            if current_price <= self.stop_loss:
+                return True, 'stop_loss'
+        else:  # short
+            if current_price >= self.stop_loss:
+                return True, 'stop_loss'
+        
         # CRITICAL SAFETY: Tiered emergency stop loss based on ROI to prevent catastrophic losses
-        # These are absolute maximum loss caps that override all other logic
+        # These are absolute maximum loss caps that act as failsafe when regular stop loss fails
         # Protects against extreme scenarios where stop loss fails or leverage magnifies losses
+        # (e.g., price gaps, stop loss order fails, etc.)
         
         # Level 1: Emergency stop at -50% ROI (liquidation danger zone)
         if current_pnl <= -0.50:
@@ -674,13 +685,9 @@ class Position:
                 if distance_to_tp > 0.05:
                     return True, 'take_profit_5pct'
         
-        # Standard stop loss and take profit checks (primary logic)
+        # Smart stop loss and take profit checks
         # Enhanced stop loss with time-based awareness
         if self.side == 'long':
-            # Check stop loss
-            if current_price <= self.stop_loss:
-                return True, 'stop_loss'
-            
             # Smart stop loss: tighten stop if position has been open for a while with no progress
             time_in_trade = (datetime.now() - self.entry_time).total_seconds() / 3600  # hours
             # current_pnl is already leveraged ROI, so check against 2% ROI directly
@@ -695,10 +702,6 @@ class Position:
             if self.take_profit and current_price >= self.take_profit * 0.99999:
                 return True, 'take_profit'
         else:  # short
-            # Check stop loss
-            if current_price >= self.stop_loss:
-                return True, 'stop_loss'
-            
             # Smart stop loss: tighten stop if position has been open for a while with no progress
             time_in_trade = (datetime.now() - self.entry_time).total_seconds() / 3600  # hours
             # current_pnl is already leveraged ROI, so check against 2% ROI directly
