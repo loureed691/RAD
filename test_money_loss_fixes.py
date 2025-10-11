@@ -4,6 +4,7 @@ Validates that the bot now uses more conservative risk management
 """
 import unittest
 from risk_manager import RiskManager
+from position_manager import Position
 
 
 class TestMoneyLossFixes(unittest.TestCase):
@@ -16,6 +17,43 @@ class TestMoneyLossFixes(unittest.TestCase):
             risk_per_trade=0.02,
             max_open_positions=3
         )
+    
+    def test_emergency_stop_loss_protection(self):
+        """Test that emergency stop loss prevents catastrophic losses"""
+        # Create a position with high leverage
+        position = Position(
+            symbol='BTC/USDT:USDT',
+            side='long',
+            entry_price=50000,
+            amount=0.1,
+            leverage=10,
+            stop_loss=48000,  # 4% price stop
+            take_profit=56000
+        )
+        
+        # Test Level 3: -20% ROI loss (should trigger emergency stop)
+        # With 10x leverage, 2% price move = 20% ROI loss
+        price_for_20pct_loss = 50000 * (1 - 0.02)  # 49000
+        should_close, reason = position.should_close(price_for_20pct_loss)
+        self.assertTrue(should_close, "Position should close at -20% ROI loss")
+        self.assertEqual(reason, 'emergency_stop_excessive_loss', "Should trigger emergency stop")
+        
+        # Test Level 2: -35% ROI loss
+        price_for_35pct_loss = 50000 * (1 - 0.035)  # 48250
+        should_close, reason = position.should_close(price_for_35pct_loss)
+        self.assertTrue(should_close, "Position should close at -35% ROI loss")
+        self.assertEqual(reason, 'emergency_stop_severe_loss', "Should trigger severe loss stop")
+        
+        # Test Level 1: -50% ROI loss (near liquidation)
+        price_for_50pct_loss = 50000 * (1 - 0.05)  # 47500
+        should_close, reason = position.should_close(price_for_50pct_loss)
+        self.assertTrue(should_close, "Position should close at -50% ROI loss")
+        self.assertEqual(reason, 'emergency_stop_liquidation_risk', "Should trigger liquidation risk stop")
+        
+        # Test that normal losses don't trigger emergency stop
+        price_for_5pct_loss = 50000 * (1 - 0.005)  # 49750 (5% ROI loss with 10x)
+        should_close, reason = position.should_close(price_for_5pct_loss)
+        self.assertFalse(should_close, "Position should NOT close at -5% ROI loss (below emergency threshold)")
     
     def test_stop_loss_percentage_tighter(self):
         """Test that stop loss percentages are more conservative"""

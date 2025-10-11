@@ -601,6 +601,23 @@ class Position:
         # This ensures positions close at the correct profit/loss levels the user expects
         current_pnl = self.get_leveraged_pnl(current_price)
         
+        # CRITICAL SAFETY: Tiered emergency stop loss based on ROI to prevent catastrophic losses
+        # These are absolute maximum loss caps that override all other logic
+        # Protects against extreme scenarios where stop loss fails or leverage magnifies losses
+        
+        # Level 1: Emergency stop at -50% ROI (liquidation danger zone)
+        if current_pnl <= -0.50:
+            return True, 'emergency_stop_liquidation_risk'
+        
+        # Level 2: Critical stop at -35% ROI (severe loss)
+        if current_pnl <= -0.35:
+            return True, 'emergency_stop_severe_loss'
+        
+        # Level 3: Warning stop at -20% ROI (unacceptable loss)
+        # This should almost never trigger if stop losses are working correctly
+        if current_pnl <= -0.20:
+            return True, 'emergency_stop_excessive_loss'
+        
         # Update favorable excursion tracking for smarter profit taking
         if current_pnl > self.max_favorable_excursion:
             self.max_favorable_excursion = current_pnl
