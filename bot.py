@@ -86,7 +86,8 @@ class TradingBot:
             if Config.RISK_PER_TRADE is None:
                 Config.RISK_PER_TRADE = 0.02
             if Config.MIN_PROFIT_THRESHOLD is None:
-                Config.MIN_PROFIT_THRESHOLD = 0.005
+                # Include trading fee buffer: 0.12% fees + 0.5% profit = 0.62%
+                Config.MIN_PROFIT_THRESHOLD = 0.0062
         
         self.scanner = MarketScanner(self.client)
         

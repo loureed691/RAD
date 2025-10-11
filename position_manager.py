@@ -844,13 +844,14 @@ class PositionManager:
                 
                 # Calculate intelligent stop loss based on current price
                 # Use a conservative 5% stop loss for imported positions
+                # Using 3x risk/reward ratio for better profitability
                 stop_loss_percentage = 0.05
                 if side == 'long':
                     stop_loss = current_price * (1 - stop_loss_percentage)
-                    take_profit = current_price * (1 + stop_loss_percentage * 2)
+                    take_profit = current_price * (1 + stop_loss_percentage * 3)
                 else:
                     stop_loss = current_price * (1 + stop_loss_percentage)
-                    take_profit = current_price * (1 - stop_loss_percentage * 2)
+                    take_profit = current_price * (1 - stop_loss_percentage * 3)
                 
                 # Create Position object
                 position = Position(
@@ -1007,12 +1008,13 @@ class PositionManager:
             self.position_logger.info(f"  Order filled at: {format_price(fill_price)}")
             
             # Calculate stop loss and take profit
+            # Using 3x risk/reward ratio for better profitability (was 2x)
             if signal == 'BUY':
                 stop_loss = fill_price * (1 - stop_loss_percentage)
-                take_profit = fill_price * (1 + stop_loss_percentage * 2)
+                take_profit = fill_price * (1 + stop_loss_percentage * 3)
             else:
                 stop_loss = fill_price * (1 + stop_loss_percentage)
-                take_profit = fill_price * (1 - stop_loss_percentage * 2)
+                take_profit = fill_price * (1 - stop_loss_percentage * 3)
             
             stop_loss_pct = (1 - stop_loss/fill_price) if signal == 'SELL' else (stop_loss/fill_price - 1)
             take_profit_pct = (1 - take_profit/fill_price) if signal == 'SELL' else (take_profit/fill_price - 1)
@@ -1566,13 +1568,14 @@ class PositionManager:
                                     continue
                                 
                                 # Calculate stop loss and take profit
+                                # Using 3x risk/reward ratio for better profitability
                                 stop_loss_pct = 0.05
                                 if side == 'long':
                                     stop_loss = current_price * (1 - stop_loss_pct)
-                                    take_profit = current_price * (1 + stop_loss_pct * 2)
+                                    take_profit = current_price * (1 + stop_loss_pct * 3)
                                 else:
                                     stop_loss = current_price * (1 + stop_loss_pct)
-                                    take_profit = current_price * (1 - stop_loss_pct * 2)
+                                    take_profit = current_price * (1 - stop_loss_pct * 3)
                                 
                                 # Create position object
                                 position = Position(
