@@ -421,25 +421,25 @@ class RiskManager:
         Returns:
             Stop loss percentage (e.g., 0.05 for 5%)
         """
-        # Base stop loss
-        base_stop = 0.025  # 2.5%
+        # Base stop loss - reduced from 2.5% to 1.5% for tighter risk control
+        base_stop = 0.015  # 1.5%
         
         # Adjust based on volatility (adaptive approach)
         # Higher volatility = wider stop loss to avoid premature stops
         if volatility < 0.02:
             # Low volatility - tighter stops
-            volatility_adjustment = volatility * 1.5
+            volatility_adjustment = volatility * 1.2
         elif volatility < 0.05:
             # Medium volatility - standard adjustment
-            volatility_adjustment = volatility * 2.0
+            volatility_adjustment = volatility * 1.5
         else:
             # High volatility - wider stops but capped
-            volatility_adjustment = min(volatility * 2.5, 0.06)
+            volatility_adjustment = min(volatility * 2.0, 0.03)
         
         stop_loss = base_stop + volatility_adjustment
         
-        # Cap between 1.5% and 8%
-        stop_loss = max(0.015, min(stop_loss, 0.08))
+        # Cap between 1.0% and 4% - tightened from 1.5%-8% for better risk management
+        stop_loss = max(0.010, min(stop_loss, 0.04))
         
         return stop_loss
     
@@ -457,112 +457,112 @@ class RiskManager:
             market_regime: Market regime ('trending', 'ranging', 'neutral')
         
         Returns:
-            Maximum leverage to use (3-20x)
+            Maximum leverage to use (2-12x, reduced from 3-20x)
         """
-        # 1. Enhanced base leverage from volatility regime classification
+        # 1. More conservative base leverage from volatility regime (REDUCED)
         if volatility > 0.10:
-            base_leverage = 3  # Extreme volatility - minimal leverage
+            base_leverage = 2  # Extreme volatility - minimal leverage (was 3)
             volatility_regime = 'extreme'
         elif volatility > 0.08:
-            base_leverage = 4  # Very high volatility
+            base_leverage = 3  # Very high volatility (was 4)
             volatility_regime = 'very_high'
         elif volatility > 0.05:
-            base_leverage = 6  # High volatility
+            base_leverage = 4  # High volatility (was 6)
             volatility_regime = 'high'
         elif volatility > 0.03:
-            base_leverage = 8  # Medium volatility
+            base_leverage = 6  # Medium volatility (was 8)
             volatility_regime = 'medium'
         elif volatility > 0.02:
-            base_leverage = 11  # Normal volatility
+            base_leverage = 8  # Normal volatility (was 11)
             volatility_regime = 'normal'
         elif volatility > 0.01:
-            base_leverage = 14  # Low volatility
+            base_leverage = 10  # Low volatility (was 14)
             volatility_regime = 'low'
         else:
-            base_leverage = 16  # Very low volatility
+            base_leverage = 11  # Very low volatility (was 16, max now 12)
             volatility_regime = 'very_low'
         
-        # 2. Enhanced confidence adjustment (±4x instead of ±3x)
+        # 2. More conservative confidence adjustment (±2x instead of ±4x)
         if confidence >= 0.85:
             # Exceptionally high confidence
-            confidence_adj = 4
+            confidence_adj = 2  # (was 4)
         elif confidence >= 0.80:
             # Very high confidence
-            confidence_adj = 3
+            confidence_adj = 2  # (was 3)
         elif confidence >= 0.75:
             # High confidence
-            confidence_adj = 2
+            confidence_adj = 1  # (was 2)
         elif confidence >= 0.65:
             # Good confidence
-            confidence_adj = 1
+            confidence_adj = 1  # (was 1)
         elif confidence >= 0.55:
             # Acceptable confidence
             confidence_adj = 0
         else:
             # Lower confidence - reduce leverage more aggressively
-            confidence_adj = -3
+            confidence_adj = -2  # (was -3)
         
-        # 3. Momentum adjustment (±2x)
+        # 3. Momentum adjustment (±1x instead of ±2x)
         momentum_adj = 0
         if abs(momentum) > 0.03:  # Strong momentum
-            momentum_adj = 2
+            momentum_adj = 1  # (was 2)
         elif abs(momentum) > 0.02:  # Good momentum
-            momentum_adj = 1
+            momentum_adj = 1  # (was 1)
         elif abs(momentum) < 0.005:  # Weak momentum
             momentum_adj = -1
         
-        # 4. Trend strength adjustment (±2x)
+        # 4. Trend strength adjustment (±1x instead of ±2x)
         trend_adj = 0
         if trend_strength > 0.7:  # Strong trend
-            trend_adj = 2
+            trend_adj = 1  # (was 2)
         elif trend_strength > 0.5:  # Moderate trend
-            trend_adj = 1
+            trend_adj = 1  # (was 1)
         elif trend_strength < 0.3:  # Weak/no trend
             trend_adj = -1
         
-        # 5. Enhanced market regime adjustment (±3x instead of ±2x)
+        # 5. More conservative market regime adjustment (±2x instead of ±3x)
         regime_adj = 0
         if market_regime == 'trending':
-            regime_adj = 3  # Can be more aggressive in trends
+            regime_adj = 2  # Can be more aggressive in trends (was 3)
         elif market_regime == 'ranging':
             regime_adj = -2  # More conservative in ranges
         
-        # 6. Performance streak adjustment (±3x)
+        # 6. More conservative performance streak adjustment (±2x)
         streak_adj = 0
         if self.win_streak >= 5:
             # Hot streak - can be slightly more aggressive
-            streak_adj = 2
+            streak_adj = 1  # (was 2)
         elif self.win_streak >= 3:
             streak_adj = 1
         elif self.loss_streak >= 4:
             # Cold streak - reduce leverage significantly
-            streak_adj = -3
+            streak_adj = -2  # (was -3)
         elif self.loss_streak >= 2:
-            streak_adj = -2
+            streak_adj = -1  # (was -2)
         
-        # 7. Enhanced recent performance adjustment (±3x instead of ±2x)
+        # 7. More conservative recent performance adjustment (±2x instead of ±3x)
         recent_adj = 0
         recent_win_rate = self.get_recent_win_rate()
         if len(self.recent_trades) >= 5:  # Need minimum data
             if recent_win_rate >= 0.75:
-                recent_adj = 3  # Excellent recent performance
+                recent_adj = 2  # Excellent recent performance (was 3)
             elif recent_win_rate >= 0.70:
-                recent_adj = 2
+                recent_adj = 1  # (was 2)
             elif recent_win_rate >= 0.60:
                 recent_adj = 1  # Good recent performance
             elif recent_win_rate <= 0.30:
-                recent_adj = -3  # Poor recent performance
+                recent_adj = -2  # Poor recent performance (was -3)
             elif recent_win_rate <= 0.40:
-                recent_adj = -2  # Below average performance
+                recent_adj = -1  # Below average performance (was -2)
         
-        # 8. Drawdown adjustment (overrides other factors)
+        # 8. Drawdown adjustment (overrides other factors) - MORE AGGRESSIVE
         drawdown_adj = 0
-        if self.current_drawdown > 0.20:
-            drawdown_adj = -10  # Severe drawdown protection - override most factors
-        elif self.current_drawdown > 0.15:
-            drawdown_adj = -6  # Moderate drawdown protection
-        elif self.current_drawdown > 0.10:
-            drawdown_adj = -3  # Light drawdown protection
+        if self.current_drawdown > 0.15:  # Lowered from 0.20
+            drawdown_adj = -8  # Severe drawdown protection (was -10 at >0.20)
+        elif self.current_drawdown > 0.10:  # Lowered from 0.15
+            drawdown_adj = -5  # Moderate drawdown protection (was -6 at >0.15)
+        elif self.current_drawdown > 0.05:  # Lowered from 0.10, NEW threshold
+            drawdown_adj = -2  # Light drawdown protection (was -3 at >0.10)
         
         # Calculate final leverage with improved bounds management
         # Cap individual adjustment categories to prevent runaway negative leverage
@@ -570,14 +570,14 @@ class RiskManager:
         
         # Apply drawdown adjustment separately (it's intentionally strong)
         # but ensure combined adjustments don't exceed reasonable bounds
-        if drawdown_adj < -10:
+        if drawdown_adj < -5:  # Changed from -10
             # Severe drawdown - limit other adjustments' impact
-            total_adj = max(total_adj, -5)  # Cap other negative adjustments
+            total_adj = max(total_adj, -3)  # Cap other negative adjustments (was -5)
         
         final_leverage = base_leverage + total_adj + drawdown_adj
         
-        # Apply hard limits (3x minimum, 20x maximum)
-        final_leverage = max(3, min(final_leverage, 20))
+        # Apply hard limits (2x minimum, 12x maximum) - REDUCED from 3-20x
+        final_leverage = max(2, min(final_leverage, 12))
         
         # Log reasoning for transparency (only when adjustments are significant)
         if abs(confidence_adj) > 1 or abs(streak_adj) > 1 or abs(drawdown_adj) > 0:

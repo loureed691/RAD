@@ -79,17 +79,17 @@ class Config:
             cls.LEVERAGE = int(cls._LEVERAGE_OVERRIDE)
             logger.info(f"📌 Using user-defined LEVERAGE: {cls.LEVERAGE}x")
         else:
-            # Smart leverage based on balance (smaller accounts = lower leverage for safety)
+            # Smart leverage based on balance - MORE CONSERVATIVE (smaller accounts = lower leverage for safety)
             if available_balance < 100:
-                cls.LEVERAGE = 5  # Micro account - very conservative
+                cls.LEVERAGE = 4  # Micro account - very conservative (was 5)
             elif available_balance < 1000:
-                cls.LEVERAGE = 7  # Small account - conservative
+                cls.LEVERAGE = 6  # Small account - conservative (was 7)
             elif available_balance < 10000:
-                cls.LEVERAGE = 10  # Medium account - balanced
+                cls.LEVERAGE = 8  # Medium account - balanced (was 10)
             elif available_balance < 100000:
-                cls.LEVERAGE = 12  # Large account - moderate-aggressive
+                cls.LEVERAGE = 10  # Large account - moderate (was 12)
             else:
-                cls.LEVERAGE = 15  # Very large account - aggressive
+                cls.LEVERAGE = 12  # Very large account - moderate-aggressive (was 15)
             logger.info(f"🤖 Auto-configured LEVERAGE: {cls.LEVERAGE}x (balance: ${available_balance:.2f})")
         
         if cls._MAX_POSITION_SIZE_OVERRIDE:
@@ -132,14 +132,22 @@ class Config:
             cls.MIN_PROFIT_THRESHOLD = float(cls._MIN_PROFIT_THRESHOLD_OVERRIDE)
             logger.info(f"📌 Using user-defined MIN_PROFIT_THRESHOLD: {cls.MIN_PROFIT_THRESHOLD:.2%}")
         else:
-            # Min profit threshold - higher for smaller accounts to offset fees
+            # Min profit threshold - must cover trading fees (maker 0.02% + taker 0.06% = ~0.08-0.12% round-trip)
+            # Plus provide meaningful profit after fees
+            # Typical round-trip trading cost: ~0.1% (0.001)
+            trading_fee_buffer = 0.0012  # 0.12% to cover round-trip fees with small buffer
+            
             if available_balance < 100:
-                cls.MIN_PROFIT_THRESHOLD = 0.008  # 0.8% min profit for micro accounts
+                # Micro accounts need higher threshold due to fixed minimums and slippage
+                cls.MIN_PROFIT_THRESHOLD = trading_fee_buffer + 0.008  # 0.12% fees + 0.8% profit = 0.92%
             elif available_balance < 1000:
-                cls.MIN_PROFIT_THRESHOLD = 0.006  # 0.6% min profit for small accounts
+                # Small accounts 
+                cls.MIN_PROFIT_THRESHOLD = trading_fee_buffer + 0.006  # 0.12% fees + 0.6% profit = 0.72%
             else:
-                cls.MIN_PROFIT_THRESHOLD = 0.005  # 0.5% min profit for medium+ accounts
-            logger.info(f"🤖 Auto-configured MIN_PROFIT_THRESHOLD: {cls.MIN_PROFIT_THRESHOLD:.2%} (balance: ${available_balance:.2f})")
+                # Medium+ accounts
+                cls.MIN_PROFIT_THRESHOLD = trading_fee_buffer + 0.005  # 0.12% fees + 0.5% profit = 0.62%
+            
+            logger.info(f"🤖 Auto-configured MIN_PROFIT_THRESHOLD: {cls.MIN_PROFIT_THRESHOLD:.2%} (balance: ${available_balance:.2f}, includes ~0.12% trading fees)")
     
     @classmethod
     def validate(cls):
