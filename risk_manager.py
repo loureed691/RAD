@@ -32,6 +32,13 @@ class RiskManager:
         self.current_drawdown = 0.0
         self.drawdown_threshold = 0.15  # Reduce risk at 15% drawdown
         
+        # PROFITABILITY FIX: Daily loss limit to prevent catastrophic losses
+        self.daily_loss_limit = 0.10  # Stop trading if lose 10% in a day
+        self.daily_start_balance = 0.0
+        self.daily_loss = 0.0
+        from datetime import date
+        self.trading_date = date.today()
+        
         # Performance streak tracking for adaptive leverage
         self.win_streak = 0
         self.loss_streak = 0
@@ -384,6 +391,11 @@ class RiskManager:
         Returns:
             Tuple of (should_open, reason)
         """
+        # PROFITABILITY FIX: Check daily loss limit first
+        if self.daily_loss >= self.daily_loss_limit:
+            self.logger.warning(f"Daily loss limit reached: {self.daily_loss:.2%} >= {self.daily_loss_limit:.2%}")
+            return False, f"Daily loss limit reached ({self.daily_loss:.1%}). Stop trading for today."
+        
         # Check if we have too many open positions
         if current_positions >= self.max_open_positions:
             return False, f"Maximum positions reached ({self.max_open_positions})"

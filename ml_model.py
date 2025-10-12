@@ -403,17 +403,17 @@ class MLModel:
         Calculate adaptive confidence threshold based on model performance and recent momentum
         
         Returns:
-            Adjusted confidence threshold (0.5-0.75)
+            Adjusted confidence threshold (0.55-0.80) - MORE CONSERVATIVE FOR PROFITABILITY
         """
-        base_threshold = 0.6
+        base_threshold = 0.65  # INCREASED from 0.6 for better quality
         
         # Adjust based on overall win rate
         win_rate = self.performance_metrics.get('win_rate', 0.5)
         total_trades = self.performance_metrics.get('total_trades', 0)
         
-        # Need minimum trades for reliable adjustment
-        if total_trades < 10:
-            return base_threshold
+        # Need minimum trades for reliable adjustment (INCREASED from 10 to 20)
+        if total_trades < 20:
+            return 0.70  # Very conservative when learning
         
         # Calculate recent momentum (last 20 trades)
         recent_trades = self.performance_metrics.get('recent_trades', [])
@@ -422,11 +422,11 @@ class MLModel:
             recent_win_rate = recent_wins / len(recent_trades)
             
             # Recent momentum is strong - can be more aggressive
-            if recent_win_rate > 0.65:
+            if recent_win_rate > 0.70:  # INCREASED from 0.65
                 momentum_adjustment = -0.08  # Lower threshold when hot
             # Recent momentum is weak - be more conservative
-            elif recent_win_rate < 0.35:
-                momentum_adjustment = 0.12  # Higher threshold when cold
+            elif recent_win_rate < 0.40:  # INCREASED from 0.35
+                momentum_adjustment = 0.15  # INCREASED from 0.12 - Higher threshold when cold
             # Recent momentum is neutral
             else:
                 momentum_adjustment = 0.0
@@ -434,19 +434,19 @@ class MLModel:
             momentum_adjustment = 0.0
         
         # Adjust based on overall win rate (longer term trend)
-        if win_rate > 0.6:
+        if win_rate > 0.65:  # INCREASED from 0.6
             # If winning more overall, can be slightly more aggressive
             win_rate_adjustment = -0.03
-        elif win_rate < 0.4:
+        elif win_rate < 0.45:  # INCREASED from 0.4
             # If losing more overall, be more conservative
-            win_rate_adjustment = 0.08
+            win_rate_adjustment = 0.12  # INCREASED from 0.08
         else:
             win_rate_adjustment = 0.0
         
         # Combine adjustments with recent momentum weighted more heavily
         threshold = base_threshold + (momentum_adjustment * 0.6) + (win_rate_adjustment * 0.4)
         
-        # Ensure threshold stays within bounds
-        threshold = max(0.52, min(threshold, 0.75))
+        # Ensure threshold stays within bounds - MORE CONSERVATIVE RANGE
+        threshold = max(0.55, min(threshold, 0.80))  # Changed from 0.52-0.75 to 0.55-0.80
         
         return threshold

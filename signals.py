@@ -16,7 +16,7 @@ class SignalGenerator:
         self.logger = Logger.get_logger()
         self.strategy_logger = Logger.get_strategy_logger()
         self.market_regime = 'neutral'  # 'trending', 'ranging', 'neutral'
-        self.adaptive_threshold = 0.55
+        self.adaptive_threshold = 0.62  # INCREASED from 0.55 for better quality trades
         self.pattern_recognizer = PatternRecognition()
         self.volume_profile_analyzer = VolumeProfile()
     
@@ -447,11 +447,11 @@ class SignalGenerator:
             confidence = 0.0
             reasons['equal_signals'] = 'buy and sell signals balanced'
         
-        # Adaptive threshold based on market regime
+        # Adaptive threshold based on market regime - MORE CONSERVATIVE
         if self.market_regime == 'trending':
-            min_confidence = 0.52  # Lower threshold in trending markets
+            min_confidence = 0.58  # INCREASED from 0.52 for better quality
         elif self.market_regime == 'ranging':
-            min_confidence = 0.58  # Higher threshold in ranging markets
+            min_confidence = 0.65  # INCREASED from 0.58 - ranging markets are riskier
         else:
             min_confidence = self.adaptive_threshold
         
@@ -459,6 +459,19 @@ class SignalGenerator:
         if confidence < min_confidence:
             signal = 'HOLD'
             reasons['confidence'] = f'too low ({confidence:.2f} < {min_confidence:.2f})'
+        
+        # PROFITABILITY FIX: Require minimum signal strength ratio
+        # This prevents weak trades where buy/sell signals are too close
+        if signal != 'HOLD':
+            weaker_signal = min(buy_signals, sell_signals)
+            stronger_signal = max(buy_signals, sell_signals)
+            if stronger_signal > 0:
+                signal_ratio = stronger_signal / (weaker_signal + 1)  # Add 1 to avoid div by 0
+                # Require at least 2:1 ratio between winning and losing signals
+                if signal_ratio < 2.0:
+                    signal = 'HOLD'
+                    confidence = 0.0
+                    reasons['weak_signal_ratio'] = f'insufficient signal strength ({signal_ratio:.2f}:1, need 2.0:1)'
         
         # Apply confluence scoring boost (NEW)
         if signal != 'HOLD':
