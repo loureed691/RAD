@@ -168,5 +168,5 @@ The bot should now be **mathematically profitable** with a win rate of 45%+ inst
 
 ---
 
-**Last Updated**: 2024-10-12
+**Last Updated**: 2025-10-12
 **Version**: 2.0 (Profitability Overhaul)

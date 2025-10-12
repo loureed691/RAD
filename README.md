@@ -1,197 +1,54 @@
 # RAD - KuCoin Futures Trading Bot
 
-A production-grade, fully automated, **self-learning and hyper-intelligent** KuCoin Futures trading bot with dynamic 3-15x leverage capability. This bot is designed to be hands-off and resilient, automatically discovering the best trading pairs and executing trades based on advanced technical indicators, multi-timeframe analysis, and institutional-grade machine learning.
+**Last Updated:** October 12, 2025
 
-## 🛡️ NEW: Comprehensive API Error Handling! ⭐⭐⭐⭐⭐ (LATEST!)
+A production-grade, fully automated, self-learning KuCoin Futures trading bot with dynamic 3-15x leverage capability. This bot is designed to be hands-off and resilient, automatically discovering the best trading pairs and executing trades based on advanced technical indicators, multi-timeframe analysis, and institutional-grade machine learning.
 
-**Now with bulletproof API error handling and automatic retry logic!** Major reliability upgrade:
+## 🚀 Quick Start
 
-- **🔄 Automatic Retries** - Rate limits, network errors, server issues handled automatically
-- **⏱️ Exponential Backoff** - Smart retry delays: 1s → 2s → 4s (up to 30s max)
-- **🎯 Smart Error Classification** - Different errors handled appropriately (retry vs. fail)
-- **📊 Comprehensive Logging** - See exactly what happened and why
-- **✅ Production Tested** - 6/6 tests passing, battle-hardened
-- **⚡ Zero Configuration** - Works out of the box with optimal settings
+1. **Setup**: Configure API keys in `.env` - see [QUICKSTART.md](QUICKSTART.md)
+2. **Run**: `python bot.py` - Auto-configures based on your balance
+3. **Monitor**: Check logs for real-time trading activity
 
-**Architecture:**
-- Automatic retry for transient errors (rate limits, network, server 5xx)
-- Immediate fail for permanent errors (auth, invalid params, insufficient funds)
-- Exponential backoff prevents API spam
-- Detailed logging for debugging and monitoring
-
-👉 **See [API_ERROR_HANDLING.md](API_ERROR_HANDLING.md) for complete details** or [QUICKREF_API_ERROR_HANDLING.md](QUICKREF_API_ERROR_HANDLING.md) for quick start.
-
-## 🚀 WebSocket API Integration! ⭐⭐⭐⭐⭐
-
-**Now using KuCoin WebSocket API for real-time market data!** Major performance upgrade:
-
-- **⚡ 10x Faster Data** - Real-time WebSocket streams vs REST API polling
-- **📊 Live Price Updates** - Instant ticker and candlestick data
-- **🔄 Automatic Fallback** - Seamlessly uses REST API if WebSocket unavailable
-- **💼 Reliable Trading** - All trading operations use proven REST API
-- **🛡️ Zero Downtime** - Intelligent fallback ensures continuous operation
-
-**Architecture:**
-- WebSocket for market data (tickers, OHLCV, orderbooks) - **READ operations**
-- REST API for trading (orders, positions, balance) - **WRITE operations**
-
-👉 **See [WEBSOCKET_GUIDE.md](WEBSOCKET_GUIDE.md) for complete details**
-
-## 🔥 BREAKING: Truly Live Trading - No More Cycles! ⭐⭐⭐⭐⭐
-
-**The bot is now TRULY LIVE - no sleep cycles, continuous monitoring!** Revolutionary upgrade:
-
-- **🚀 600x More Responsive** - Loop checks every 100ms instead of 60 seconds
-- **⚡ 0.1s Reaction Time** - Near real-time response vs 5-60 second delays
-- **🎯 Same API Usage** - Throttled by time checks, not sleep cycles
-- **💓 Always Active** - Never stuck sleeping, always monitoring
-- **🏆 Professional Grade** - Operates like institutional trading systems
-
-**Expected Impact:** Instant reaction to market changes, no missed opportunities, better risk management
-
-👉 **See [TRULY_LIVE_TRADING.md](TRULY_LIVE_TRADING.md) for quick overview** or [LIVE_TRADING_IMPLEMENTATION.md](LIVE_TRADING_IMPLEMENTATION.md) for complete technical details.
-
-## ⚡ Latest: Performance Optimization ⭐⭐⭐⭐⭐
-
-**The bot is now 2x faster with configurable performance tuning!** Major performance improvements:
-
-- **⚡ 2x Faster Scanning** - Increased default parallel workers from 10 to 20
-- **🎛️ Configurable Workers** - Adjust MAX_WORKERS from 5 to 50+ based on your server
-- **💾 Smart Caching** - Configurable CACHE_DURATION for optimal API usage
-- **📊 Performance Monitoring** - Built-in tools to track and optimize scan times
-- **🎯 Pre-configured Profiles** - Conservative, Balanced, and Aggressive settings
-
-**Expected Impact:** 2-5x faster market scanning, better CPU utilization, lower API costs
-
-👉 **See [PERFORMANCE_IMPROVEMENTS_SUMMARY.md](PERFORMANCE_IMPROVEMENTS_SUMMARY.md) for quick overview** or [PERFORMANCE_OPTIMIZATION.md](PERFORMANCE_OPTIMIZATION.md) for complete guide.
-
-## 🎉 Latest Update: Repository Cleaned and Verified ⭐⭐⭐⭐⭐
-
-**The repository has been cleaned and live mode verified!** Major improvements:
-
-- **📁 65% Fewer Files** - Removed 130+ redundant docs, tests, and scripts (200+ → 63 files)
-- **✅ 93% Test Pass Rate** - 76/82 tests passing, all critical features verified
-- **🚀 Live Mode Confirmed Working** - Continuous monitoring, 5s position updates, 60s scans
-- **🔒 Thread-Safe Operation** - Background scanner with proper synchronization
-- **📚 Consolidated Documentation** - 20 essential docs, easy to navigate
-
-👉 **See [REPO_CLEANUP_AND_VERIFICATION.md](REPO_CLEANUP_AND_VERIFICATION.md) for complete details** or [QUICK_REFERENCE.md](QUICK_REFERENCE.md) for quick start.
-
-## 🧠 Latest: Smarter Bot Intelligence Upgrade ⭐⭐⭐⭐⭐
-
-**The bot just got significantly smarter!** Major intelligence enhancements:
-
-- **🎯 Ensemble ML Model** - VotingClassifier combining GradientBoosting + RandomForest (5-10% better accuracy)
-- **📊 5 New Predictive Features** - Sentiment score, momentum acceleration, breakout detection (+19% more data)
-- **🔄 Momentum-Based Adaptive Threshold** - Tracks hot/cold streaks, adjusts dynamically (0.52-0.75 range)
-- **💰 Kelly Criterion Position Sizing** - Optimal sizing based on performance edge (8-12% better returns)
-- **⚡ Early Exit Intelligence** - Cuts losing trades 15-20% faster with smart exit logic
-
-**Expected Impact:** +20-30% risk-adjusted returns, +5-10% win rate, -15% drawdown
-
-👉 **See [SMARTER_BOT_ENHANCEMENTS.md](SMARTER_BOT_ENHANCEMENTS.md) for complete details** or [SMARTER_BOT_QUICKREF.md](SMARTER_BOT_QUICKREF.md) for quick start.
-
-## 🎯 Auto-Configuration (NEW!) ⭐
-
-**No more manual configuration!** The bot now automatically configures optimal trading parameters based on your account balance:
-
-- **LEVERAGE** - Automatically scales from 5x (micro accounts) to 15x (large accounts)
-- **MAX_POSITION_SIZE** - Dynamically set as 30-60% of your balance
-- **RISK_PER_TRADE** - Intelligently adjusted from 1% to 3% based on account size
-- **MIN_PROFIT_THRESHOLD** - Optimized to account for fees at different balance tiers
-
-Simply set up your API keys and start trading - the bot handles the rest!
-
-👉 **See [AUTO_CONFIG.md](AUTO_CONFIG.md) for complete details on auto-configuration**
-
-## 🚀 Recent Intelligence Upgrade
-
-The bot has been **significantly enhanced with institutional-grade intelligence**:
-
-### Latest Enhanced Trading Methods ⭐⭐⭐⭐ (NEW!)
-- **Advanced Order Types:** Post-only, reduce-only, stop-limit orders for better execution control
-- **Position Scaling:** Scale in/out of positions for DCA and profit-taking strategies
-- **Slippage Protection:** Pre-trade validation, order book depth checking, and monitoring
-- **Order Monitoring:** Real-time order status tracking and partial fill handling
-- **Fee Savings:** ~$650-1800 annually on $100k capital through better execution
-
-👉 **See [ENHANCED_TRADING_METHODS.md](ENHANCED_TRADING_METHODS.md) for complete details** or [ENHANCED_TRADING_QUICKREF.md](ENHANCED_TRADING_QUICKREF.md) for quick start.
-
-### Latest Advanced Features ⭐⭐⭐ (NEW!)
-- **Advanced Pattern Recognition:** Detects Head & Shoulders, Double Tops/Bottoms, Triangles, Wedges (+5-10% win rate)
-- **Sophisticated Exit Strategies:** 8 intelligent exit methods (time, volatility, momentum, scaling, chandelier, profit-lock, breakeven+, dynamic trailing) (+15-20% profit factor)
-- **Advanced Performance Analytics:** Sortino Ratio, Calmar Ratio, Information Ratio, Profit Factor, Recovery Factor, Ulcer Index (institutional-grade metrics)
-
-👉 **See [ADVANCED_FEATURES.md](ADVANCED_FEATURES.md) for complete details** or [ADVANCED_FEATURES_QUICKSTART.md](ADVANCED_FEATURES_QUICKSTART.md) for quick start.
-
-### Latest Optimizations⭐⭐
-- **Kelly Criterion with Real Data:** Tracks actual wins/losses for accurate position sizing (0.5-3% dynamic risk)
-- **Drawdown Protection:** Automatically reduces risk during losing streaks (75% at 15% DD, 50% at 20% DD)
-- **Volume-Based Filtering:** Only scans pairs with $1M+ daily volume for better liquidity
-- **Risk-Adjusted Scoring:** Prioritizes high momentum/low volatility opportunities (+10/-5 scoring)
-- **Separate Performance Tracking:** Independent win/loss metrics for better Kelly calculations
-
-### Expected Impact 📊
-- **Win Rate:** +5-10% improvement through better trade selection
-- **Max Drawdown:** -20-30% reduction via drawdown protection
-- **Trade Quality:** Significant improvement through volume filtering
-- **Risk Management:** Dynamic adjustment based on actual performance
-
-👉 **See [STRATEGY_OPTIMIZATIONS.md](STRATEGY_OPTIMIZATIONS.md) for optimization details** or [OPTIMIZATION_QUICKSTART.md](OPTIMIZATION_QUICKSTART.md) for quick start guide.
-
-### Major Enhancements ⭐
-- **Multi-Timeframe Analysis:** Confirms signals across 1h, 4h, 1d for 15-25% better win rate
-- **Enhanced ML Model:** 26 features (up from 19) with advanced predictive power
-- **Portfolio Diversification:** Correlation-aware position management across 6 asset groups
-- **Kelly Criterion Sizing:** Optimal position sizing based on historical performance
-- **Volume Profile Analysis:** Support/resistance identification for intelligent profit targeting
-- **Order Book Intelligence:** Entry timing optimization using bid/ask imbalance
-
-### Expected Performance 📈
-- **Win Rate:** 50-55% → 65-72% (+20-30%)
-- **Annual Return:** 45% → 75%+ (+67%)
-- **Sharpe Ratio:** 1.2 → 1.8 (+50%)
-- **Max Drawdown:** -15% → -10% (-33%)
-- **Risk/Reward:** 1.1:1 → 1.7:1 (+55%)
-
-👉 **See [INTELLIGENCE_UPGRADE.md](INTELLIGENCE_UPGRADE.md) for complete details** or [INTELLIGENCE_ENHANCEMENTS.md](INTELLIGENCE_ENHANCEMENTS.md) for technical deep-dive.
+👉 **See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions**
 
 ---
 
-## Features
+## Core Features
 
-### Core Trading Intelligence
-- **Multi-Timeframe Analysis**: Confirms signals across 1h, 4h, and 1d timeframes for maximum accuracy
-- **Enhanced Machine Learning**: 26-feature GradientBoosting model that learns and improves from every trade
-- **Portfolio Diversification**: Correlation-aware position management to avoid overexposure
-- **Kelly Criterion Sizing**: Optimal position sizing that adapts to your performance
-- **Volume Profile Analysis**: Identifies key support/resistance levels using volume distribution
-- **Order Book Intelligence**: Analyzes bid/ask imbalance for optimal entry timing
-- **🛡️ Comprehensive API Error Handling**: Automatic retries with exponential backoff for rate limits, network errors, and server issues (NEW!)
+### 🎯 Intelligent Trading
+- **Multi-Timeframe Analysis**: Confirms signals across 1h, 4h, and 1d timeframes
+- **Enhanced Machine Learning**: 26-feature GradientBoosting model with continuous learning
+- **Automated Pair Discovery**: Scans all KuCoin Futures pairs to find best opportunities
+- **Advanced Technical Analysis**: RSI, MACD, Bollinger Bands, Stochastic, Volume, VWAP
+- **Market Regime Detection**: Adapts strategy for trending vs ranging markets
+- **Pattern Recognition**: Detects Head & Shoulders, Double Tops/Bottoms, Triangles, Wedges
 
-- **Automated Trading Pair Discovery**: Automatically scans all available KuCoin Futures pairs and selects the best opportunities
-- **Advanced Technical Analysis**: Uses multiple indicators including RSI, MACD, Bollinger Bands, Stochastic, volume, and VWAP
-- **Market Regime Detection**: Automatically detects trending vs ranging markets and adapts strategy
-- **Adaptive Confidence Thresholds**: Dynamically adjusts confidence requirements based on performance (52-70%)
-- **Dynamic Leverage Management**: Intelligently adjusts leverage (3-15x) based on volatility and signal confidence
-- **Smart Stop Loss**: Volatility-adaptive stop loss (1.5-8%) with support/resistance awareness
-- **Intelligent Profit Targets**: Dynamic take-profit based on volume profile and resistance levels
-- **Trailing Stop Loss**: Automatically trails profits to lock in gains while letting winners run
-- **Existing Position Management**: Automatically syncs and manages positions opened manually or by previous sessions
-- **Risk Management**: Kelly Criterion sizing, portfolio diversification, maximum position limits
-- **Performance Tracking**: Real-time win rate, average profit, and trade statistics with auto-optimization
-- **Smart Market Scanning**: Multi-timeframe analysis with intelligent caching (50% faster, 40% fewer API calls)
-- **Resilient Architecture**: Error handling, logging, and graceful shutdown capabilities with automatic retry logic
-- **Production-Ready**: Designed for 24/7 operation with comprehensive monitoring, logging, and error recovery
+### 💰 Risk Management
+- **Kelly Criterion Sizing**: Optimal position sizing based on performance history
+- **Portfolio Diversification**: Correlation-aware position management (6 asset groups)
+- **Dynamic Leverage**: Intelligently adjusts 3-15x based on volatility and confidence
+- **Smart Stop Loss**: Volatility-adaptive (1.5-8%) with support/resistance awareness
+- **Drawdown Protection**: Reduces risk during losing streaks (75% at 15% DD, 50% at 20% DD)
+- **Volume Filtering**: Only trades pairs with $1M+ daily volume
 
-### What's New in Intelligence Upgrade
-- 🧠 **Multi-Timeframe Confirmation** across 1h, 4h, 1d (15-25% better signals)
-- 📊 **Enhanced ML Model** with 26 features (10-15% better predictions)
-- 🎲 **Portfolio Diversification** with correlation tracking (smoother returns)
-- 💰 **Kelly Criterion** for optimal position sizing (8-12% better returns)
-- 📈 **Volume Profile** support/resistance analysis (20% better R:R)
-- 📖 **Order Book** imbalance tracking (5-10% better entries)
-- 🔄 **Continuous Learning**: Gets smarter with every trade
+### 📊 Advanced Features
+- **Volume Profile Analysis**: Support/resistance identification using volume distribution
+- **Order Book Intelligence**: Entry timing optimization using bid/ask imbalance
+- **WebSocket Integration**: Real-time market data with REST API fallback
+- **Truly Live Monitoring**: 100ms loop checks, 1-5s position updates
+- **Advanced Order Types**: Post-only, reduce-only, stop-limit orders
+- **Position Scaling**: Scale in/out for DCA and profit-taking strategies
+- **Sophisticated Exit Strategies**: 8 intelligent exit methods
+
+### 🛡️ Reliability & Production
+- **Comprehensive API Error Handling**: Automatic retries with exponential backoff
+- **Auto-Configuration**: Optimizes parameters based on account balance
+- **Existing Position Sync**: Manages positions opened manually or by previous sessions
+- **Performance Tracking**: Real-time win rate, profit stats with auto-optimization
+- **Smart Caching**: 50% faster scanning, 40% fewer API calls
+- **24/7 Operation**: Comprehensive monitoring, logging, and error recovery
+- **Thread-Safe**: Background scanner with proper synchronization
 
 ## Architecture
 
@@ -256,12 +113,13 @@ Key configuration parameters in `.env`:
 - **ENABLE_WEBSOCKET**: Use WebSocket for market data (default: true) ⭐ NEW!
 
 **Trading Parameters (Auto-configured if not set):**
-- **LEVERAGE**: Maximum leverage to use (default: 10)
-- **MAX_POSITION_SIZE**: Maximum position size in USDT (default: 1000)
-- **RISK_PER_TRADE**: Risk per trade as percentage of balance (default: 0.02 = 2%)
-- **MIN_PROFIT_THRESHOLD**: Minimum profit threshold to consider (default: 0.005 = 0.5%)
+- **LEVERAGE**: Maximum leverage to use (default: 10, auto-scales 5x-15x based on balance)
+- **MAX_POSITION_SIZE**: Maximum position size in USDT (default: 1000, auto-adjusts to 30-60% of balance)
+- **RISK_PER_TRADE**: Risk per trade as percentage of balance (default: 0.02 = 2%, auto-adjusts 1-3%)
+- **MIN_PROFIT_THRESHOLD**: Minimum profit threshold (default: 0.005 = 0.5%, auto-adjusted for fees)
 - **CHECK_INTERVAL**: Seconds between market scans (default: 60)
-- **POSITION_UPDATE_INTERVAL**: Seconds between position checks (default: 3) - **IMPROVED for 40% faster trailing stops** ⭐
+- **POSITION_UPDATE_INTERVAL**: Seconds between position checks (default: 1)
+- **LIVE_LOOP_INTERVAL**: Main loop sleep interval for live monitoring (default: 0.05 = 50ms)
 - **MAX_WORKERS**: Number of parallel workers for market scanning (default: 20)
 - **CACHE_DURATION**: Cache duration in seconds (default: 300)
 - **TRAILING_STOP_PERCENTAGE**: Trailing stop percentage (default: 0.02 = 2%)
@@ -269,9 +127,8 @@ Key configuration parameters in `.env`:
 - **RETRAIN_INTERVAL**: Seconds between ML model retraining (default: 86400 = 24 hours)
 
 For performance tuning, see [PERFORMANCE_OPTIMIZATION.md](PERFORMANCE_OPTIMIZATION.md)  
-For WebSocket details, see [WEBSOCKET_GUIDE.md](WEBSOCKET_GUIDE.md) ⭐ NEW!
-
-For performance tuning, see [PERFORMANCE_OPTIMIZATION.md](PERFORMANCE_OPTIMIZATION.md)
+For WebSocket details, see [WEBSOCKET_GUIDE.md](WEBSOCKET_GUIDE.md)  
+For auto-configuration details, see [AUTO_CONFIG.md](AUTO_CONFIG.md)
 
 ## Usage
 
@@ -289,7 +146,7 @@ The bot will:
 5. Monitor and update positions with trailing stops
 6. Continuously learn and improve from trading outcomes
 
-> **Note**: The bot automatically detects and manages any existing positions on your account, whether they were opened manually or by a previous bot session. See [POSITION_SYNC.md](POSITION_SYNC.md) for details.
+> **Note**: The bot automatically detects and manages any existing positions on your account, whether they were opened manually or by a previous bot session.
 
 ### Stopping the Bot
 

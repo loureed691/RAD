@@ -263,7 +263,6 @@ Error: 429 - Too Many Requests
 - Retries use exponential backoff (1s, 2s, 4s...)
 - If errors persist, reduce CHECK_INTERVAL
 - Enable WebSocket to reduce REST API calls
-- See [API_ERROR_HANDLING.md](API_ERROR_HANDLING.md) for details
 
 ## API Rate Limits
 
@@ -283,8 +282,6 @@ The bot includes advanced error handling for all API limitations:
 ✅ **Smart Error Classification**: Different errors handled appropriately (retry vs. fail)
 ✅ **Comprehensive Logging**: All errors logged with retry attempts and outcomes
 ✅ **Zero Configuration**: Works out of the box with optimal settings
-
-**See [API_ERROR_HANDLING.md](API_ERROR_HANDLING.md) for complete documentation.**
 
 ## Production Checklist
 
