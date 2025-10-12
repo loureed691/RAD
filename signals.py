@@ -16,7 +16,7 @@ class SignalGenerator:
         self.logger = Logger.get_logger()
         self.strategy_logger = Logger.get_strategy_logger()
         self.market_regime = 'neutral'  # 'trending', 'ranging', 'neutral'
-        self.adaptive_threshold = 0.55
+        self.adaptive_threshold = 0.62  # INCREASED from 0.55 for better quality trades
         self.pattern_recognizer = PatternRecognition()
         self.volume_profile_analyzer = VolumeProfile()
     
@@ -317,14 +317,27 @@ class SignalGenerator:
         
         # 3. RSI (weighted for ranging markets)
         rsi = indicators['rsi']
-        if rsi < 30:
+        # PROFITABILITY FIX: Be more selective with RSI - avoid false reversals
+        if rsi < 25:
+            # Extreme oversold - strong buy signal
+            buy_signals += (oscillator_weight * 2.0)  # INCREASED from 1.5
+            reasons['rsi'] = f'extreme oversold ({rsi:.1f})'
+        elif rsi < 30:
             buy_signals += (oscillator_weight * 1.5)
             reasons['rsi'] = f'oversold ({rsi:.1f})'
+        elif rsi > 75:
+            # Extreme overbought - strong sell signal
+            sell_signals += (oscillator_weight * 2.0)  # INCREASED from 1.5
+            reasons['rsi'] = f'extreme overbought ({rsi:.1f})'
         elif rsi > 70:
             sell_signals += (oscillator_weight * 1.5)
             reasons['rsi'] = f'overbought ({rsi:.1f})'
-        elif 40 < rsi < 60:
+        elif 45 < rsi < 55:
+            # PROFITABILITY FIX: Neutral zone - slightly penalize signals (choppy market)
             reasons['rsi'] = f'neutral ({rsi:.1f})'
+            # Reduce signal strength in neutral RSI
+            buy_signals *= 0.95
+            sell_signals *= 0.95
         elif rsi < 40:
             buy_signals += oscillator_weight * 0.5
             reasons['rsi'] = f'weak ({rsi:.1f})'
@@ -354,13 +367,26 @@ class SignalGenerator:
             reasons['bollinger'] = 'above upper band'
         
         # 6. Volume (confirmation signal - amplifies existing signals)
-        if indicators['volume_ratio'] > 1.5:
+        # PROFITABILITY FIX: Require minimum volume to avoid low-liquidity traps
+        volume_ratio = indicators.get('volume_ratio', 0)
+        if volume_ratio < 0.8:
+            # Below-average volume - signal is unreliable
+            buy_signals *= 0.7  # Penalize all signals
+            sell_signals *= 0.7
+            reasons['volume'] = 'low volume - weak signal'
+        elif volume_ratio > 1.5:
             reasons['volume'] = 'high volume confirmation'
             # Amplify existing signals with high volume
             if buy_signals > sell_signals:
                 buy_signals += 1.0
             elif sell_signals > buy_signals:
                 sell_signals += 1.0
+        elif volume_ratio > 1.2:
+            # Good volume - slight boost
+            if buy_signals > sell_signals:
+                buy_signals += 0.5
+            elif sell_signals > buy_signals:
+                sell_signals += 0.5
         
         # 7. Enhanced Momentum Analysis (weighted by regime)
         momentum_threshold = 0.015 if self.market_regime == 'ranging' else 0.02
@@ -447,11 +473,11 @@ class SignalGenerator:
             confidence = 0.0
             reasons['equal_signals'] = 'buy and sell signals balanced'
         
-        # Adaptive threshold based on market regime
+        # Adaptive threshold based on market regime - MORE CONSERVATIVE
         if self.market_regime == 'trending':
-            min_confidence = 0.52  # Lower threshold in trending markets
+            min_confidence = 0.58  # INCREASED from 0.52 for better quality
         elif self.market_regime == 'ranging':
-            min_confidence = 0.58  # Higher threshold in ranging markets
+            min_confidence = 0.65  # INCREASED from 0.58 - ranging markets are riskier
         else:
             min_confidence = self.adaptive_threshold
         
@@ -459,6 +485,45 @@ class SignalGenerator:
         if confidence < min_confidence:
             signal = 'HOLD'
             reasons['confidence'] = f'too low ({confidence:.2f} < {min_confidence:.2f})'
+        
+        # PROFITABILITY FIX: Require minimum signal strength ratio
+        # This prevents weak trades where buy/sell signals are too close
+        if signal != 'HOLD':
+            weaker_signal = min(buy_signals, sell_signals)
+            stronger_signal = max(buy_signals, sell_signals)
+            if stronger_signal > 0:
+                signal_ratio = stronger_signal / (weaker_signal + 1)  # Add 1 to avoid div by 0
+                # Require at least 2:1 ratio between winning and losing signals
+                if signal_ratio < 2.0:
+                    signal = 'HOLD'
+                    confidence = 0.0
+                    reasons['weak_signal_ratio'] = f'insufficient signal strength ({signal_ratio:.2f}:1, need 2.0:1)'
+        
+        # PROFITABILITY FIX: Require trend and momentum alignment for non-extreme conditions
+        if signal != 'HOLD' and rsi > 30 and rsi < 70:  # Not in extreme oversold/overbought
+            # Check if trend and momentum agree with the signal
+            ema_12 = indicators.get('ema_12', 0)
+            ema_26 = indicators.get('ema_26', 0)
+            momentum = indicators.get('momentum', 0)
+            macd = indicators.get('macd', 0)
+            macd_signal = indicators.get('macd_signal', 0)
+            
+            if signal == 'BUY':
+                # For BUY, require bullish trend OR bullish momentum
+                trend_bullish = ema_12 > ema_26
+                momentum_bullish = momentum > 0 or macd > macd_signal
+                if not (trend_bullish or momentum_bullish):
+                    signal = 'HOLD'
+                    confidence = 0.0
+                    reasons['trend_momentum_mismatch'] = 'trend and momentum not aligned with BUY'
+            elif signal == 'SELL':
+                # For SELL, require bearish trend OR bearish momentum
+                trend_bearish = ema_12 < ema_26
+                momentum_bearish = momentum < 0 or macd < macd_signal
+                if not (trend_bearish or momentum_bearish):
+                    signal = 'HOLD'
+                    confidence = 0.0
+                    reasons['trend_momentum_mismatch'] = 'trend and momentum not aligned with SELL'
         
         # Apply confluence scoring boost (NEW)
         if signal != 'HOLD':

@@ -112,8 +112,8 @@ class Position:
         
         current_pnl = self.get_pnl(current_price)
         
-        # Move to breakeven when profit > 2%
-        if current_pnl > 0.02:
+        # PROFITABILITY FIX: Move to breakeven earlier at 1.5% profit (was 2%)
+        if current_pnl > 0.015:  # Changed from 0.02
             if self.side == 'long':
                 new_stop = self.entry_price * (1 + buffer)
                 if new_stop > self.stop_loss:
@@ -147,29 +147,31 @@ class Position:
         if current_pnl > self.max_favorable_excursion:
             self.max_favorable_excursion = current_pnl
         
-        # Adaptive trailing percentage based on multiple factors
+        # PROFITABILITY FIX: More aggressive trailing to lock profits
         adaptive_trailing = trailing_percentage
         
-        # 1. Volatility adjustment - wider stops in high volatility
+        # 1. Volatility adjustment - tighter overall for profit protection
         if volatility > 0.05:
-            adaptive_trailing *= 1.5  # 50% wider in high volatility
+            adaptive_trailing *= 1.3  # REDUCED from 1.5 - tighter in high volatility
         elif volatility < 0.02:
-            adaptive_trailing *= 0.8  # 20% tighter in low volatility
+            adaptive_trailing *= 0.7  # TIGHTER from 0.8 in low volatility
         
-        # 2. Profit-based adjustment - tighten as profit increases
+        # 2. Profit-based adjustment - MORE AGGRESSIVE tightening
         if current_pnl > 0.10:  # >10% profit
-            adaptive_trailing *= 0.7  # Tighten to 70% to lock in more profit
+            adaptive_trailing *= 0.5  # TIGHTER from 0.7 to lock in more profit
         elif current_pnl > 0.05:  # >5% profit
-            adaptive_trailing *= 0.85  # Moderate tightening
+            adaptive_trailing *= 0.7  # TIGHTER from 0.85
+        elif current_pnl > 0.03:  # >3% profit (NEW threshold)
+            adaptive_trailing *= 0.85  # Start tightening earlier
         
-        # 3. Momentum adjustment - adapt to trend strength
+        # 3. Momentum adjustment - more conservative
         if abs(momentum) > 0.03:  # Strong momentum
-            adaptive_trailing *= 1.2  # Wider to let trend run
+            adaptive_trailing *= 1.1  # REDUCED from 1.2
         elif abs(momentum) < 0.01:  # Weak momentum
-            adaptive_trailing *= 0.9  # Tighter when momentum fades
+            adaptive_trailing *= 0.8  # TIGHTER from 0.9 when momentum fades
         
-        # Cap adaptive trailing between reasonable bounds (0.5% to 5%)
-        adaptive_trailing = max(0.005, min(adaptive_trailing, 0.05))
+        # Cap adaptive trailing between tighter bounds (0.4% to 4%)
+        adaptive_trailing = max(0.004, min(adaptive_trailing, 0.04))  # Changed from 0.005-0.05
         
         if self.side == 'long':
             if current_price > self.highest_price:
