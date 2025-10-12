@@ -499,6 +499,32 @@ class SignalGenerator:
                     confidence = 0.0
                     reasons['weak_signal_ratio'] = f'insufficient signal strength ({signal_ratio:.2f}:1, need 2.0:1)'
         
+        # PROFITABILITY FIX: Require trend and momentum alignment for non-extreme conditions
+        if signal != 'HOLD' and rsi > 30 and rsi < 70:  # Not in extreme oversold/overbought
+            # Check if trend and momentum agree with the signal
+            ema_12 = indicators.get('ema_12', 0)
+            ema_26 = indicators.get('ema_26', 0)
+            momentum = indicators.get('momentum', 0)
+            macd = indicators.get('macd', 0)
+            macd_signal = indicators.get('macd_signal', 0)
+            
+            if signal == 'BUY':
+                # For BUY, require bullish trend OR bullish momentum
+                trend_bullish = ema_12 > ema_26
+                momentum_bullish = momentum > 0 or macd > macd_signal
+                if not (trend_bullish or momentum_bullish):
+                    signal = 'HOLD'
+                    confidence = 0.0
+                    reasons['trend_momentum_mismatch'] = 'trend and momentum not aligned with BUY'
+            elif signal == 'SELL':
+                # For SELL, require bearish trend OR bearish momentum
+                trend_bearish = ema_12 < ema_26
+                momentum_bearish = momentum < 0 or macd < macd_signal
+                if not (trend_bearish or momentum_bearish):
+                    signal = 'HOLD'
+                    confidence = 0.0
+                    reasons['trend_momentum_mismatch'] = 'trend and momentum not aligned with SELL'
+        
         # Apply confluence scoring boost (NEW)
         if signal != 'HOLD':
             confluence_score = self.calculate_confluence_score(indicators, signal)
