@@ -317,14 +317,27 @@ class SignalGenerator:
         
         # 3. RSI (weighted for ranging markets)
         rsi = indicators['rsi']
-        if rsi < 30:
+        # PROFITABILITY FIX: Be more selective with RSI - avoid false reversals
+        if rsi < 25:
+            # Extreme oversold - strong buy signal
+            buy_signals += (oscillator_weight * 2.0)  # INCREASED from 1.5
+            reasons['rsi'] = f'extreme oversold ({rsi:.1f})'
+        elif rsi < 30:
             buy_signals += (oscillator_weight * 1.5)
             reasons['rsi'] = f'oversold ({rsi:.1f})'
+        elif rsi > 75:
+            # Extreme overbought - strong sell signal
+            sell_signals += (oscillator_weight * 2.0)  # INCREASED from 1.5
+            reasons['rsi'] = f'extreme overbought ({rsi:.1f})'
         elif rsi > 70:
             sell_signals += (oscillator_weight * 1.5)
             reasons['rsi'] = f'overbought ({rsi:.1f})'
-        elif 40 < rsi < 60:
+        elif 45 < rsi < 55:
+            # PROFITABILITY FIX: Neutral zone - slightly penalize signals (choppy market)
             reasons['rsi'] = f'neutral ({rsi:.1f})'
+            # Reduce signal strength in neutral RSI
+            buy_signals *= 0.95
+            sell_signals *= 0.95
         elif rsi < 40:
             buy_signals += oscillator_weight * 0.5
             reasons['rsi'] = f'weak ({rsi:.1f})'
@@ -354,13 +367,26 @@ class SignalGenerator:
             reasons['bollinger'] = 'above upper band'
         
         # 6. Volume (confirmation signal - amplifies existing signals)
-        if indicators['volume_ratio'] > 1.5:
+        # PROFITABILITY FIX: Require minimum volume to avoid low-liquidity traps
+        volume_ratio = indicators.get('volume_ratio', 0)
+        if volume_ratio < 0.8:
+            # Below-average volume - signal is unreliable
+            buy_signals *= 0.7  # Penalize all signals
+            sell_signals *= 0.7
+            reasons['volume'] = 'low volume - weak signal'
+        elif volume_ratio > 1.5:
             reasons['volume'] = 'high volume confirmation'
             # Amplify existing signals with high volume
             if buy_signals > sell_signals:
                 buy_signals += 1.0
             elif sell_signals > buy_signals:
                 sell_signals += 1.0
+        elif volume_ratio > 1.2:
+            # Good volume - slight boost
+            if buy_signals > sell_signals:
+                buy_signals += 0.5
+            elif sell_signals > buy_signals:
+                sell_signals += 0.5
         
         # 7. Enhanced Momentum Analysis (weighted by regime)
         momentum_threshold = 0.015 if self.market_regime == 'ranging' else 0.02
