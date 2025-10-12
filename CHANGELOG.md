@@ -42,7 +42,6 @@ All notable changes to the RAD KuCoin Futures Trading Bot will be documented in 
 
 - **Performance Documentation**: Created comprehensive performance guides
   - `PERFORMANCE_OPTIMIZATION.md` - Detailed 200+ line optimization guide
-  - `PERFORMANCE_IMPROVEMENTS_SUMMARY.md` - Quick reference for common scenarios
   - Updated `README.md` with performance section
   - Enhanced `DEPLOYMENT.md` with tuning recommendations
   - Updated `.env.example` with new parameters

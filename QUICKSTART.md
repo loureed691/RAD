@@ -133,8 +133,8 @@ python test_bot.py  # Should show 12/12 passing
 - Verify diversification is working
 
 ### Questions?
-1. Read `INTELLIGENCE_UPGRADE.md` (summary)
-2. Read `INTELLIGENCE_ENHANCEMENTS.md` (details)
+1. Read `SMARTER_BOT_ENHANCEMENTS.md` (detailed features)
+2. Read `STRATEGY_OPTIMIZATIONS.md` (optimization details)
 3. Check `logs/bot.log` (real-time info)
 
 ---
@@ -159,10 +159,10 @@ Expected results after 50 trades:
 
 ## 📚 Learn More
 
-- **Summary:** `INTELLIGENCE_UPGRADE.md`
-- **Technical:** `INTELLIGENCE_ENHANCEMENTS.md`
+- **Smart Features:** `SMARTER_BOT_ENHANCEMENTS.md`
+- **Strategy Details:** `STRATEGY_OPTIMIZATIONS.md`
 - **Original Features:** `README.md`
-- **Previous Optimizations:** `OPTIMIZATION_SUMMARY.md`
+- **Performance Tuning:** `PERFORMANCE_OPTIMIZATION.md`
 
 ---
 

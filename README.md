@@ -146,7 +146,7 @@ The bot will:
 5. Monitor and update positions with trailing stops
 6. Continuously learn and improve from trading outcomes
 
-> **Note**: The bot automatically detects and manages any existing positions on your account, whether they were opened manually or by a previous bot session. See [POSITION_SYNC.md](POSITION_SYNC.md) for details.
+> **Note**: The bot automatically detects and manages any existing positions on your account, whether they were opened manually or by a previous bot session.
 
 ### Stopping the Bot
 
