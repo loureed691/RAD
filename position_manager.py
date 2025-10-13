@@ -607,17 +607,23 @@ class Position:
         # These are absolute maximum loss caps that override all other logic
         # Protects against extreme scenarios where stop loss fails or leverage magnifies losses
         
-        # Level 1: Emergency stop at -50% ROI (liquidation danger zone)
-        if current_pnl <= -0.50:
+        # TIGHTENED: Emergency stops adjusted based on leverage to prevent excessive losses
+        # With high leverage, price moves are amplified, so we need tighter emergency stops
+        
+        # Level 1: Emergency stop at -40% ROI (liquidation danger zone)
+        # This is reduced from -50% to prevent getting too close to liquidation
+        if current_pnl <= -0.40:
             return True, 'emergency_stop_liquidation_risk'
         
-        # Level 2: Critical stop at -35% ROI (severe loss)
-        if current_pnl <= -0.35:
+        # Level 2: Critical stop at -25% ROI (severe loss)
+        # Reduced from -35% - this should catch failing positions before catastrophic loss
+        if current_pnl <= -0.25:
             return True, 'emergency_stop_severe_loss'
         
-        # Level 3: Warning stop at -20% ROI (unacceptable loss)
+        # Level 3: Warning stop at -15% ROI (unacceptable loss)
+        # Reduced from -20% - if regular stops fail, this catches it earlier
         # This should almost never trigger if stop losses are working correctly
-        if current_pnl <= -0.20:
+        if current_pnl <= -0.15:
             return True, 'emergency_stop_excessive_loss'
         
         # Update favorable excursion tracking for smarter profit taking
@@ -1196,7 +1202,10 @@ class PositionManager:
             with self._positions_lock:
                 del self.positions[symbol]
             
-            return pnl
+            # CRITICAL FIX: Return leveraged P/L for accurate ROI tracking
+            # The bot.py analytics and risk_manager expect ROI (return on investment),
+            # not just price movement. With 5x leverage, a 2% price move = 10% ROI.
+            return leveraged_pnl
             
         except Exception as e:
             self.logger.error(f"Error closing position: {e}")
@@ -1254,12 +1263,14 @@ class PositionManager:
                     if attempt < 2:  # Don't wait after last attempt
                         time.sleep(0.5 * (2 ** attempt))
                 
-                # If all retries failed, use last known price from position entry as fallback
-                # This ensures we NEVER skip a position - we always check close conditions
+                # CRITICAL FIX: If all retries failed, skip this update cycle
+                # Using entry_price as fallback is DANGEROUS because it prevents stop losses from triggering
+                # Better to skip one cycle and retry on next iteration than to use stale data
                 if not current_price or current_price <= 0:
-                    current_price = position.entry_price  # Use entry price as safe fallback
-                    self.logger.warning(f"All ticker retries failed for {symbol}, using entry price {current_price} as fallback")
-                    self.position_logger.warning(f"  ⚠ Using entry price as fallback - close conditions checked with stale data")
+                    self.logger.warning(f"All ticker retries failed for {symbol}, skipping position update this cycle")
+                    self.position_logger.warning(f"  ⚠ API failed to fetch price - SKIPPING update to avoid using stale data")
+                    self.position_logger.warning(f"  ⚠ Stop loss protection: Will retry on next cycle")
+                    continue  # Skip this position and try again next cycle
                 
                 self.position_logger.info(f"  Current Price: {format_price(current_price)}")
                 
