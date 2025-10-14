@@ -32,6 +32,18 @@ class KuCoinClient:
         self._critical_call_lock = threading.Lock()
         self._closing = False  # Flag to indicate client is shutting down
         
+        # PRIORITY 1 SAFETY: Symbol metadata cache for exchange invariant validation
+        self._symbol_metadata_cache = {}  # Cache symbol specs (min qty, price step, etc.)
+        self._metadata_cache_time = None
+        self._metadata_refresh_interval = 3600  # Refresh every hour
+        self._metadata_lock = threading.Lock()
+        
+        # PRIORITY 1 SAFETY: Clock sync tracking
+        self._server_time_offset = 0  # Milliseconds difference between local and server
+        self._last_sync_check = None
+        self._max_time_drift_ms = 5000  # Max 5 seconds drift allowed
+        self._sync_check_interval = 3600  # Check every hour
+        
         try:
             self.exchange = ccxt.kucoinfutures({
                 'apiKey': api_key,
@@ -41,6 +53,9 @@ class KuCoinClient:
             })
             self.logger.info("KuCoin Futures client initialized successfully")
             self.logger.info("✅ API Call Priority System: ENABLED (Trading operations have priority)")
+            
+            # PRIORITY 1 SAFETY: Verify clock sync at startup
+            self._verify_clock_sync()
             
             # Set position mode to one-way (single position per symbol)
             # This prevents error 330011: "position mode does not match"
@@ -905,6 +920,17 @@ class KuCoinClient:
         """
         def _create_order():
             nonlocal leverage
+            
+            # PRIORITY 1 SAFETY: Validate order locally before submitting to exchange
+            is_valid, rejection_reason = self.validate_order_locally(symbol, amount, 0)  # Price check comes later
+            if not is_valid:
+                self.logger.error(f"🛑 Order validation failed: {rejection_reason}")
+                self.orders_logger.error(
+                    f"Order rejected locally | Symbol: {symbol} | Side: {side} | "
+                    f"Amount: {amount:.4f} | Reason: {rejection_reason}"
+                )
+                return None
+            
             # Get current price first for margin checks (use HIGH priority for position-related ticker)
             ticker = self.get_ticker(symbol, priority=APICallPriority.HIGH)
             if not ticker:
@@ -1625,6 +1651,193 @@ class KuCoinClient:
         except Exception as e:
             self.logger.error(f"Error validating price slippage: {e}")
             return False, 0.0
+    
+    # PRIORITY 1 SAFETY: Clock Sync and Metadata Caching
+    
+    def _verify_clock_sync(self) -> bool:
+        """
+        Verify local time vs KuCoin server time and refuse to trade if drift > threshold
+        
+        Returns:
+            True if clock sync is OK, False if drift is too large
+        """
+        try:
+            
+            
+            # Get server time
+            server_time = self.exchange.fetch_time()  # milliseconds
+            local_time = int(time.time() * 1000)  # milliseconds
+            
+            # Calculate drift
+            self._server_time_offset = server_time - local_time
+            drift_ms = abs(self._server_time_offset)
+            
+            self._last_sync_check = time.time()
+            
+            if drift_ms > self._max_time_drift_ms:
+                self.logger.critical(
+                    f"⚠️  CLOCK DRIFT TOO LARGE: {drift_ms}ms (max: {self._max_time_drift_ms}ms)"
+                )
+                self.logger.critical(
+                    f"   Server time: {server_time}, Local time: {local_time}"
+                )
+                self.logger.critical(
+                    "   ❌ TRADING DISABLED - Fix clock sync to prevent nonce/signature errors"
+                )
+                return False
+            else:
+                self.logger.info(
+                    f"✅ Clock sync OK: drift={drift_ms}ms (threshold: {self._max_time_drift_ms}ms)"
+                )
+                return True
+                
+        except Exception as e:
+            self.logger.error(f"Error checking clock sync: {e}")
+            # Fail safe - allow trading but log warning
+            self.logger.warning("⚠️  Could not verify clock sync, proceeding with caution")
+            return True
+    
+    def should_check_clock_sync(self) -> bool:
+        """Check if it's time for hourly clock sync verification"""
+        if self._last_sync_check is None:
+            return True
+        return (time.time() - self._last_sync_check) > self._sync_check_interval
+    
+    def verify_clock_sync_if_needed(self) -> bool:
+        """
+        Verify clock sync if enough time has passed (hourly check)
+        
+        Returns:
+            True if sync is OK or check not needed, False if drift too large
+        """
+        if self.should_check_clock_sync():
+            self.logger.info("⏰ Performing hourly clock sync check...")
+            return self._verify_clock_sync()
+        return True  # Check not needed yet
+    
+    def get_cached_symbol_metadata(self, symbol: str, force_refresh: bool = False) -> Optional[Dict]:
+        """
+        Get cached symbol metadata (min qty, price step, contract size) with scheduled refresh
+        
+        PRIORITY 1: Cache and validate exchange invariants locally before placing orders
+        
+        Args:
+            symbol: Trading pair symbol
+            force_refresh: Force refresh even if cache is valid
+        
+        Returns:
+            Dictionary with symbol metadata or None if not available
+        """
+        current_time = time.time()
+        
+        with self._metadata_lock:
+            # Check if cache needs refresh
+            needs_refresh = (
+                force_refresh or
+                self._metadata_cache_time is None or
+                (current_time - self._metadata_cache_time) > self._metadata_refresh_interval or
+                symbol not in self._symbol_metadata_cache
+            )
+            
+            if needs_refresh:
+                # Refresh metadata for this symbol
+                try:
+                    markets = self.exchange.load_markets()
+                    if symbol in markets:
+                        market = markets[symbol]
+                        
+                        # Extract key metadata for order validation
+                        metadata = {
+                            'symbol': symbol,
+                            'min_amount': market.get('limits', {}).get('amount', {}).get('min'),
+                            'max_amount': market.get('limits', {}).get('amount', {}).get('max'),
+                            'min_cost': market.get('limits', {}).get('cost', {}).get('min'),
+                            'max_cost': market.get('limits', {}).get('cost', {}).get('max'),
+                            'price_precision': market.get('precision', {}).get('price'),
+                            'amount_precision': market.get('precision', {}).get('amount'),
+                            'contract_size': market.get('contractSize', 1),
+                            'type': market.get('type'),
+                            'active': market.get('active', False),
+                            'cached_at': current_time
+                        }
+                        
+                        self._symbol_metadata_cache[symbol] = metadata
+                        
+                        # Update cache time only after successful refresh
+                        self._metadata_cache_time = current_time
+                        
+                        self.logger.debug(
+                            f"Cached metadata for {symbol}: "
+                            f"min={metadata['min_amount']}, max={metadata['max_amount']}, "
+                            f"contract_size={metadata['contract_size']}"
+                        )
+                        
+                        return metadata
+                    else:
+                        self.logger.warning(f"Symbol {symbol} not found in markets")
+                        return None
+                        
+                except Exception as e:
+                    self.logger.error(f"Error caching symbol metadata for {symbol}: {e}")
+                    return None
+            
+            # Return cached data
+            return self._symbol_metadata_cache.get(symbol)
+    
+    def validate_order_locally(self, symbol: str, amount: float, price: float) -> tuple[bool, str]:
+        """
+        Validate order against cached exchange invariants BEFORE submitting to API
+        
+        PRIORITY 1: Reject invalid orders locally to avoid API churn
+        
+        Args:
+            symbol: Trading pair symbol
+            amount: Order amount in contracts
+            price: Order price
+        
+        Returns:
+            Tuple of (is_valid, rejection_reason)
+        """
+        try:
+            # Get cached metadata
+            metadata = self.get_cached_symbol_metadata(symbol)
+            if not metadata:
+                # If we can't get metadata, allow but log warning
+                self.logger.warning(f"No metadata available for {symbol}, allowing order")
+                return True, "metadata_unavailable"
+            
+            # Check if market is active
+            if not metadata.get('active', False):
+                return False, f"Market {symbol} is not active"
+            
+            # Validate minimum amount
+            min_amount = metadata.get('min_amount')
+            if min_amount and amount < min_amount:
+                return False, f"Amount {amount:.4f} below minimum {min_amount}"
+            
+            # Validate maximum amount
+            max_amount = metadata.get('max_amount')
+            if max_amount and amount > max_amount:
+                return False, f"Amount {amount:.4f} exceeds maximum {max_amount}"
+            
+            # Validate minimum cost
+            cost = amount * price
+            min_cost = metadata.get('min_cost')
+            if min_cost and cost < min_cost:
+                return False, f"Order cost ${cost:.2f} below minimum ${min_cost:.2f}"
+            
+            # Validate maximum cost
+            max_cost = metadata.get('max_cost')
+            if max_cost and cost > max_cost:
+                return False, f"Order cost ${cost:.2f} exceeds maximum ${max_cost:.2f}"
+            
+            # All validations passed
+            return True, "valid"
+            
+        except Exception as e:
+            self.logger.error(f"Error validating order locally: {e}")
+            # Fail safe - allow order but log error
+            return True, f"validation_error: {str(e)}"
     
     def close(self):
         """Close connections and cleanup resources"""

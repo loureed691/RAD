@@ -10,13 +10,32 @@ from logger import Logger
 class BacktestEngine:
     """Advanced backtesting engine for strategy validation"""
     
-    def __init__(self, initial_balance: float = 10000):
+    def __init__(self, initial_balance: float = 10000, 
+                 trading_fee_rate: float = 0.0006,  # 0.06% taker fee
+                 funding_rate: float = 0.0001):  # 0.01% per 8 hours
+        """
+        Initialize backtest engine with realistic fees
+        
+        PRIORITY 1: Include trading fees and funding rates for realistic PnL
+        
+        Args:
+            initial_balance: Starting capital
+            trading_fee_rate: Trading fee as decimal (default: 0.0006 = 0.06%)
+            funding_rate: Funding rate per 8 hours (default: 0.0001 = 0.01%)
+        """
         self.logger = Logger.get_logger()
         self.initial_balance = initial_balance
         self.balance = initial_balance
         self.positions = []
         self.closed_trades = []
         self.equity_curve = []
+        
+        # PRIORITY 1: Track fees for realistic backtesting
+        self.trading_fee_rate = trading_fee_rate  # Taker fee (conservative)
+        self.funding_rate = funding_rate  # Default 0.01% per 8h
+        self.total_trading_fees = 0.0
+        self.total_funding_fees = 0.0
+        self.funding_payments = []  # Track all funding payments
     
     def reset(self):
         """Reset backtesting state"""
@@ -24,6 +43,9 @@ class BacktestEngine:
         self.positions = []
         self.closed_trades = []
         self.equity_curve = []
+        self.total_trading_fees = 0.0
+        self.total_funding_fees = 0.0
+        self.funding_payments = []
     
     def run_backtest(self, data: pd.DataFrame, strategy_func,
                     initial_balance: float = None) -> Dict:
@@ -74,10 +96,16 @@ class BacktestEngine:
             # Calculate final metrics
             results = self.calculate_results()
             
+            # PRIORITY 1: Log fee impact
             self.logger.info(
-                f"Backtest complete: Total P&L: ${results['total_pnl']:.2f} "
+                f"Backtest complete: Net P&L: ${results['total_pnl']:.2f} "
                 f"({results['total_pnl_pct']:.2%}), Win Rate: {results['win_rate']:.2%}, "
                 f"Sharpe: {results['sharpe_ratio']:.2f}"
+            )
+            self.logger.info(
+                f"Fees: Trading: ${results['total_trading_fees']:.2f}, "
+                f"Funding: ${results['total_funding_fees']:.2f}, "
+                f"Total: ${results['total_fees']:.2f} ({results['fee_impact_pct']:.1f}% of gross PnL)"
             )
             
             return results
@@ -248,7 +276,11 @@ class BacktestEngine:
                 self.close_position(position, current_price, exit_reason)
     
     def close_position(self, position: Dict, exit_price: float, exit_reason: str):
-        """Close a position and record the trade"""
+        """
+        Close a position and record the trade
+        
+        PRIORITY 1: Include trading fees and funding in PnL calculation
+        """
         try:
             # Calculate P&L
             if position['side'] == 'long':
@@ -257,21 +289,49 @@ class BacktestEngine:
                 price_change = (position['entry_price'] - exit_price) / position['entry_price']
             
             position_value = position['amount'] * position['entry_price']
-            pnl = price_change * position_value * position['leverage']
+            gross_pnl = price_change * position_value * position['leverage']
             
-            # Return margin and add P&L
+            # PRIORITY 1: Calculate trading fees (entry + exit)
+            entry_fee = position_value * self.trading_fee_rate
+            exit_value = position['amount'] * exit_price
+            exit_fee = exit_value * self.trading_fee_rate
+            trading_fees = entry_fee + exit_fee
+            
+            # PRIORITY 1: Calculate funding fees
+            # Estimate funding based on position hold time (if available)
+            funding_fees = 0.0
+            if 'entry_time' in position and 'exit_time' in position:
+                # Calculate number of 8-hour funding periods
+                hold_hours = (position['exit_time'] - position['entry_time']).total_seconds() / 3600
+                funding_periods = hold_hours / 8  # Funding every 8 hours
+                funding_fees = position_value * self.funding_rate * funding_periods
+            else:
+                # Fallback: assume 1 funding period per position
+                funding_fees = position_value * self.funding_rate
+            
+            # Net PnL after fees
+            net_pnl = gross_pnl - trading_fees - funding_fees
+            
+            # Track fees
+            self.total_trading_fees += trading_fees
+            self.total_funding_fees += funding_fees
+            
+            # Return margin and add net P&L
             required_margin = position_value / position['leverage']
-            self.balance += required_margin + pnl
+            self.balance += required_margin + net_pnl
             
-            # Record trade
+            # Record trade with fee details
             trade = {
                 'side': position['side'],
                 'entry_price': position['entry_price'],
                 'exit_price': exit_price,
                 'amount': position['amount'],
                 'leverage': position['leverage'],
-                'pnl': pnl,
-                'pnl_pct': price_change * position['leverage'],
+                'gross_pnl': gross_pnl,
+                'trading_fees': trading_fees,
+                'funding_fees': funding_fees,
+                'net_pnl': net_pnl,
+                'pnl_pct': (net_pnl / required_margin) if required_margin > 0 else 0,
                 'exit_reason': exit_reason
             }
             
@@ -298,7 +358,11 @@ class BacktestEngine:
         return equity
     
     def calculate_results(self) -> Dict:
-        """Calculate backtest performance metrics"""
+        """
+        Calculate backtest performance metrics
+        
+        PRIORITY 1: Include fee impact in metrics
+        """
         try:
             if not self.closed_trades:
                 return {
@@ -306,19 +370,28 @@ class BacktestEngine:
                     'total_pnl': 0,
                     'total_pnl_pct': 0,
                     'win_rate': 0,
-                    'sharpe_ratio': 0
+                    'sharpe_ratio': 0,
+                    'total_trading_fees': 0,
+                    'total_funding_fees': 0,
+                    'total_fees': 0
                 }
             
             total_trades = len(self.closed_trades)
-            winning_trades = sum(1 for t in self.closed_trades if t['pnl'] > 0)
+            
+            # PRIORITY 1: Use net_pnl (after fees) for metrics
+            winning_trades = sum(1 for t in self.closed_trades if t.get('net_pnl', t.get('pnl', 0)) > 0)
             losing_trades = total_trades - winning_trades
             
-            total_pnl = sum(t['pnl'] for t in self.closed_trades)
+            # Calculate with net PnL (includes fees)
+            total_pnl = sum(t.get('net_pnl', t.get('pnl', 0)) for t in self.closed_trades)
             total_pnl_pct = (self.balance - self.initial_balance) / self.initial_balance
+            
+            # Calculate gross PnL (before fees) for comparison
+            gross_pnl = sum(t.get('gross_pnl', t.get('pnl', 0)) for t in self.closed_trades)
             
             win_rate = winning_trades / total_trades if total_trades > 0 else 0
             
-            # Calculate Sharpe ratio
+            # Calculate Sharpe ratio using net PnL percentages
             returns = [t['pnl_pct'] for t in self.closed_trades]
             if len(returns) > 1:
                 avg_return = np.mean(returns)
@@ -328,26 +401,33 @@ class BacktestEngine:
                 sharpe_ratio = 0
             
             # Calculate max drawdown
-            equity_values = [e['equity'] for e in self.equity_curve]
-            peak = equity_values[0]
             max_drawdown = 0
-            for equity in equity_values:
-                if equity > peak:
-                    peak = equity
-                drawdown = (peak - equity) / peak
-                if drawdown > max_drawdown:
-                    max_drawdown = drawdown
+            if self.equity_curve:
+                equity_values = [e['equity'] for e in self.equity_curve]
+                peak = equity_values[0]
+                for equity in equity_values:
+                    if equity > peak:
+                        peak = equity
+                    drawdown = (peak - equity) / peak
+                    if drawdown > max_drawdown:
+                        max_drawdown = drawdown
             
             return {
                 'total_trades': total_trades,
                 'winning_trades': winning_trades,
                 'losing_trades': losing_trades,
                 'win_rate': win_rate,
-                'total_pnl': total_pnl,
+                'total_pnl': total_pnl,  # Net PnL (after fees)
+                'gross_pnl': gross_pnl,  # Gross PnL (before fees)
                 'total_pnl_pct': total_pnl_pct,
                 'final_balance': self.balance,
                 'sharpe_ratio': sharpe_ratio,
                 'max_drawdown': max_drawdown,
+                # PRIORITY 1: Fee metrics
+                'total_trading_fees': self.total_trading_fees,
+                'total_funding_fees': self.total_funding_fees,
+                'total_fees': self.total_trading_fees + self.total_funding_fees,
+                'fee_impact_pct': ((gross_pnl - total_pnl) / gross_pnl * 100) if gross_pnl != 0 else 0,
                 'trades': self.closed_trades,
                 'equity_curve': self.equity_curve
             }

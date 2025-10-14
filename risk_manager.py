@@ -39,6 +39,11 @@ class RiskManager:
         from datetime import date
         self.trading_date = date.today()
         
+        # PRIORITY 1 SAFETY: Hard guardrails
+        self.kill_switch_active = False  # Global kill switch - halts new entries, allows exits
+        self.max_risk_per_trade_pct = 0.05  # Max 5% of equity per trade
+        self.kill_switch_reason = ""  # Reason for kill switch activation
+        
         # Performance streak tracking for adaptive leverage
         self.win_streak = 0
         self.loss_streak = 0
@@ -663,18 +668,23 @@ class RiskManager:
         return True, "Portfolio diversification OK"
     
     def calculate_kelly_criterion(self, win_rate: float, avg_win: float, 
-                                  avg_loss: float, use_fractional: bool = True) -> float:
+                                  avg_loss: float, use_fractional: bool = True,
+                                  volatility: float = 0.03) -> float:
         """
-        Calculate optimal position size using Kelly Criterion with enhanced adaptive fractional adjustment
+        Calculate optimal position size using Kelly Criterion with HARD fractional caps (0.25-0.5)
+        and volatility targeting to prevent leverage jumps during regime flips
+        
+        PRIORITY 1 SAFETY: Kelly is capped at 0.25-0.5 to prevent over-leveraging
         
         Args:
             win_rate: Historical win rate (0-1)
             avg_win: Average win percentage
             avg_loss: Average loss percentage (positive number)
             use_fractional: Whether to use adaptive fractional Kelly (default: True)
+            volatility: Current market volatility for regime-aware adjustment
         
         Returns:
-            Optimal fraction of capital to risk (0-1)
+            Optimal fraction of capital to risk (0-1), HARD CAPPED at 0.25-0.5 Kelly
         """
         if win_rate <= 0 or avg_win <= 0 or avg_loss <= 0:
             return self.risk_per_trade  # Use default if no history
@@ -687,61 +697,73 @@ class RiskManager:
         
         kelly_fraction = (b * p - q) / b
         
-        # Enhanced adaptive fractional Kelly based on performance confidence
+        # PRIORITY 1: Enforce HARD fractional Kelly cap (0.25-0.5)
         if use_fractional:
-            # Start with half-Kelly as baseline (0.5)
-            fraction = 0.5
+            # Start with quarter-Kelly as baseline (0.25) for safety
+            fraction = 0.25
             
-            # Adjust fraction based on recent performance stability
+            # VOLATILITY TARGETING: Adjust for market volatility to prevent leverage jumps
+            # Lower fraction in high volatility, allow slightly higher in low volatility
+            if volatility > 0.06:
+                # High volatility regime - use minimum Kelly (0.25)
+                fraction = 0.25
+                self.logger.debug(f"High volatility ({volatility:.1%}) - using min Kelly: 0.25")
+            elif volatility < 0.02:
+                # Low volatility regime - can use up to 0.40 Kelly
+                fraction = 0.40
+                self.logger.debug(f"Low volatility ({volatility:.1%}) - using Kelly: 0.40")
+            else:
+                # Medium volatility - use 0.30 Kelly
+                fraction = 0.30
+                self.logger.debug(f"Medium volatility ({volatility:.1%}) - using Kelly: 0.30")
+            
+            # Adjust fraction based on recent performance stability (within caps)
             if len(self.recent_trades) >= 5:
                 recent_win_rate = self.get_recent_win_rate()
                 
-                # If recent performance matches historical, can be more aggressive
+                # If recent performance matches historical, can be slightly more aggressive
                 performance_consistency = 1.0 - abs(recent_win_rate - win_rate)
                 
-                if performance_consistency > 0.90:
-                    # Exceptional consistency - can use 65% Kelly
-                    fraction = 0.65
+                if performance_consistency > 0.90 and volatility < 0.04:
+                    # Exceptional consistency + low vol - can use up to 0.5 Kelly (HARD CAP)
+                    fraction = min(fraction * 1.25, 0.5)
                 elif performance_consistency > 0.85:
-                    # Very consistent performance - can use 60% Kelly
-                    fraction = 0.6
-                elif performance_consistency > 0.70:
-                    # Good consistency - use 55% Kelly
-                    fraction = 0.55
+                    # Very consistent performance - increase slightly
+                    fraction = min(fraction * 1.15, 0.45)
                 elif performance_consistency < 0.50:
-                    # Inconsistent performance - more conservative (35% Kelly)
-                    fraction = 0.35
-                elif performance_consistency < 0.60:
-                    # Below average consistency - 45% Kelly
-                    fraction = 0.45
+                    # Inconsistent performance - reduce to minimum
+                    fraction = 0.25
             
-            # Additional adjustment for win rate quality
-            if win_rate >= 0.65:
-                # High win rate - can be slightly more aggressive
-                fraction = min(fraction * 1.1, 0.7)  # Max 10% increase, capped at 70%
-            elif win_rate <= 0.45:
-                # Low win rate - be more conservative
-                fraction = max(fraction * 0.85, 0.3)  # 15% reduction, min 30%
-            
-            # Further reduce during losing streaks
+            # HARD REDUCTION during losing streaks (safety first)
             if self.loss_streak >= 3:
-                fraction *= 0.65  # 35% reduction during 3+ loss streak (was 30%)
+                fraction = 0.25  # Drop to minimum on 3+ loss streak
+                self.logger.warning(f"Loss streak {self.loss_streak} - reducing to min Kelly: 0.25")
             elif self.loss_streak >= 2:
-                fraction *= 0.85  # 15% reduction during 2+ loss streak
+                fraction = min(fraction * 0.75, 0.35)  # 25% reduction on 2+ loss streak
             
-            # Can increase slightly during win streaks (but capped more conservatively)
+            # Modest increase during win streaks (still capped)
             if self.win_streak >= 5:
-                fraction = min(fraction * 1.15, 0.7)  # Max 15% increase, capped at 70%
+                fraction = min(fraction * 1.15, 0.5)  # Max 15% increase, HARD CAP at 0.5
             elif self.win_streak >= 3:
-                fraction = min(fraction * 1.08, 0.7)  # Max 8% increase
+                fraction = min(fraction * 1.08, 0.45)  # Max 8% increase, cap at 0.45
+            
+            # HARD CAP enforcement: 0.25 <= fraction <= 0.5
+            fraction = max(0.25, min(fraction, 0.5))
             
             conservative_kelly = kelly_fraction * fraction
         else:
-            # Standard half-Kelly
-            conservative_kelly = kelly_fraction * 0.5
+            # Standard quarter-Kelly (conservative default)
+            conservative_kelly = kelly_fraction * 0.25
         
-        # Enhanced cap with better bounds: between 0.5% and 3.5% of portfolio
-        optimal_risk = max(0.005, min(conservative_kelly, 0.035))
+        # PRIORITY 1: HARD BOUNDS - between 0.5% and 2.5% of portfolio
+        # This ensures we never risk more than 2.5% even with best Kelly
+        optimal_risk = max(0.005, min(conservative_kelly, 0.025))
+        
+        self.logger.debug(
+            f"Kelly calculation: raw={kelly_fraction:.3f}, "
+            f"fraction={fraction if use_fractional else 0.25:.2f}, "
+            f"final={optimal_risk:.3f} (volatility={volatility:.1%})"
+        )
         
         return optimal_risk
     
@@ -959,3 +981,83 @@ class RiskManager:
             risk_adjustment = 1.0
         
         return risk_adjustment
+    
+    # PRIORITY 1 SAFETY: Kill Switch and Guardrails
+    
+    def activate_kill_switch(self, reason: str) -> None:
+        """
+        Activate the global kill switch - halts all new entries but allows exits
+        
+        Args:
+            reason: Reason for activation (logged for audit)
+        """
+        self.kill_switch_active = True
+        self.kill_switch_reason = reason
+        self.logger.critical(f"🛑 KILL SWITCH ACTIVATED: {reason}")
+        self.logger.critical("   ⚠️  No new positions will be opened")
+        self.logger.critical("   ✓ Existing positions can still be closed")
+    
+    def deactivate_kill_switch(self) -> None:
+        """Deactivate the global kill switch - resumes normal trading"""
+        if self.kill_switch_active:
+            self.logger.info(f"✅ KILL SWITCH DEACTIVATED (was: {self.kill_switch_reason})")
+        self.kill_switch_active = False
+        self.kill_switch_reason = ""
+    
+    def is_kill_switch_active(self) -> tuple[bool, str]:
+        """
+        Check if kill switch is active
+        
+        Returns:
+            Tuple of (is_active, reason)
+        """
+        return self.kill_switch_active, self.kill_switch_reason
+    
+    def validate_trade_guardrails(self, balance: float, position_value: float, 
+                                  current_positions: int, is_exit: bool = False) -> tuple[bool, str]:
+        """
+        Validate all hard guardrails before allowing a trade
+        
+        Args:
+            balance: Current account balance
+            position_value: Value of position being opened
+            current_positions: Number of currently open positions
+            is_exit: True if this is an exit trade (always allowed)
+        
+        Returns:
+            Tuple of (is_allowed, blocking_reason)
+        """
+        # Always allow exits even if kill switch is active
+        if is_exit:
+            return True, "exit_allowed"
+        
+        # 1. Check kill switch
+        if self.kill_switch_active:
+            reason = f"Kill switch active: {self.kill_switch_reason}"
+            self.logger.warning(f"🛑 Trade blocked - {reason}")
+            return False, reason
+        
+        # 2. Check daily loss limit
+        if self.daily_loss >= self.daily_loss_limit:
+            reason = f"Daily loss limit reached: {self.daily_loss:.1%} >= {self.daily_loss_limit:.1%}"
+            self.logger.warning(f"🛑 Trade blocked - {reason}")
+            # Auto-activate kill switch on daily loss limit
+            self.activate_kill_switch("Daily loss limit breach")
+            return False, reason
+        
+        # 3. Check max concurrent positions
+        if current_positions >= self.max_open_positions:
+            reason = f"Max concurrent positions reached: {current_positions} >= {self.max_open_positions}"
+            self.logger.warning(f"🛑 Trade blocked - {reason}")
+            return False, reason
+        
+        # 4. Check per-trade max risk as % of equity
+        if balance > 0:
+            trade_risk_pct = position_value / balance
+            if trade_risk_pct > self.max_risk_per_trade_pct:
+                reason = f"Per-trade risk too high: {trade_risk_pct:.1%} > {self.max_risk_per_trade_pct:.1%} of equity"
+                self.logger.warning(f"🛑 Trade blocked - {reason}")
+                return False, reason
+        
+        # All checks passed
+        return True, "guardrails_passed"
