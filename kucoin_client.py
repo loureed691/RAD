@@ -1662,7 +1662,7 @@ class KuCoinClient:
             True if clock sync is OK, False if drift is too large
         """
         try:
-            import datetime
+            
             
             # Get server time
             server_time = self.exchange.fetch_time()  # milliseconds
