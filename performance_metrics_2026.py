@@ -3,7 +3,7 @@ Advanced Performance Metrics for 2026
 Comprehensive performance tracking and analysis
 """
 import numpy as np
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 from logger import Logger
 
