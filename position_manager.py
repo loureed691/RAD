@@ -1825,6 +1825,17 @@ class PositionManager:
         if closing_entire_position:
             return self.close_position(symbol, reason)
         
+        # Check minimum order size before attempting to scale out
+        limits = self.client.get_market_limits(symbol)
+        if limits:
+            min_amount = limits['amount']['min']
+            if min_amount and amount_to_close < min_amount:
+                self.logger.warning(
+                    f"Scale-out amount {amount_to_close:.4f} below minimum {min_amount} for {symbol}. "
+                    f"Skipping partial exit. Reason: {reason}"
+                )
+                return None
+        
         try:
             # Get current price
             ticker = self.client.get_ticker(symbol)
