@@ -140,10 +140,15 @@ class KuCoinWebSocket:
                     kucoin_symbol = symbol.replace('/', '').replace(':', '')
                     self._subscribe_ticker(kucoin_symbol)
                 elif subscription.startswith('candles:'):
-                    parts = subscription.split(':', 2)
+                    # Format is: candles:SYMBOL:TIMEFRAME where SYMBOL may contain ':'
+                    # e.g., candles:BTC/USDT:USDT:1h
+                    # Split on ':' and take last part as timeframe, rest as symbol
+                    parts = subscription.split(':')
                     if len(parts) >= 3:
-                        symbol = parts[1]
-                        timeframe = parts[2]
+                        # Last part is timeframe, everything between 'candles:' and timeframe is symbol
+                        timeframe = parts[-1]
+                        # Join all parts except first (candles) and last (timeframe) to get symbol
+                        symbol = ':'.join(parts[1:-1])
                         # Convert symbol format before passing to _subscribe_candles
                         kucoin_symbol = symbol.replace('/', '').replace(':', '')
                         # Convert timeframe to KuCoin format
