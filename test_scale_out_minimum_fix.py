@@ -181,5 +181,65 @@ class TestScaleOutMinimumFix(unittest.TestCase):
         mock_client.create_market_order.assert_called_once()
 
 
+    def test_scale_out_exactly_at_minimum(self):
+        """Test that scale-out is accepted when amount equals minimum exactly"""
+        # Create a mock client
+        mock_client = Mock()
+        
+        # Mock get_market_limits to return min amount of 1.0
+        mock_client.get_market_limits.return_value = {
+            'amount': {'min': 1.0, 'max': 10000.0},
+            'cost': {'min': 1.0, 'max': 100000.0}
+        }
+        
+        # Mock get_ticker
+        mock_client.get_ticker.return_value = {'last': 51020.0}
+        
+        # Mock create_market_order to return a successful order
+        mock_client.create_market_order.return_value = {
+            'id': '123456',
+            'status': 'closed',
+            'filled': 1.0
+        }
+        
+        # Create position manager with mock client
+        with patch('logger.Logger.get_logger'), \
+             patch('logger.Logger.get_position_logger'), \
+             patch('logger.Logger.get_orders_logger'):
+            position_manager = self.PositionManager(mock_client)
+        
+        # Create a position with exactly 4.0 contracts
+        # 25% of 4.0 = 1.0 (exactly at minimum)
+        position = self.Position(
+            symbol='BTC/USDT:USDT',
+            side='long',
+            entry_price=50000.0,
+            amount=4.0,
+            leverage=10,
+            stop_loss=49000.0,
+            take_profit=52000.0
+        )
+        
+        # Add position to manager
+        position_manager.positions['BTC/USDT:USDT'] = position
+        
+        # Try to scale out exactly at minimum (1.0 contracts)
+        amount_to_close = 1.0
+        result = position_manager.scale_out_position(
+            'BTC/USDT:USDT', 
+            amount_to_close,
+            'First target reached (2.04%)'
+        )
+        
+        # Should succeed (1.0 == 1.0 is valid)
+        self.assertIsNotNone(result)
+        
+        # Verify order was created
+        mock_client.create_market_order.assert_called_once()
+        
+        # Verify position amount reduced
+        self.assertEqual(position.amount, 3.0)  # 4.0 - 1.0
+
+
 if __name__ == '__main__':
     unittest.main()
