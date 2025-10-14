@@ -180,7 +180,6 @@ class TestScaleOutMinimumFix(unittest.TestCase):
         self.assertIsNotNone(result)
         mock_client.create_market_order.assert_called_once()
 
-
     def test_scale_out_exactly_at_minimum(self):
         """Test that scale-out is accepted when amount equals minimum exactly"""
         # Create a mock client
