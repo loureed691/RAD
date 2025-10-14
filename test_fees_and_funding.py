@@ -6,7 +6,6 @@ Tests that trading fees and funding rates are incorporated into PnL calculations
 import sys
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
 from backtest_engine import BacktestEngine
 
 def test_trading_fees_calculation():
