@@ -175,9 +175,19 @@ class KuCoinClient:
                 
             except ccxt.InvalidOrder as e:
                 # Don't retry - order parameters are invalid
-                self.logger.error(
-                    f"Invalid order parameters for {operation_name}: {str(e)}"
-                )
+                # Check if this is the expected "no position to close" error
+                error_str = str(e)
+                if '300009' in error_str or 'No open positions to close' in error_str:
+                    # This is expected when trying to close an already-closed position
+                    # Log at DEBUG level instead of ERROR
+                    self.logger.debug(
+                        f"Position already closed for {operation_name}: {error_str}"
+                    )
+                else:
+                    # Other invalid order errors should still be logged as ERROR
+                    self.logger.error(
+                        f"Invalid order parameters for {operation_name}: {error_str}"
+                    )
                 return None
                 
             except ccxt.AuthenticationError as e:

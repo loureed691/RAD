@@ -135,13 +135,24 @@ class KuCoinWebSocket:
             self.logger.info(f"Resubscribing to {len(self._subscriptions)} channels...")
             for subscription in list(self._subscriptions):
                 if subscription.startswith('ticker:'):
-                    symbol = subscription.split(':')[1]
-                    self._subscribe_ticker(symbol)
+                    symbol = subscription.split(':', 1)[1]
+                    # Convert symbol format before passing to _subscribe_ticker
+                    kucoin_symbol = symbol.replace('/', '').replace(':', '')
+                    self._subscribe_ticker(kucoin_symbol)
                 elif subscription.startswith('candles:'):
-                    parts = subscription.split(':')
-                    symbol = parts[1]
-                    timeframe = parts[2]
-                    self._subscribe_candles(symbol, timeframe)
+                    parts = subscription.split(':', 2)
+                    if len(parts) >= 3:
+                        symbol = parts[1]
+                        timeframe = parts[2]
+                        # Convert symbol format before passing to _subscribe_candles
+                        kucoin_symbol = symbol.replace('/', '').replace(':', '')
+                        # Convert timeframe to KuCoin format
+                        tf_map = {
+                            '1m': '1min', '5m': '5min', '15m': '15min', '30m': '30min',
+                            '1h': '1hour', '4h': '4hour', '1d': '1day', '1w': '1week'
+                        }
+                        kucoin_tf = tf_map.get(timeframe, timeframe)
+                        self._subscribe_candles(kucoin_symbol, kucoin_tf)
     
     def _on_message(self, ws, message):
         """Handle incoming WebSocket message"""
