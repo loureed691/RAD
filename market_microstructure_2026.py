@@ -389,6 +389,12 @@ class MarketMicrostructure2026:
         """
         Detect potential spoofing in order book
         
+        Spoofing is when large orders appear on one side to manipulate price,
+        then disappear before execution. We detect this by looking for:
+        1. Large orders that appear suddenly
+        2. These orders disappear within a few snapshots
+        3. This happens repeatedly (pattern)
+        
         Args:
             orderbook_history: List of recent order book snapshots
             
@@ -402,21 +408,74 @@ class MarketMicrostructure2026:
             }
         
         try:
-            # Look for large orders that appear and disappear quickly
-            # This is a simplified implementation
-            
-            large_order_threshold = 0.3  # 30% of total volume in level
-            
+            large_order_threshold = 0.25  # 25% of total volume in level
             spoof_signals = 0
-            for i in range(len(orderbook_history) - 1):
-                current = orderbook_history[i]
+            
+            for i in range(len(orderbook_history) - 2):
+                current_book = orderbook_history[i]
                 next_book = orderbook_history[i + 1]
                 
-                # Check if large bid/ask disappeared
-                # (Implementation simplified for brevity)
+                if not current_book.get('bids') or not current_book.get('asks'):
+                    continue
+                if not next_book.get('bids') or not next_book.get('asks'):
+                    continue
                 
-            confidence = min(spoof_signals / 5, 1.0)
+                # Analyze top 5 levels on each side
+                for side in ['bids', 'asks']:
+                    current_orders = current_book[side][:5]
+                    next_orders = next_book[side][:5]
+                    
+                    if not current_orders or not next_orders:
+                        continue
+                    
+                    # Calculate total volume at current level
+                    total_volume = sum(float(order[1]) for order in current_orders)
+                    
+                    if total_volume == 0:
+                        continue
+                    
+                    # Check each level for large orders
+                    for j, current_order in enumerate(current_orders):
+                        current_price = float(current_order[0])
+                        current_volume = float(current_order[1])
+                        
+                        # Is this a large order?
+                        volume_ratio = current_volume / total_volume
+                        if volume_ratio < large_order_threshold:
+                            continue
+                        
+                        # Check if this large order disappeared in next snapshot
+                        order_found = False
+                        for next_order in next_orders:
+                            next_price = float(next_order[0])
+                            next_volume = float(next_order[1])
+                            
+                            # Same price level within 0.1% tolerance
+                            if abs(next_price - current_price) / current_price < 0.001:
+                                # Check if volume remained significant
+                                if next_volume >= current_volume * 0.5:
+                                    order_found = True
+                                    break
+                        
+                        # Large order disappeared = potential spoof
+                        if not order_found:
+                            spoof_signals += 1
+            
+            # Calculate confidence based on frequency of disappearing orders
+            # More disappearances = higher confidence in spoofing
+            max_possible_signals = (len(orderbook_history) - 2) * 2 * 5  # sides * levels
+            if max_possible_signals > 0:
+                confidence = min(spoof_signals / (max_possible_signals * 0.1), 1.0)
+            else:
+                confidence = 0.0
+            
             detected = confidence > 0.3
+            
+            if detected:
+                self.logger.warning(
+                    f"⚠️ Potential spoofing detected: {spoof_signals} signals, "
+                    f"confidence: {confidence:.2f}"
+                )
             
             return {
                 'spoofing_detected': detected,

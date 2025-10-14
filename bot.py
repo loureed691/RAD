@@ -216,11 +216,13 @@ class TradingBot:
             return False
         
         # 2026 FEATURE: Calculate portfolio heat before opening position
-        open_positions = [
-            {'leverage': pos.leverage} for pos in self.position_manager.positions.values()
-        ]
+        open_positions = list(self.position_manager.positions.values())
+        
+        # Calculate correlations between positions
+        correlations = self.advanced_risk_2026.calculate_position_correlations(open_positions)
+        
         portfolio_heat = self.advanced_risk_2026.calculate_portfolio_heat(
-            open_positions, {}
+            open_positions, correlations
         )
         
         # Check if we should open a position

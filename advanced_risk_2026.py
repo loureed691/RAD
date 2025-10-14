@@ -170,14 +170,14 @@ class AdvancedRiskManager2026:
         
         return final_kelly
     
-    def calculate_portfolio_heat(self, open_positions: List[Dict],
-                                correlations: Dict[str, float]) -> float:
+    def calculate_portfolio_heat(self, open_positions: List,
+                                correlations: Dict[str, float] = None) -> float:
         """
         Calculate portfolio heat score (risk concentration metric)
         
         Args:
-            open_positions: List of current open positions
-            correlations: Correlation coefficients between positions
+            open_positions: List of Position objects or dictionaries with position data
+            correlations: Correlation coefficients between positions (optional)
             
         Returns:
             Portfolio heat score (0-100)
@@ -190,14 +190,25 @@ class AdvancedRiskManager2026:
             position_count = len(open_positions)
             base_heat = (position_count / 10) * 30  # Max 30 points from count
             
-            # Heat from leverage
-            total_leverage = sum(pos.get('leverage', 1) for pos in open_positions)
-            avg_leverage = total_leverage / position_count
+            # Heat from leverage - handle both Position objects and dicts
+            total_leverage = 0
+            for pos in open_positions:
+                if hasattr(pos, 'leverage'):
+                    # Position object
+                    total_leverage += pos.leverage
+                elif isinstance(pos, dict):
+                    # Dictionary format
+                    total_leverage += pos.get('leverage', 1)
+                else:
+                    # Unknown format, assume default
+                    total_leverage += 1
+            
+            avg_leverage = total_leverage / position_count if position_count > 0 else 1
             leverage_heat = min((avg_leverage / 15) * 30, 30)  # Max 30 points
             
             # Heat from correlation (positions moving together = higher risk)
             correlation_heat = 0.0
-            if correlations:
+            if correlations and len(correlations) > 0:
                 avg_correlation = np.mean(list(correlations.values()))
                 correlation_heat = min(avg_correlation * 40, 40)  # Max 40 points
             
@@ -216,6 +227,80 @@ class AdvancedRiskManager2026:
         except Exception as e:
             self.logger.error(f"Error calculating portfolio heat: {e}")
             return 50.0  # Conservative default
+    
+    def calculate_position_correlations(self, positions: List) -> Dict[str, float]:
+        """
+        Calculate correlation coefficients between open positions
+        
+        Args:
+            positions: List of Position objects
+            
+        Returns:
+            Dictionary mapping position pairs to correlation coefficients
+        """
+        if len(positions) < 2:
+            return {}
+        
+        correlations = {}
+        
+        try:
+            # Define correlation groups based on asset categories
+            correlation_groups = {
+                'major_coins': ['BTC', 'ETH'],
+                'defi': ['UNI', 'AAVE', 'SUSHI', 'LINK', 'COMP'],
+                'layer1': ['SOL', 'AVAX', 'DOT', 'NEAR', 'ATOM', 'ADA'],
+                'layer2': ['MATIC', 'OP', 'ARB', 'IMX'],
+                'meme': ['DOGE', 'SHIB', 'PEPE', 'FLOKI'],
+                'exchange': ['BNB', 'OKB', 'FTT', 'CRO']
+            }
+            
+            # Extract symbols from positions
+            position_symbols = []
+            for pos in positions:
+                if hasattr(pos, 'symbol'):
+                    # Extract base currency (e.g., 'BTC' from 'BTCUSDT')
+                    symbol = pos.symbol.replace('USDT', '').replace('PERP', '')
+                    position_symbols.append(symbol)
+                elif isinstance(pos, dict) and 'symbol' in pos:
+                    symbol = pos['symbol'].replace('USDT', '').replace('PERP', '')
+                    position_symbols.append(symbol)
+            
+            # Calculate correlations between position pairs
+            for i, sym1 in enumerate(position_symbols):
+                for j, sym2 in enumerate(position_symbols):
+                    if i >= j:
+                        continue
+                    
+                    # Default correlation is low
+                    corr = 0.3
+                    
+                    # Check if both are in the same correlation group
+                    for group_name, group_members in correlation_groups.items():
+                        if sym1 in group_members and sym2 in group_members:
+                            # High correlation within same group
+                            if group_name == 'major_coins':
+                                corr = 0.85  # BTC and ETH are highly correlated
+                            elif group_name == 'defi':
+                                corr = 0.75  # DeFi tokens moderately correlated
+                            elif group_name == 'layer1':
+                                corr = 0.70  # Layer 1s moderately correlated
+                            elif group_name == 'meme':
+                                corr = 0.80  # Meme coins highly correlated
+                            else:
+                                corr = 0.65
+                            break
+                    
+                    # BTC has moderate correlation with most alts
+                    if 'BTC' in [sym1, sym2] and sym1 != sym2:
+                        corr = max(corr, 0.60)
+                    
+                    correlations[f"{sym1}_{sym2}"] = corr
+            
+            return correlations
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating correlations: {e}")
+            return {}
     
     def should_open_position(self, signal_confidence: float,
                            market_regime: str,
