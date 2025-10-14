@@ -16,6 +16,11 @@ from risk_manager import RiskManager
 from ml_model import MLModel
 from indicators import Indicators
 from advanced_analytics import AdvancedAnalytics
+# 2026 Advanced Features
+from advanced_risk_2026 import AdvancedRiskManager2026
+from market_microstructure_2026 import MarketMicrostructure2026
+from adaptive_strategy_2026 import AdaptiveStrategySelector2026
+from performance_metrics_2026 import AdvancedPerformanceMetrics2026
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -106,6 +111,18 @@ class TradingBot:
         
         # Advanced analytics module
         self.analytics = AdvancedAnalytics()
+        
+        # 2026 Advanced Features
+        self.advanced_risk_2026 = AdvancedRiskManager2026()
+        self.market_micro_2026 = MarketMicrostructure2026()
+        self.strategy_selector_2026 = AdaptiveStrategySelector2026()
+        self.performance_2026 = AdvancedPerformanceMetrics2026()
+        
+        self.logger.info("🚀 2026 Advanced Features Activated:")
+        self.logger.info("   ✅ Advanced Risk Manager (Regime-aware Kelly)")
+        self.logger.info("   ✅ Market Microstructure (Order flow analysis)")
+        self.logger.info("   ✅ Adaptive Strategy Selector (4 strategies)")
+        self.logger.info("   ✅ Performance Metrics (Sharpe, Sortino, Calmar)")
         
         # State
         self.running = False
@@ -198,6 +215,14 @@ class TradingBot:
             self.logger.info(f"Diversification check failed for {symbol}: {div_reason}")
             return False
         
+        # 2026 FEATURE: Calculate portfolio heat before opening position
+        open_positions = [
+            {'leverage': pos.leverage} for pos in self.position_manager.positions.values()
+        ]
+        portfolio_heat = self.advanced_risk_2026.calculate_portfolio_heat(
+            open_positions, {}
+        )
+        
         # Check if we should open a position
         current_positions = self.position_manager.get_open_positions_count()
         should_open, reason = self.risk_manager.should_open_position(
@@ -234,6 +259,26 @@ class TradingBot:
         indicators = Indicators.get_latest_indicators(df)
         volatility = indicators.get('bb_width', 0.03)
         
+        # 2026 FEATURE: Get order book for microstructure analysis
+        try:
+            orderbook = self.client.get_order_book(symbol, depth=20)
+            orderbook_metrics = self.market_micro_2026.analyze_order_book_imbalance(orderbook)
+            
+            # Get 24h volume for liquidity score
+            volume_24h = ticker.get('vol', 0) * entry_price  # Convert to USDT
+            liquidity_score = self.market_micro_2026.calculate_liquidity_score(
+                orderbook, volume_24h, []
+            )
+            
+            self.logger.info(f"📊 Market Microstructure for {symbol}:")
+            self.logger.info(f"   Order book imbalance: {orderbook_metrics['imbalance']:.3f} ({orderbook_metrics['signal']})")
+            self.logger.info(f"   Spread: {orderbook_metrics['spread_bps']:.2f} bps")
+            self.logger.info(f"   Liquidity score: {liquidity_score:.2f}")
+        except Exception as e:
+            self.logger.debug(f"Could not fetch orderbook data: {e}")
+            orderbook_metrics = {'imbalance': 0.0, 'signal': 'neutral'}
+            liquidity_score = 0.7  # Default moderate liquidity
+        
         # Get additional market context for smarter leverage calculation
         momentum = indicators.get('momentum', 0.0)
         
@@ -251,16 +296,91 @@ class TradingBot:
         # Detect market regime for leverage adjustment
         market_regime = self.scanner.signal_generator.detect_market_regime(df)
         
+        # 2026 FEATURE: Enhanced market regime detection with price/volume data
+        try:
+            price_data = df['close'].values
+            volume_data = df['volume'].values
+            detected_regime = self.advanced_risk_2026.detect_market_regime(
+                price_data, volume_data, lookback=50
+            )
+            self.logger.info(f"🔍 Market Regime Detected: {detected_regime}")
+            market_regime = detected_regime
+        except Exception as e:
+            self.logger.debug(f"Using fallback regime detection: {e}")
+        
+        # 2026 FEATURE: Adaptive strategy selection
+        try:
+            # Prepare confidence scores for strategies
+            confidence_scores = {
+                'trend_following': confidence if market_regime in ['bull', 'bear'] else confidence * 0.8,
+                'mean_reversion': confidence if market_regime in ['neutral', 'low_vol'] else confidence * 0.7,
+                'breakout': confidence * 0.85,
+                'momentum': confidence if abs(momentum) > 0.02 else confidence * 0.6
+            }
+            
+            selected_strategy = self.strategy_selector_2026.select_strategy(
+                market_regime, volatility, momentum, confidence_scores
+            )
+            
+            # Apply strategy-specific filters
+            signal, confidence = self.strategy_selector_2026.apply_strategy_filters(
+                selected_strategy, indicators, signal, confidence
+            )
+            
+            if signal == 'HOLD':
+                self.logger.info(f"Strategy {selected_strategy} filtered out trade")
+                return False
+            
+            self.logger.info(f"🎯 Selected Strategy: {selected_strategy} (adjusted confidence: {confidence:.2f})")
+        except Exception as e:
+            self.logger.debug(f"Strategy selection error: {e}, using default")
+            selected_strategy = 'trend_following'
+        
+        # 2026 FEATURE: Advanced risk check with regime awareness
+        try:
+            should_trade, risk_reason = self.advanced_risk_2026.should_open_position(
+                confidence, market_regime, portfolio_heat, liquidity_score
+            )
+            if not should_trade:
+                self.logger.info(f"❌ 2026 Risk Check Failed: {risk_reason}")
+                return False
+            self.logger.info(f"✅ 2026 Risk Check Passed: {risk_reason}")
+        except Exception as e:
+            self.logger.warning(f"2026 risk check error: {e}, proceeding with caution")
+        
         # Calculate support/resistance levels for intelligent profit targeting
         support_resistance = Indicators.calculate_support_resistance(df, lookback=50)
         
         # Calculate stop loss
         stop_loss_percentage = self.risk_manager.calculate_stop_loss_percentage(volatility)
         
-        if signal == 'BUY':
-            stop_loss_price = entry_price * (1 - stop_loss_percentage)
-        else:
-            stop_loss_price = entry_price * (1 + stop_loss_percentage)
+        # 2026 FEATURE: Enhanced stop loss with ATR and support/resistance
+        try:
+            atr = indicators.get('atr', entry_price * 0.02)  # Fallback to 2% if no ATR
+            support_level = None
+            if signal == 'BUY' and 'support' in support_resistance:
+                support_level = support_resistance['support']
+            elif signal == 'SELL' and 'resistance' in support_resistance:
+                support_level = support_resistance['resistance']
+            
+            dynamic_stop = self.advanced_risk_2026.calculate_dynamic_stop_loss(
+                entry_price, atr, support_level, market_regime,
+                'long' if signal == 'BUY' else 'short'
+            )
+            
+            # Use dynamic stop if it's more conservative than standard stop
+            if signal == 'BUY':
+                stop_loss_price = max(dynamic_stop, entry_price * (1 - stop_loss_percentage))
+            else:
+                stop_loss_price = min(dynamic_stop, entry_price * (1 + stop_loss_percentage))
+                
+            self.logger.info(f"🛡️ Dynamic Stop Loss: ${stop_loss_price:.2f} (regime-aware)")
+        except Exception as e:
+            self.logger.debug(f"Using standard stop loss: {e}")
+            if signal == 'BUY':
+                stop_loss_price = entry_price * (1 - stop_loss_percentage)
+            else:
+                stop_loss_price = entry_price * (1 + stop_loss_percentage)
         
         # Calculate safe leverage with enhanced multi-factor analysis
         leverage = self.risk_manager.get_max_leverage(
@@ -278,10 +398,18 @@ class TradingBot:
         # Only use Kelly if we have sufficient trade history (20+ trades)
         kelly_fraction = None
         if total_trades >= 20 and win_rate > 0 and avg_profit > 0 and avg_loss > 0:
-            # Use risk_manager's superior adaptive Kelly implementation
-            kelly_fraction = self.risk_manager.calculate_kelly_criterion(
-                win_rate, avg_profit, avg_loss, use_fractional=True
-            )
+            # 2026 FEATURE: Use regime-aware Kelly Criterion
+            try:
+                kelly_fraction = self.advanced_risk_2026.calculate_regime_aware_kelly(
+                    win_rate, avg_profit, avg_loss, market_regime, confidence
+                )
+                self.logger.info(f"💰 Regime-Aware Kelly: {kelly_fraction:.3f} (regime={market_regime})")
+            except Exception as e:
+                # Fallback to standard Kelly
+                self.logger.debug(f"Using standard Kelly: {e}")
+                kelly_fraction = self.risk_manager.calculate_kelly_criterion(
+                    win_rate, avg_profit, avg_loss, use_fractional=True
+                )
         
         # Check drawdown and adjust risk
         risk_adjustment = self.risk_manager.update_drawdown(available_balance)
@@ -296,6 +424,13 @@ class TradingBot:
         success = self.position_manager.open_position(
             symbol, signal, position_size, leverage, stop_loss_percentage
         )
+        
+        # 2026 FEATURE: Store strategy with position for tracking
+        if success and symbol in self.position_manager.positions:
+            try:
+                self.position_manager.positions[symbol].strategy = selected_strategy
+            except:
+                pass  # Silently fail if position doesn't support strategy attribute
         
         return success
     
@@ -327,6 +462,28 @@ class TradingBot:
                         'duration': trade_duration,
                         'leverage': position.leverage
                     })
+                    
+                    # 2026 FEATURE: Record trade in performance metrics
+                    try:
+                        exit_price = position.entry_price * (1 + pnl / leverage) if position.side == 'long' else position.entry_price * (1 - pnl / leverage)
+                        self.performance_2026.record_trade(
+                            entry_price=position.entry_price,
+                            exit_price=exit_price,
+                            side=position.side,
+                            size=position.size,
+                            pnl=pnl,
+                            entry_time=position.entry_time,
+                            exit_time=datetime.now(),
+                            strategy=getattr(position, 'strategy', 'unknown')
+                        )
+                        
+                        # Record for strategy selector if strategy is known
+                        if hasattr(position, 'strategy'):
+                            self.strategy_selector_2026.record_strategy_outcome(
+                                position.strategy, pnl
+                            )
+                    except Exception as e:
+                        self.logger.debug(f"Error recording 2026 metrics: {e}")
                     
                     # Record outcome for ML model
                     ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
@@ -494,11 +651,44 @@ class TradingBot:
         if balance and 'free' in balance:
             available_balance = float(balance.get('free', {}).get('USDT', 0))
             self.analytics.record_equity(available_balance)
+            
+            # 2026 FEATURE: Record equity for performance metrics
+            try:
+                self.performance_2026.record_equity(available_balance)
+            except Exception as e:
+                self.logger.debug(f"Error recording 2026 equity: {e}")
         
         # Periodic analytics report (every hour)
         time_since_report = (datetime.now() - self.last_analytics_report).total_seconds()
         if time_since_report > 3600:  # 1 hour
             self.logger.info(self.analytics.get_performance_summary())
+            
+            # 2026 FEATURE: Log comprehensive performance metrics
+            try:
+                self.performance_2026.log_performance_report()
+                
+                # Log strategy statistics
+                strategy_stats = self.strategy_selector_2026.get_strategy_statistics()
+                self.logger.info("=" * 60)
+                self.logger.info("🎯 STRATEGY PERFORMANCE")
+                self.logger.info("=" * 60)
+                self.logger.info(f"Current Strategy: {strategy_stats['current_strategy']}")
+                for name, stats in strategy_stats['strategies'].items():
+                    if stats['trades'] > 0:
+                        self.logger.info(
+                            f"  {stats['name']}: "
+                            f"Trades={stats['trades']}, "
+                            f"Win Rate={stats['win_rate']:.1%}"
+                        )
+                self.logger.info("=" * 60)
+                
+                # Log regime statistics
+                regime_stats = self.advanced_risk_2026.get_regime_statistics()
+                self.logger.info(f"📈 Market Regime: {regime_stats['current_regime']} "
+                               f"(stability: {regime_stats['regime_stability']:.1%})")
+            except Exception as e:
+                self.logger.debug(f"Error logging 2026 metrics: {e}")
+            
             self.last_analytics_report = datetime.now()
         
         # Log performance metrics
