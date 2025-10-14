@@ -8,7 +8,6 @@ Test Priority 1 - Reliability & Safety features:
 5. Per-trade risk limits
 """
 import sys
-import time
 from risk_manager import RiskManager
 
 def test_kill_switch():
