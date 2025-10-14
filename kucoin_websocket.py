@@ -135,13 +135,29 @@ class KuCoinWebSocket:
             self.logger.info(f"Resubscribing to {len(self._subscriptions)} channels...")
             for subscription in list(self._subscriptions):
                 if subscription.startswith('ticker:'):
-                    symbol = subscription.split(':')[1]
-                    self._subscribe_ticker(symbol)
+                    symbol = subscription.split(':', 1)[1]
+                    # Convert symbol format before passing to _subscribe_ticker
+                    kucoin_symbol = symbol.replace('/', '').replace(':', '')
+                    self._subscribe_ticker(kucoin_symbol)
                 elif subscription.startswith('candles:'):
+                    # Format is: candles:SYMBOL:TIMEFRAME where SYMBOL may contain ':'
+                    # e.g., candles:BTC/USDT:USDT:1h
+                    # Split on ':' and take last part as timeframe, rest as symbol
                     parts = subscription.split(':')
-                    symbol = parts[1]
-                    timeframe = parts[2]
-                    self._subscribe_candles(symbol, timeframe)
+                    if len(parts) >= 3:
+                        # Last part is timeframe, everything between 'candles:' and timeframe is symbol
+                        timeframe = parts[-1]
+                        # Join all parts except first (candles) and last (timeframe) to get symbol
+                        symbol = ':'.join(parts[1:-1])
+                        # Convert symbol format before passing to _subscribe_candles
+                        kucoin_symbol = symbol.replace('/', '').replace(':', '')
+                        # Convert timeframe to KuCoin format
+                        tf_map = {
+                            '1m': '1min', '5m': '5min', '15m': '15min', '30m': '30min',
+                            '1h': '1hour', '4h': '4hour', '1d': '1day', '1w': '1week'
+                        }
+                        kucoin_tf = tf_map.get(timeframe, timeframe)
+                        self._subscribe_candles(kucoin_symbol, kucoin_tf)
     
     def _on_message(self, ws, message):
         """Handle incoming WebSocket message"""
