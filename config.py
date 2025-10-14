@@ -53,6 +53,13 @@ class Config:
     RETRAIN_INTERVAL = int(os.getenv('RETRAIN_INTERVAL', '86400'))
     ML_MODEL_PATH = os.getenv('ML_MODEL_PATH', 'models/signal_model.pkl')
     
+    # Historical Training
+    ENABLE_HISTORICAL_TRAINING = os.getenv('ENABLE_HISTORICAL_TRAINING', 'true').lower() in ('true', '1', 'yes')
+    HISTORICAL_TRAINING_SYMBOLS = os.getenv('HISTORICAL_TRAINING_SYMBOLS', 'BTC/USDT:USDT,ETH/USDT:USDT').split(',')
+    HISTORICAL_TRAINING_TIMEFRAME = os.getenv('HISTORICAL_TRAINING_TIMEFRAME', '1h')
+    HISTORICAL_TRAINING_DAYS = int(os.getenv('HISTORICAL_TRAINING_DAYS', '30'))
+    HISTORICAL_TRAINING_MIN_SAMPLES = int(os.getenv('HISTORICAL_TRAINING_MIN_SAMPLES', '100'))
+    
     @classmethod
     def auto_configure_from_balance(cls, available_balance: float):
         """

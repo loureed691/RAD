@@ -16,6 +16,7 @@ from risk_manager import RiskManager
 from ml_model import MLModel
 from indicators import Indicators
 from advanced_analytics import AdvancedAnalytics
+from historical_trainer import HistoricalTrainer
 # 2026 Advanced Features
 from advanced_risk_2026 import AdvancedRiskManager2026
 from market_microstructure_2026 import MarketMicrostructure2026
@@ -109,6 +110,9 @@ class TradingBot:
         
         self.ml_model = MLModel(Config.ML_MODEL_PATH)
         
+        # Historical trainer for background training
+        self.historical_trainer = HistoricalTrainer(self.client, self.ml_model)
+        
         # Advanced analytics module
         self.analytics = AdvancedAnalytics()
         
@@ -143,6 +147,11 @@ class TradingBot:
         self._position_monitor_lock = threading.Lock()  # Lock for position monitor timing
         self._last_position_check = datetime.now()
         
+        # Historical training state
+        self._historical_training_thread = None
+        self._historical_training_running = False
+        self._historical_training_complete = False
+        
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
@@ -162,12 +171,14 @@ class TradingBot:
         self.logger.info("   - Stopping trading cycle")
         self.logger.info("   - Stopping background scanning thread")
         self.logger.info("   - Stopping position monitoring thread")
+        self.logger.info("   - Stopping historical training (if running)")
         self.logger.info("   - Will complete current operations")
         self.logger.info("   - Then proceed to shutdown")
         self.logger.info("=" * 60)
         self.running = False
         self._scan_thread_running = False
         self._position_monitor_running = False
+        self._historical_training_running = False
     
     def execute_trade(self, opportunity: dict) -> bool:
         """
@@ -574,6 +585,49 @@ class TradingBot:
         
         self.logger.info("👁️ Position monitor thread stopped")
     
+    def _historical_training_worker(self):
+        """Background thread that trains ML model with historical data"""
+        self.logger.info("🎓 Historical training thread started")
+        
+        try:
+            # Only train if enabled
+            if not Config.ENABLE_HISTORICAL_TRAINING:
+                self.logger.info("Historical training disabled in config")
+                self._historical_training_complete = True
+                return
+            
+            # Check if we should run training
+            if self.ml_model.model is not None:
+                # Model already exists - check if it has enough data
+                current_samples = len(self.ml_model.training_data)
+                if current_samples >= Config.HISTORICAL_TRAINING_MIN_SAMPLES:
+                    self.logger.info(
+                        f"ML model already has {current_samples} samples, "
+                        f"skipping historical training"
+                    )
+                    self._historical_training_complete = True
+                    return
+            
+            # Run historical training
+            success = self.historical_trainer.train_from_history(
+                symbols=Config.HISTORICAL_TRAINING_SYMBOLS,
+                timeframe=Config.HISTORICAL_TRAINING_TIMEFRAME,
+                days=Config.HISTORICAL_TRAINING_DAYS,
+                min_samples=Config.HISTORICAL_TRAINING_MIN_SAMPLES
+            )
+            
+            if success:
+                self.logger.info("✅ Historical training completed successfully")
+            else:
+                self.logger.warning("⚠️  Historical training did not complete successfully")
+            
+        except Exception as e:
+            self.logger.error(f"Error in historical training: {e}", exc_info=True)
+        finally:
+            self._historical_training_complete = True
+            self._historical_training_running = False
+            self.logger.info("🎓 Historical training thread stopped")
+    
     def _get_latest_opportunities(self):
         """Get the latest opportunities from background scanner in a thread-safe manner"""
         with self._scan_lock:
@@ -750,8 +804,21 @@ class TradingBot:
         self._scan_thread = threading.Thread(target=self._background_scanner, daemon=True, name="BackgroundScanner")
         self._scan_thread.start()
         
+        # Start historical training thread if enabled
+        if Config.ENABLE_HISTORICAL_TRAINING:
+            self.logger.info("🎓 Starting historical training thread (PRIORITY: LOW)...")
+            self._historical_training_running = True
+            self._historical_training_thread = threading.Thread(
+                target=self._historical_training_worker, 
+                daemon=True, 
+                name="HistoricalTrainer"
+            )
+            self._historical_training_thread.start()
+        else:
+            self.logger.info("⏭️  Historical training disabled (set ENABLE_HISTORICAL_TRAINING=true to enable)")
+        
         self.logger.info("=" * 60)
-        self.logger.info("✅ Both threads started - Position Monitor has API priority")
+        self.logger.info("✅ All threads started - Position Monitor has API priority")
         self.logger.info("=" * 60)
         
         # Initialize timing for full cycles
@@ -816,6 +883,17 @@ class TradingBot:
                     self.logger.warning("⚠️  Position monitor thread did not stop gracefully")
                 else:
                     self.logger.info("✅ Position monitor thread stopped")
+        
+        # Stop historical training thread if running
+        if self._historical_training_thread:
+            self._historical_training_running = False  # Set flag to False to stop thread
+            if self._historical_training_thread.is_alive():
+                self.logger.info("⏳ Stopping historical training thread...")
+                self._historical_training_thread.join(timeout=10)  # Wait up to 10 seconds
+                if self._historical_training_thread.is_alive():
+                    self.logger.warning("⚠️  Historical training thread did not stop gracefully")
+                else:
+                    self.logger.info("✅ Historical training thread stopped")
         
         # Close all positions if configured to do so
         if getattr(Config, "CLOSE_POSITIONS_ON_SHUTDOWN", False):
