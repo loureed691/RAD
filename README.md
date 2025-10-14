@@ -60,6 +60,7 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 ### 🎯 Intelligent Trading
 - **Multi-Timeframe Analysis**: Confirms signals across 1h, 4h, and 1d timeframes
 - **Enhanced Machine Learning**: 26-feature GradientBoosting model with continuous learning
+- **Historical Training**: Auto-trains on KuCoin historical data before live trading (see [HISTORICAL_TRAINING.md](HISTORICAL_TRAINING.md))
 - **Automated Pair Discovery**: Scans all KuCoin Futures pairs to find best opportunities
 - **Advanced Technical Analysis**: RSI, MACD, Bollinger Bands, Stochastic, Volume, VWAP
 - **Market Regime Detection**: Adapts strategy for trending vs ranging markets
