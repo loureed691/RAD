@@ -1764,8 +1764,7 @@ class KuCoinClient:
                         self._symbol_metadata_cache[symbol] = metadata
                         
                         # Update cache time only after successful refresh
-                        if symbol not in self._symbol_metadata_cache or force_refresh:
-                            self._metadata_cache_time = current_time
+                        self._metadata_cache_time = current_time
                         
                         self.logger.debug(
                             f"Cached metadata for {symbol}: "
