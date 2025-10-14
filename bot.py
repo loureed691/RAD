@@ -235,6 +235,41 @@ class TradingBot:
             self.logger.info(f"Not opening position: {reason}")
             return False
         
+        # PRIORITY 1 SAFETY: Check clock sync periodically (hourly)
+        if not self.client.verify_clock_sync_if_needed():
+            self.logger.critical("❌ Clock drift too large - refusing to trade")
+            return False
+        
+        # PRIORITY 1 SAFETY: Validate hard guardrails before proceeding
+        # Calculate estimated position value for guardrail check
+        ticker = self.client.get_ticker(symbol)
+        if not ticker:
+            return False
+        entry_price_estimate = ticker.get('last', 0)
+        if entry_price_estimate <= 0:
+            self.logger.warning(f"Invalid entry price for {symbol}: {entry_price_estimate}")
+            return False
+        
+        # Estimate position value (we'll refine this after calculating actual position size)
+        estimated_position_value = min(
+            available_balance * Config.RISK_PER_TRADE * 10,  # Rough estimate
+            Config.MAX_POSITION_SIZE
+        )
+        
+        # Check all guardrails (kill switch, daily loss, max positions, per-trade risk)
+        is_allowed, block_reason = self.risk_manager.validate_trade_guardrails(
+            balance=available_balance,
+            position_value=estimated_position_value,
+            current_positions=current_positions,
+            is_exit=False
+        )
+        
+        if not is_allowed:
+            self.logger.warning(f"🛑 GUARDRAILS BLOCKED TRADE: {block_reason}")
+            return False
+        
+        self.logger.debug(f"✅ Guardrails passed: {block_reason}")
+        
         # Validate trade
         is_valid, reason = self.risk_manager.validate_trade(
             symbol, signal, confidence
@@ -407,11 +442,14 @@ class TradingBot:
                 )
                 self.logger.info(f"💰 Regime-Aware Kelly: {kelly_fraction:.3f} (regime={market_regime})")
             except Exception as e:
-                # Fallback to standard Kelly
+                # Fallback to standard Kelly with PRIORITY 1 fractional caps
                 self.logger.debug(f"Using standard Kelly: {e}")
                 kelly_fraction = self.risk_manager.calculate_kelly_criterion(
-                    win_rate, avg_profit, avg_loss, use_fractional=True
+                    win_rate, avg_profit, avg_loss, use_fractional=True, volatility=volatility
                 )
+                self.logger.info(f"💰 Fractional Kelly (0.25-0.5 cap): {kelly_fraction:.3f}")
+        else:
+            self.logger.debug(f"Insufficient trade history ({total_trades} trades), using default risk")
         
         # Check drawdown and adjust risk
         risk_adjustment = self.risk_manager.update_drawdown(available_balance)
