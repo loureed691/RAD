@@ -239,6 +239,5 @@ class TestScaleOutMinimumFix(unittest.TestCase):
         # Verify position amount reduced
         self.assertEqual(position.amount, 3.0)  # 4.0 - 1.0
 
-
 if __name__ == '__main__':
     unittest.main()
