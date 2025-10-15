@@ -1830,11 +1830,32 @@ class PositionManager:
         if limits:
             min_amount = limits['amount']['min']
             if min_amount and amount_to_close < min_amount:
+                # Adjust order size to meet minimum instead of skipping
+                original_amount = amount_to_close
+                amount_to_close = min_amount
+                
+                # Check if adjusted amount exceeds position size (thread-safe check)
+                with self._positions_lock:
+                    if symbol not in self.positions:
+                        self.logger.error(f"No position found for {symbol} to scale out of")
+                        return None
+                    position = self.positions[symbol]
+                    position_amount = position.amount
+                    should_close_entire = amount_to_close >= position_amount
+                
+                # If adjusted amount would close entire position, use close_position instead
+                # (must be outside lock to avoid deadlock)
+                if should_close_entire:
+                    self.logger.info(
+                        f"Adjusted scale-out amount {amount_to_close:.4f} would close entire position "
+                        f"for {symbol} (position size: {position_amount:.4f}). Closing full position."
+                    )
+                    return self.close_position(symbol, reason)
+                
                 self.logger.warning(
-                    f"Scale-out amount {amount_to_close:.4f} below minimum {min_amount} for {symbol}. "
-                    f"Skipping partial exit. Reason: {reason}"
+                    f"Scale-out amount {original_amount:.4f} below minimum {min_amount} for {symbol}. "
+                    f"Adjusting to minimum {amount_to_close:.4f}. Reason: {reason}"
                 )
-                return None
         
         try:
             # Get current price
