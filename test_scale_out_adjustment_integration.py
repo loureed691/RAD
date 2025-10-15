@@ -63,11 +63,6 @@ class TestScaleOutAdjustmentIntegration(unittest.TestCase):
         scale_pct = 0.25
         amount_to_close = 1.714 * scale_pct  # = 0.4285 (below minimum)
         
-        print(f"\n=== Scale-Out Adjustment Integration Test ===")
-        print(f"Position size: {position.amount} contracts")
-        print(f"Requested scale-out: {scale_pct*100:.0f}% = {amount_to_close:.4f} contracts")
-        print(f"Exchange minimum: 1.0 contracts")
-        print(f"Expected adjustment: {amount_to_close:.4f} → 1.0 contracts")
         
         # Execute scale-out
         result = position_manager.scale_out_position(
