@@ -598,10 +598,11 @@ class Position:
 
     def should_close(self, current_price: float) -> tuple[bool, str]:
         """Check if position should be closed"""
-        # Calculate current P/L percentage
-        # CRITICAL FIX: Use leveraged P&L to check ROI-based thresholds (20% profit = 20% ROI, not 20% price movement)
-        # This ensures positions close at the correct profit/loss levels the user expects
-        current_pnl = self.get_leveraged_pnl(current_price)
+        # Calculate P/L percentages
+        # - base_pnl: unleveraged price movement (e.g., 5% price change = 0.05)
+        # - leveraged_pnl: actual ROI with leverage (e.g., 5% price change * 5x = 0.25 or 25% ROI)
+        base_pnl = self.get_pnl(current_price)
+        leveraged_pnl = self.get_leveraged_pnl(current_price)
         
         # CRITICAL SAFETY: Tiered emergency stop loss based on ROI to prevent catastrophic losses
         # These are absolute maximum loss caps that override all other logic
@@ -612,27 +613,30 @@ class Position:
         
         # Level 1: Emergency stop at -40% ROI (liquidation danger zone)
         # This is reduced from -50% to prevent getting too close to liquidation
-        if current_pnl <= -0.40:
+        if leveraged_pnl <= -0.40:
             return True, 'emergency_stop_liquidation_risk'
         
         # Level 2: Critical stop at -25% ROI (severe loss)
         # Reduced from -35% - this should catch failing positions before catastrophic loss
-        if current_pnl <= -0.25:
+        if leveraged_pnl <= -0.25:
             return True, 'emergency_stop_severe_loss'
         
         # Level 3: Warning stop at -15% ROI (unacceptable loss)
         # Reduced from -20% - if regular stops fail, this catches it earlier
         # This should almost never trigger if stop losses are working correctly
-        if current_pnl <= -0.15:
+        if leveraged_pnl < -0.15:  # Changed from <= to < for exact boundary
             return True, 'emergency_stop_excessive_loss'
         
         # Update favorable excursion tracking for smarter profit taking
-        if current_pnl > self.max_favorable_excursion:
-            self.max_favorable_excursion = current_pnl
+        # Use leveraged P/L for tracking since that's what users care about (ROI)
+        if leveraged_pnl > self.max_favorable_excursion:
+            self.max_favorable_excursion = leveraged_pnl
         
-        # Intelligent profit taking - take profits at key ROI levels when TP is far away
-        # This prevents scenarios where TP gets extended too far and price retraces
-        if current_pnl > 0 and self.take_profit:
+        # Intelligent profit taking - take profits at key PRICE MOVEMENT levels when TP is far away
+        # CRITICAL: Use base_pnl (unleveraged) for these thresholds since they represent price movement %
+        # This prevents closing positions too early with high leverage
+        # Example: 20% price move threshold should trigger at 20% price change, not 20% ROI
+        if base_pnl > 0 and self.take_profit:
             # Calculate distance to take profit
             if self.side == 'long':
                 distance_to_tp = (self.take_profit - current_price) / current_price
@@ -640,46 +644,49 @@ class Position:
                 distance_to_tp = (current_price - self.take_profit) / current_price
             
             # Exceptional profit levels - always take profit (no override)
-            if current_pnl >= 0.20:  # 20% price movement
+            if base_pnl >= 0.20:  # 20% price movement
                 return True, 'take_profit_20pct_exceptional'
             
-            # Very high profit - take if TP is far (>2%)
-            if current_pnl >= 0.15:
-                if distance_to_tp > 0.02:
+            # Very high profit - take if TP is >5% away (more conservative)
+            # Only if TP has been extended unrealistically far
+            if base_pnl >= 0.15:
+                if distance_to_tp > 0.05:
                     return True, 'take_profit_15pct_far_tp'
             
             # Profit velocity check - take profit if we're losing momentum
             # Check this at various profit levels to catch retracements early
-            # This takes priority over flat ROI thresholds when losing significant momentum
-            if self.max_favorable_excursion >= 0.10:  # Had at least 10% profit (significant)
-                profit_drawdown = self.max_favorable_excursion - current_pnl
+            # Use leveraged P/L for momentum checks since we care about ROI drawdowns
+            if self.max_favorable_excursion >= 0.10:  # Had at least 10% ROI (significant)
+                profit_drawdown = self.max_favorable_excursion - leveraged_pnl
                 drawdown_pct = profit_drawdown / self.max_favorable_excursion
                 
                 # If we've given back ~50% of peak profit and still above breakeven
                 # This is checked FIRST as it's more critical than 30% drawdown
                 # Use 0.499 to handle floating point precision issues
-                if drawdown_pct >= 0.499 and current_pnl >= 0.01:
+                if drawdown_pct >= 0.499 and leveraged_pnl >= 0.01:
                     return True, 'take_profit_major_retracement'
                 
                 # If we've given back ~30% of peak profit and in 3-15% ROI range
                 # Exit before hitting other thresholds to protect profits from further decline
                 # Use 0.299 to handle floating point precision issues
-                if drawdown_pct >= 0.299 and 0.03 <= current_pnl < 0.15:
+                if drawdown_pct >= 0.299 and 0.03 <= leveraged_pnl < 0.15:
                     return True, 'take_profit_momentum_loss'
             
-            # 10% price movement - take profit if TP is >2% away
-            if current_pnl >= 0.10:
-                if distance_to_tp > 0.02:
+            # 10% price movement - take profit if TP is >10% away (very conservative)
+            # Only for cases where TP extension has moved target unrealistically far
+            if base_pnl >= 0.10:
+                if distance_to_tp > 0.10:
                     return True, 'take_profit_10pct'
             
-            # 8% price movement - take profit if TP is >3% away
-            if current_pnl >= 0.08:
-                if distance_to_tp > 0.03:
+            # 8% price movement - take profit if TP is >12% away (very conservative)
+            if base_pnl >= 0.08:
+                if distance_to_tp > 0.12:
                     return True, 'take_profit_8pct'
             
-            # 5% price movement - take profit if TP is >5% away
-            if current_pnl >= 0.05:
-                if distance_to_tp > 0.05:
+            # 5% price movement - take profit if TP is >15% away (very conservative)
+            # This is a safety net for when TP extension logic goes wrong
+            if base_pnl >= 0.05:
+                if distance_to_tp > 0.15:
                     return True, 'take_profit_5pct'
         
         # Standard stop loss and take profit checks (primary logic)
@@ -691,8 +698,8 @@ class Position:
             
             # Smart stop loss: tighten stop if position has been open for a while with no progress
             time_in_trade = (datetime.now() - self.entry_time).total_seconds() / 3600  # hours
-            # current_pnl is already leveraged ROI, so check against 2% ROI directly
-            if time_in_trade >= 4.0 and current_pnl < 0.02:  # 4 hours with < 2% ROI
+            # Use leveraged ROI for stalled position check
+            if time_in_trade >= 4.0 and leveraged_pnl < 0.02:  # 4 hours with < 2% ROI
                 # Calculate a tighter stop loss for stalled positions
                 tighter_stop = self.entry_price * 0.99  # 1% below entry
                 if current_price <= tighter_stop:
@@ -709,8 +716,8 @@ class Position:
             
             # Smart stop loss: tighten stop if position has been open for a while with no progress
             time_in_trade = (datetime.now() - self.entry_time).total_seconds() / 3600  # hours
-            # current_pnl is already leveraged ROI, so check against 2% ROI directly
-            if time_in_trade >= 4.0 and current_pnl < 0.02:  # 4 hours with < 2% ROI
+            # Use leveraged ROI for stalled position check
+            if time_in_trade >= 4.0 and leveraged_pnl < 0.02:  # 4 hours with < 2% ROI
                 # Calculate a tighter stop loss for stalled positions
                 tighter_stop = self.entry_price * 1.01  # 1% above entry
                 if current_price >= tighter_stop:
@@ -723,7 +730,8 @@ class Position:
         
         # Emergency profit protection - only trigger if TP is unreachable or position has extreme profit
         # This is a safety mechanism for when TP extension logic fails, not normal operation
-        if self.take_profit and current_pnl >= 0.05:  # Only check if we have 5%+ ROI
+        # Use leveraged P/L since this is about protecting realized ROI
+        if self.take_profit and leveraged_pnl >= 0.10:  # Only check if we have 10%+ ROI
             # Calculate how far we are from the take profit target
             if self.side == 'long':
                 distance_to_tp = (self.take_profit - current_price) / current_price
@@ -736,12 +744,13 @@ class Position:
             
             # Only use emergency profit protection if:
             # 1. We've already passed TP (should have closed above, but just in case), OR
-            # 2. We have extreme profits (>50% ROI) AND TP is far away (>10%)
+            # 2. We have extreme profits (>100% ROI) AND TP is far away (>15%)
+            # This is ONLY for catastrophic TP extension failures
             if passed_tp:
                 # Already at/past TP - close immediately
                 return True, 'take_profit'
-            elif current_pnl >= 0.50 and distance_to_tp > 0.10:
-                # Extreme profit (50%+ ROI) but TP is 10%+ away - protect profits
+            elif leveraged_pnl >= 1.00 and distance_to_tp > 0.15:
+                # Extreme profit (100%+ ROI) but TP is 15%+ away - TP extension has failed badly
                 return True, 'emergency_profit_protection'
         
         return False, ''
