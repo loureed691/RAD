@@ -1840,14 +1840,15 @@ class PositionManager:
                         self.logger.error(f"No position found for {symbol} to scale out of")
                         return None
                     position = self.positions[symbol]
-                    should_close_entire = amount_to_close >= position.amount
+                    position_amount = position.amount
+                    should_close_entire = amount_to_close >= position_amount
                 
                 # If adjusted amount would close entire position, use close_position instead
                 # (must be outside lock to avoid deadlock)
                 if should_close_entire:
                     self.logger.info(
                         f"Adjusted scale-out amount {amount_to_close:.4f} would close entire position "
-                        f"for {symbol} (position size: {position.amount:.4f}). Closing full position."
+                        f"for {symbol} (position size: {position_amount:.4f}). Closing full position."
                     )
                     return self.close_position(symbol, reason)
                 
