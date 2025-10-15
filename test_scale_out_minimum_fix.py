@@ -263,7 +263,7 @@ class TestScaleOutMinimumFix(unittest.TestCase):
         mock_client.get_ticker.return_value = {'last': 51020.0}
         
         # Mock close_position to return success
-        mock_client.close_position.return_value = True
+        mock_client.close_position.return_value = 0.0204
         
         # Create position manager with mock client
         with patch('logger.Logger.get_logger'), \
