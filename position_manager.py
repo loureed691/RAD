@@ -205,18 +205,19 @@ class Position:
         if not self.take_profit:
             return
         
-        # Calculate current P/L (leveraged ROI) and initial target
-        # Use leveraged PNL for consistency with should_close() and profit-based logic
-        current_pnl = self.get_leveraged_pnl(current_price)
+        # Calculate current P/L (price movement for TP logic, leveraged for velocity tracking)
+        # Use unleveraged price movement for TP extension caps (consistent across leverage levels)
+        current_price_pnl = self.get_pnl(current_price)
+        current_leveraged_pnl = self.get_leveraged_pnl(current_price)
         initial_distance = abs(self.initial_take_profit - self.entry_price) / self.entry_price
         
-        # Update profit velocity tracking
+        # Update profit velocity tracking (use leveraged for ROI velocity)
         now = datetime.now()
         time_delta = (now - self.last_pnl_time).total_seconds() / 3600  # hours
         if time_delta > 0:
-            pnl_change = current_pnl - self.last_pnl
+            pnl_change = current_leveraged_pnl - self.last_pnl
             self.profit_velocity = pnl_change / time_delta  # % per hour
-            self.last_pnl = current_pnl
+            self.last_pnl = current_leveraged_pnl
             self.last_pnl_time = now
         
         # Base multiplier for extending take profit
@@ -279,11 +280,12 @@ class Position:
             tp_multiplier *= 0.92  # Tighten 8% on aging positions
         
         # 7. Already profitable - be more conservative with extensions (CAP EARLIER)
-        if current_pnl > 0.10:  # High profit (>10%) - start capping earlier
+        # Use unleveraged price movement to be consistent across leverage levels
+        if current_price_pnl > 0.10:  # High profit (>10% price move) - start capping earlier
             tp_multiplier = min(tp_multiplier, 1.03)  # Very minimal extension (was 1.1)
-        elif current_pnl > 0.05:  # Moderate profit (>5%)
+        elif current_price_pnl > 0.05:  # Moderate profit (>5% price move)
             tp_multiplier = min(tp_multiplier, 1.08)  # Limited extension (was 1.2)
-        elif current_pnl > 0.03:  # Small profit (>3%) - NEW
+        elif current_price_pnl > 0.03:  # Small profit (>3% price move) - NEW
             tp_multiplier = min(tp_multiplier, 1.15)  # Cap moderate extensions
         
         # Additional safeguard: never extend TP if it would move beyond current price by too much
