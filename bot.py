@@ -471,8 +471,12 @@ class TradingBot:
         if success and symbol in self.position_manager.positions:
             try:
                 self.position_manager.positions[symbol].strategy = selected_strategy
-            except:
-                pass  # Silently fail if position doesn't support strategy attribute
+            except AttributeError:
+                # Position object doesn't support strategy attribute, which is fine
+                self.logger.debug(f"Position for {symbol} doesn't support strategy attribute")
+            except Exception as e:
+                # Log unexpected errors but don't fail the trade
+                self.logger.warning(f"Unexpected error setting strategy on position: {type(e).__name__}: {e}")
         
         return success
     
