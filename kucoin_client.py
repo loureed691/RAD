@@ -11,6 +11,37 @@ from enum import IntEnum
 from kucoin_websocket import KuCoinWebSocket
 from functools import wraps
 
+
+def track_api_performance(func):
+    """Decorator to track API call performance"""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        success = True
+        retried = False
+        
+        try:
+            result = func(*args, **kwargs)
+            return result
+        except Exception as e:
+            success = False
+            # Check if this was a retry scenario
+            if 'attempt' in str(e).lower() or 'retry' in str(e).lower():
+                retried = True
+            raise
+        finally:
+            duration = time.time() - start_time
+            # Import here to avoid circular dependency
+            try:
+                from performance_monitor import get_monitor
+                monitor = get_monitor()
+                monitor.record_api_call(duration, success, retried)
+            except Exception:
+                pass  # Silently fail if monitor not available
+    
+    return wrapper
+
+
 class APICallPriority(IntEnum):
     """Priority levels for API calls - lower number = higher priority"""
     CRITICAL = 1   # Order execution, position closing - MUST execute first
