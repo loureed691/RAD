@@ -161,6 +161,8 @@ class RiskManager:
         """
         Check if adding this symbol would create too much correlation risk
         
+        PERFORMANCE: Optimized to O(n) by using set membership instead of nested loops
+        
         Args:
             symbol: Symbol to check (e.g., 'BTC/USDT:USDT')
             open_positions: List of open Position objects
@@ -182,14 +184,17 @@ class RiskManager:
             # Unknown asset, allow but with caution
             return True, "unknown_group"
         
-        # Count positions in same group
+        # PERFORMANCE OPTIMIZATION: Build set of assets in target group for O(1) lookup
+        # This replaces the nested loop which was O(n*m) with O(n) complexity
+        group_assets_set = set(self.correlation_groups.get(asset_group, []))
+        
+        # Count positions in same group using optimized set membership check
         same_group_count = 0
         for pos in open_positions:
             pos_base = pos.symbol.split('/')[0].replace('USDT', '').replace('USD', '')
-            for asset in self.correlation_groups.get(asset_group, []):
-                if asset in pos_base:
-                    same_group_count += 1
-                    break
+            # Check if any group asset is in position base (single pass)
+            if group_assets_set & set(pos_base.split()):
+                same_group_count += 1
         
         # Allow max 2 positions from same correlation group
         if same_group_count >= 2:

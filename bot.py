@@ -16,6 +16,7 @@ from risk_manager import RiskManager
 from ml_model import MLModel
 from indicators import Indicators
 from advanced_analytics import AdvancedAnalytics
+from performance_monitor import get_monitor
 # 2026 Advanced Features
 from advanced_risk_2026 import AdvancedRiskManager2026
 from market_microstructure_2026 import MarketMicrostructure2026
@@ -112,6 +113,10 @@ class TradingBot:
         # Advanced analytics module
         self.analytics = AdvancedAnalytics()
         
+        # Performance monitoring
+        self.perf_monitor = get_monitor()
+        self.logger.info("✅ Performance Monitor: ENABLED")
+        
         # 2026 Advanced Features
         self.advanced_risk_2026 = AdvancedRiskManager2026()
         self.market_micro_2026 = MarketMicrostructure2026()
@@ -129,6 +134,7 @@ class TradingBot:
         self.last_scan_time = None
         self.last_retrain_time = datetime.now()
         self.last_analytics_report = datetime.now()
+        self.last_performance_report = datetime.now()  # Track performance reporting
         
         # Background scanning state
         self._scan_thread = None
@@ -471,8 +477,12 @@ class TradingBot:
         if success and symbol in self.position_manager.positions:
             try:
                 self.position_manager.positions[symbol].strategy = selected_strategy
-            except:
-                pass  # Silently fail if position doesn't support strategy attribute
+            except AttributeError:
+                # Position object doesn't support strategy attribute, which is fine
+                self.logger.debug(f"Position for {symbol} doesn't support strategy attribute")
+            except Exception as e:
+                # Log unexpected errors but don't fail the trade
+                self.logger.warning(f"Unexpected error setting strategy on position: {type(e).__name__}: {e}")
         
         return success
     
@@ -556,11 +566,15 @@ class TradingBot:
         
         while self._scan_thread_running:
             try:
+                # PERFORMANCE: Track scan duration
+                scan_start = time.time()
+                
                 # Scan market for opportunities
                 self.logger.info("🔍 [Background] Scanning market for opportunities...")
-                scan_start = datetime.now()
                 opportunities = self.scanner.get_best_pairs(n=5)
-                scan_duration = (datetime.now() - scan_start).total_seconds()
+                
+                scan_duration = time.time() - scan_start
+                self.perf_monitor.record_scan_time(scan_duration)
                 
                 # Update shared opportunities list in a thread-safe manner
                 with self._scan_lock:
@@ -571,6 +585,16 @@ class TradingBot:
                     self.logger.info(f"✅ [Background] Found {len(opportunities)} opportunities (scan took {scan_duration:.1f}s)")
                 else:
                     self.logger.debug("[Background] No opportunities found in this scan")
+                
+                # Report performance periodically
+                if (datetime.now() - self.last_performance_report).total_seconds() >= 900:  # Every 15 minutes
+                    self.perf_monitor.print_summary()
+                    self.last_performance_report = datetime.now()
+                    
+                    # Check performance health
+                    is_healthy, reason = self.perf_monitor.check_health()
+                    if not is_healthy:
+                        self.logger.warning(f"⚠️  PERFORMANCE WARNING: {reason}")
                 
                 # Sleep for the configured scan interval before next scan
                 # Check periodically if we should stop - yield control more frequently

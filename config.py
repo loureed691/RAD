@@ -2,10 +2,18 @@
 Configuration management for the KuCoin Futures Trading Bot
 """
 import os
+import random
+import numpy as np
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# REPRODUCIBILITY: Set random seeds for consistent behavior across runs
+# This is critical for debugging and testing
+RANDOM_SEED = int(os.getenv('RANDOM_SEED', '42'))
+random.seed(RANDOM_SEED)
+np.random.seed(RANDOM_SEED)
 
 class Config:
     """Configuration class for trading bot"""
@@ -151,7 +159,47 @@ class Config:
     
     @classmethod
     def validate(cls):
-        """Validate that required configuration is set"""
+        """
+        Validate that required configuration is set and parameters are within safe limits
+        
+        SAFETY: Enhanced validation to prevent catastrophic configuration errors
+        """
+        # Check API credentials
         if not cls.API_KEY or not cls.API_SECRET or not cls.API_PASSPHRASE:
             raise ValueError("KuCoin API credentials are required. Please set them in .env file")
+        
+        # SAFETY: Validate numerical parameters are within safe bounds
+        if cls.LEVERAGE is not None:
+            if not (1 <= cls.LEVERAGE <= 20):
+                raise ValueError(f"LEVERAGE must be between 1 and 20, got {cls.LEVERAGE}")
+        
+        if cls.MAX_POSITION_SIZE is not None:
+            if cls.MAX_POSITION_SIZE <= 0:
+                raise ValueError(f"MAX_POSITION_SIZE must be positive, got {cls.MAX_POSITION_SIZE}")
+            if cls.MAX_POSITION_SIZE > 1000000:  # $1M sanity check
+                raise ValueError(f"MAX_POSITION_SIZE seems unreasonably large: ${cls.MAX_POSITION_SIZE}")
+        
+        if cls.RISK_PER_TRADE is not None:
+            if not (0.001 <= cls.RISK_PER_TRADE <= 0.10):  # 0.1% to 10%
+                raise ValueError(f"RISK_PER_TRADE must be between 0.001 and 0.10, got {cls.RISK_PER_TRADE}")
+        
+        if cls.MAX_OPEN_POSITIONS < 1 or cls.MAX_OPEN_POSITIONS > 20:
+            raise ValueError(f"MAX_OPEN_POSITIONS must be between 1 and 20, got {cls.MAX_OPEN_POSITIONS}")
+        
+        if cls.TRAILING_STOP_PERCENTAGE <= 0 or cls.TRAILING_STOP_PERCENTAGE > 0.50:  # Max 50%
+            raise ValueError(f"TRAILING_STOP_PERCENTAGE must be between 0 and 0.50, got {cls.TRAILING_STOP_PERCENTAGE}")
+        
+        if cls.CHECK_INTERVAL < 10 or cls.CHECK_INTERVAL > 3600:  # 10s to 1h
+            raise ValueError(f"CHECK_INTERVAL must be between 10 and 3600 seconds, got {cls.CHECK_INTERVAL}")
+        
+        # SAFETY: Warn about aggressive settings
+        from logger import Logger
+        logger = Logger.get_logger()
+        
+        if cls.LEVERAGE is not None and cls.LEVERAGE > 15:
+            logger.warning(f"⚠️  HIGH LEVERAGE WARNING: {cls.LEVERAGE}x leverage is very risky!")
+        
+        if cls.RISK_PER_TRADE is not None and cls.RISK_PER_TRADE > 0.05:
+            logger.warning(f"⚠️  HIGH RISK WARNING: {cls.RISK_PER_TRADE:.1%} risk per trade is aggressive!")
+        
         return True
