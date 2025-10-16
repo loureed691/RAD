@@ -587,7 +587,7 @@ class TradingBot:
                     self.logger.debug("[Background] No opportunities found in this scan")
                 
                 # Report performance periodically
-                if (datetime.now() - self.last_performance_report).seconds >= 900:  # Every 15 minutes
+                if (datetime.now() - self.last_performance_report).total_seconds() >= 900:  # Every 15 minutes
                     self.perf_monitor.print_summary()
                     self.last_performance_report = datetime.now()
                     
