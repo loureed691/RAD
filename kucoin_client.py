@@ -36,8 +36,8 @@ def track_api_performance(func):
                 from performance_monitor import get_monitor
                 monitor = get_monitor()
                 monitor.record_api_call(duration, success, retried)
-            except Exception:
-                pass  # Silently fail if monitor not available
+            except Exception as monitor_exc:
+                Logger.get_logger().debug(f"Performance monitoring failed in track_api_performance: {monitor_exc}")
     
     return wrapper
 
