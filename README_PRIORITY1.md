@@ -163,10 +163,32 @@ else:
 ### Monitor Fee Impact
 ```python
 from backtest_engine import BacktestEngine
+import pandas as pd
 
+# Create test data
+data = pd.DataFrame({
+    'timestamp': pd.date_range('2024-01-01', periods=100, freq='h'),
+    'close': [50000 + i * 10 for i in range(100)],
+    'high': [50100 + i * 10 for i in range(100)],
+    'low': [49900 + i * 10 for i in range(100)],
+    'volume': [100] * 100
+})
+
+# Define a simple strategy
+def my_strategy(row, balance, positions):
+    if not positions and row['close'] < 50500:
+        return {
+            'side': 'long',
+            'amount': 0.1,
+            'leverage': 10,
+            'stop_loss': row['close'] * 0.95,
+            'take_profit': row['close'] * 1.05
+        }
+    return 'HOLD'
+
+# Run backtest
 engine = BacktestEngine(10000, 0.0006, 0.0001)
-# ... run backtest ...
-results = engine.calculate_results()
+results = engine.run_backtest(data, my_strategy)
 
 print(f"Gross PnL: ${results['gross_pnl']:.2f}")
 print(f"Net PnL: ${results['total_pnl']:.2f}")
