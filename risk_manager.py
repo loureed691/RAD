@@ -193,7 +193,7 @@ class RiskManager:
         for pos in open_positions:
             pos_base = pos.symbol.split('/')[0].replace('USDT', '').replace('USD', '')
             # Check if any group asset is in position base (single pass)
-            if any(asset in pos_base for asset in group_assets_set):
+            if group_assets_set & set(pos_base.split()):
                 same_group_count += 1
         
         # Allow max 2 positions from same correlation group
