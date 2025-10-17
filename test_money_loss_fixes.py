@@ -64,7 +64,7 @@ class TestMoneyLossFixes(unittest.TestCase):
         
         # Medium volatility
         med_vol_sl = self.risk_manager.calculate_stop_loss_percentage(0.035)
-        self.assertLessEqual(med_vol_sl, 0.03, "Medium volatility stop loss should be <= 3%")
+        self.assertLessEqual(med_vol_sl, 0.025, "Medium volatility stop loss should be <= 2.5%")
         
         # High volatility - capped at 2.5% (reduced from 4% to prevent excessive leverage losses)
         high_vol_sl = self.risk_manager.calculate_stop_loss_percentage(0.10)
