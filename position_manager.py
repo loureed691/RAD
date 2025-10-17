@@ -148,12 +148,17 @@ class Position:
             volatility: Market volatility (e.g., ATR or BB width)
             momentum: Current price momentum (-1 to 1)
         """
-        # Calculate current P/L percentage
+        # Calculate current P/L percentage (unleveraged for comparison)
         current_pnl = self.get_pnl(current_price)
         
-        # Update max favorable excursion
-        if current_pnl > self.max_favorable_excursion:
-            self.max_favorable_excursion = current_pnl
+        # CRITICAL FIX: Calculate net P/L after fees for profit-based adjustments
+        from config import Config
+        trading_fees_pct = self.calculate_trading_fees()
+        net_pnl = current_pnl - trading_fees_pct
+        
+        # Update max favorable excursion (using net P/L)
+        if net_pnl > self.max_favorable_excursion:
+            self.max_favorable_excursion = net_pnl
         
         # PROFITABILITY FIX: More aggressive trailing to lock profits
         adaptive_trailing = trailing_percentage
@@ -165,12 +170,15 @@ class Position:
             adaptive_trailing *= 0.7  # TIGHTER from 0.8 in low volatility
         
         # 2. Profit-based adjustment - MORE AGGRESSIVE tightening
-        if current_pnl > 0.10:  # >10% profit
+        # Use NET P/L after fees for profit thresholds
+        if net_pnl > 0.10:  # >10% NET profit after fees
             adaptive_trailing *= 0.5  # TIGHTER from 0.7 to lock in more profit
-        elif current_pnl > 0.05:  # >5% profit
+        elif net_pnl > 0.05:  # >5% NET profit
             adaptive_trailing *= 0.7  # TIGHTER from 0.85
-        elif current_pnl > 0.03:  # >3% profit (NEW threshold)
+        elif net_pnl > 0.03:  # >3% NET profit (NEW threshold)
             adaptive_trailing *= 0.85  # Start tightening earlier
+        elif net_pnl > trading_fees_pct:  # Just above breakeven after fees
+            adaptive_trailing *= 0.95  # Slightly tighter to protect small profit
         
         # 3. Momentum adjustment - more conservative
         if abs(momentum) > 0.03:  # Strong momentum
@@ -216,15 +224,22 @@ class Position:
         # Calculate current P/L (leveraged ROI) and initial target
         # Use leveraged PNL for consistency with should_close() and profit-based logic
         current_pnl = self.get_leveraged_pnl(current_price)
+        
+        # CRITICAL FIX: Calculate net P/L after fees for profit-based decisions
+        from config import Config
+        trading_fees_pct = self.calculate_trading_fees()
+        leveraged_fees_pct = trading_fees_pct * self.leverage
+        net_pnl = current_pnl - leveraged_fees_pct
+        
         initial_distance = abs(self.initial_take_profit - self.entry_price) / self.entry_price
         
-        # Update profit velocity tracking
+        # Update profit velocity tracking (using net P/L)
         now = datetime.now()
         time_delta = (now - self.last_pnl_time).total_seconds() / 3600  # hours
         if time_delta > 0:
-            pnl_change = current_pnl - self.last_pnl
+            pnl_change = net_pnl - self.last_pnl
             self.profit_velocity = pnl_change / time_delta  # % per hour
-            self.last_pnl = current_pnl
+            self.last_pnl = net_pnl
             self.last_pnl_time = now
         
         # Base multiplier for extending take profit
@@ -287,12 +302,15 @@ class Position:
             tp_multiplier *= 0.92  # Tighten 8% on aging positions
         
         # 7. Already profitable - be more conservative with extensions (CAP EARLIER)
-        if current_pnl > 0.10:  # High profit (>10%) - start capping earlier
+        # Use NET P/L after fees for profit-based caps
+        if net_pnl > 0.10:  # High NET profit (>10%) after fees - start capping earlier
             tp_multiplier = min(tp_multiplier, 1.03)  # Very minimal extension (was 1.1)
-        elif current_pnl > 0.05:  # Moderate profit (>5%)
+        elif net_pnl > 0.05:  # Moderate NET profit (>5%)
             tp_multiplier = min(tp_multiplier, 1.08)  # Limited extension (was 1.2)
-        elif current_pnl > 0.03:  # Small profit (>3%) - NEW
+        elif net_pnl > 0.03:  # Small NET profit (>3%) - NEW
             tp_multiplier = min(tp_multiplier, 1.15)  # Cap moderate extensions
+        elif net_pnl > trading_fees_pct * self.leverage:  # Just above breakeven after fees
+            tp_multiplier = min(tp_multiplier, 1.20)  # Be conservative with small profits
         
         # Additional safeguard: never extend TP if it would move beyond current price by too much
         # This prevents the scenario where TP keeps moving away as price approaches it
