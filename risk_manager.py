@@ -443,25 +443,30 @@ class RiskManager:
         Returns:
             Stop loss percentage (e.g., 0.05 for 5%)
         """
-        # Base stop loss - reduced from 2.5% to 1.5% for tighter risk control
-        base_stop = 0.015  # 1.5%
+        # MONEY LOSS FIX: Tighter base stop loss to prevent excessive losses with leverage
+        # With average leverage of 6x, we want max -10% ROI loss on stop = ~1.7% price stop
+        # Base stop loss reduced from 1.5% to 1.2% for better protection
+        base_stop = 0.012  # 1.2%
         
         # Adjust based on volatility (adaptive approach)
         # Higher volatility = wider stop loss to avoid premature stops
         if volatility < 0.02:
             # Low volatility - tighter stops
-            volatility_adjustment = volatility * 1.2
+            volatility_adjustment = volatility * 1.0  # Reduced multiplier from 1.2
         elif volatility < 0.05:
             # Medium volatility - standard adjustment
-            volatility_adjustment = volatility * 1.5
+            volatility_adjustment = volatility * 1.2  # Reduced from 1.5
         else:
             # High volatility - wider stops but capped
-            volatility_adjustment = min(volatility * 2.0, 0.03)
+            volatility_adjustment = min(volatility * 1.5, 0.02)  # Reduced cap from 0.03 to 0.02
         
         stop_loss = base_stop + volatility_adjustment
         
-        # Cap between 1.0% and 4% - tightened from 1.5%-8% for better risk management
-        stop_loss = max(0.010, min(stop_loss, 0.04))
+        # MONEY LOSS FIX: Tighter caps to prevent excessive losses with leverage
+        # Cap between 1.0% and 2.5% (reduced from 1.0%-4.0%)
+        # With 6x leverage: 2.5% price stop = -15% ROI (at emergency threshold)
+        # This ensures stops trigger BEFORE emergency stops
+        stop_loss = max(0.010, min(stop_loss, 0.025))
         
         return stop_loss
     

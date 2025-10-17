@@ -64,11 +64,11 @@ class TestMoneyLossFixes(unittest.TestCase):
         
         # Medium volatility
         med_vol_sl = self.risk_manager.calculate_stop_loss_percentage(0.035)
-        self.assertLessEqual(med_vol_sl, 0.04, "Medium volatility stop loss should be <= 4%")
+        self.assertLessEqual(med_vol_sl, 0.03, "Medium volatility stop loss should be <= 3%")
         
-        # High volatility - capped at 4%
+        # High volatility - capped at 2.5% (reduced from 4% to prevent excessive leverage losses)
         high_vol_sl = self.risk_manager.calculate_stop_loss_percentage(0.10)
-        self.assertEqual(high_vol_sl, 0.04, "High volatility stop loss should be capped at 4% (was 8%)")
+        self.assertEqual(high_vol_sl, 0.025, "High volatility stop loss should be capped at 2.5% (was 4%, now tighter for leverage safety)")
     
     def test_leverage_reduced_bounds(self):
         """Test that leverage has more conservative bounds"""
