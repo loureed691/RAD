@@ -157,9 +157,13 @@ class KuCoinClient:
                 else:
                     self._pending_critical_calls = max(0, self._pending_critical_calls - 1)
     
-    def _check_circuit_breaker(self) -> bool:
+    def _check_circuit_breaker(self, log_if_active: bool = True) -> bool:
         """
         Check if circuit breaker is active and should block API calls.
+        
+        Args:
+            log_if_active: If True, log warning when circuit breaker is active. 
+                          Set to False to avoid log spam during retries.
         
         Returns:
             True if call should proceed, False if blocked by circuit breaker
@@ -174,8 +178,9 @@ class KuCoinClient:
                     return True
                 else:
                     # Still in timeout period
-                    remaining = int(self._circuit_breaker_reset_time - time.time())
-                    self.logger.warning(f"⛔ Circuit breaker active, retry in {remaining}s")
+                    if log_if_active:
+                        remaining = int(self._circuit_breaker_reset_time - time.time())
+                        self.logger.warning(f"⛔ Circuit breaker active, retry in {remaining}s")
                     return False
             return True
     
@@ -230,11 +235,16 @@ class KuCoinClient:
         # to ensure trades are executed even with transient errors
         effective_retries = max_retries * 3 if is_critical else max_retries
         
+        # Check circuit breaker ONCE at the start - if active, return early to avoid log spam
+        if not self._check_circuit_breaker(log_if_active=True):
+            self.logger.warning(f"⛔ {operation_name} blocked by circuit breaker")
+            return None
+        
         for attempt in range(effective_retries):
             try:
-                # RELIABILITY: Check circuit breaker before API call
-                if not self._check_circuit_breaker():
-                    self.logger.warning(f"⛔ {operation_name} blocked by circuit breaker")
+                # Check circuit breaker again but don't log to avoid spam during retries
+                if not self._check_circuit_breaker(log_if_active=False):
+                    # Circuit breaker activated during retries, return early
                     return None
                 
                 result = func()
