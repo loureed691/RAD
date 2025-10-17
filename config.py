@@ -15,6 +15,16 @@ RANDOM_SEED = int(os.getenv('RANDOM_SEED', '42'))
 random.seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 
+# Set TensorFlow seed for reproducibility (if TensorFlow is used)
+try:
+    import tensorflow as tf
+    tf.random.set_seed(RANDOM_SEED)
+    # Also set hash seed for Python hash-based operations
+    import os as _os
+    _os.environ['PYTHONHASHSEED'] = str(RANDOM_SEED)
+except ImportError:
+    pass  # TensorFlow not installed or not needed
+
 class Config:
     """Configuration class for trading bot"""
     
