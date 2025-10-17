@@ -98,8 +98,9 @@ class RiskManager:
         
         # Track recent trades (rolling window)
         self.recent_trades.append(pnl)
+        # MEMORY: Keep only last N trades (more efficient than pop(0))
         if len(self.recent_trades) > self.max_recent_trades:
-            self.recent_trades.pop(0)
+            self.recent_trades = self.recent_trades[-self.max_recent_trades:]
     
     def get_win_rate(self) -> float:
         """Calculate overall win rate"""

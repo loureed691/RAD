@@ -33,6 +33,10 @@ class AdvancedAnalytics:
             'duration': trade_data.get('duration', 0),
             'leverage': trade_data.get('leverage', 1)
         })
+        
+        # MEMORY: Limit history size to prevent unbounded growth
+        if len(self.trade_history) > self.max_history_size:
+            self.trade_history = self.trade_history[-self.max_history_size:]
     
     def record_equity(self, balance: float):
         """Record current equity for curve tracking"""
@@ -40,6 +44,14 @@ class AdvancedAnalytics:
             'timestamp': datetime.now(),
             'balance': balance
         })
+        
+        # MEMORY: Limit equity curve size to prevent unbounded growth
+        if len(self.equity_curve) > self.max_history_size:
+            self.equity_curve = self.equity_curve[-self.max_history_size:]
+        
+        # MEMORY: Limit equity curve size to prevent unbounded growth
+        if len(self.equity_curve) > self.max_history_size:
+            self.equity_curve = self.equity_curve[-self.max_history_size:]
     
     def calculate_sortino_ratio(self, risk_free_rate: float = 0.0) -> float:
         """
