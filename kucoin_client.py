@@ -157,6 +157,21 @@ class KuCoinClient:
                 else:
                     self._pending_critical_calls = max(0, self._pending_critical_calls - 1)
     
+    def is_circuit_breaker_active(self) -> bool:
+        """
+        Check if circuit breaker is currently active (public method for callers).
+        
+        Returns:
+            True if circuit breaker is active, False otherwise
+        """
+        with self._critical_call_lock:
+            if self._circuit_breaker_active:
+                # Check if timeout has elapsed
+                if time.time() >= self._circuit_breaker_reset_time:
+                    return False  # Timeout elapsed, not active anymore
+                return True
+            return False
+    
     def _check_circuit_breaker(self, log_if_active: bool = True) -> bool:
         """
         Check if circuit breaker is active and should block API calls.
