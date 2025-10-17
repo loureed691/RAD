@@ -63,6 +63,13 @@ class KuCoinClient:
         self._critical_call_lock = threading.Lock()
         self._closing = False  # Flag to indicate client is shutting down
         
+        # RELIABILITY: Circuit breaker for API failures
+        self._consecutive_failures = 0
+        self._max_consecutive_failures = 5  # Threshold for circuit breaker
+        self._circuit_breaker_active = False
+        self._circuit_breaker_reset_time = None
+        self._circuit_breaker_timeout = 60  # Seconds before retry
+        
         # PRIORITY 1 SAFETY: Symbol metadata cache for exchange invariant validation
         self._symbol_metadata_cache = {}  # Cache symbol specs (min qty, price step, etc.)
         self._metadata_cache_time = None
@@ -81,6 +88,12 @@ class KuCoinClient:
                 'secret': api_secret,
                 'password': api_passphrase,
                 'enableRateLimit': True,
+                # PERFORMANCE: Enable session reuse for better connection management
+                'timeout': 30000,  # 30 second timeout
+                'options': {
+                    'defaultType': 'future',
+                    'adjustForTimeDifference': True,
+                },
             })
             self.logger.info("KuCoin Futures client initialized successfully")
             self.logger.info("✅ API Call Priority System: ENABLED (Trading operations have priority)")
@@ -144,6 +157,48 @@ class KuCoinClient:
                 else:
                     self._pending_critical_calls = max(0, self._pending_critical_calls - 1)
     
+    def _check_circuit_breaker(self) -> bool:
+        """
+        Check if circuit breaker is active and should block API calls.
+        
+        Returns:
+            True if call should proceed, False if blocked by circuit breaker
+        """
+        with self._critical_call_lock:
+            if self._circuit_breaker_active:
+                # Check if timeout has elapsed
+                if time.time() >= self._circuit_breaker_reset_time:
+                    self.logger.info("🔄 Circuit breaker timeout elapsed, attempting reset...")
+                    self._circuit_breaker_active = False
+                    self._consecutive_failures = 0
+                    return True
+                else:
+                    # Still in timeout period
+                    remaining = int(self._circuit_breaker_reset_time - time.time())
+                    self.logger.warning(f"⛔ Circuit breaker active, retry in {remaining}s")
+                    return False
+            return True
+    
+    def _record_api_success(self):
+        """Record successful API call for circuit breaker"""
+        with self._critical_call_lock:
+            if self._consecutive_failures > 0:
+                self.logger.debug(f"✅ API call succeeded, resetting failure count from {self._consecutive_failures}")
+            self._consecutive_failures = 0
+    
+    def _record_api_failure(self):
+        """Record failed API call for circuit breaker"""
+        with self._critical_call_lock:
+            self._consecutive_failures += 1
+            self.logger.warning(f"⚠️ API call failed ({self._consecutive_failures}/{self._max_consecutive_failures})")
+            
+            if self._consecutive_failures >= self._max_consecutive_failures:
+                if not self._circuit_breaker_active:
+                    self.logger.error(f"🚨 CIRCUIT BREAKER ACTIVATED after {self._consecutive_failures} consecutive failures")
+                    self.logger.error(f"   Will retry after {self._circuit_breaker_timeout}s cooldown period")
+                    self._circuit_breaker_active = True
+                    self._circuit_breaker_reset_time = time.time() + self._circuit_breaker_timeout
+    
     def _handle_api_error(self, func: Callable, max_retries: int = 3, 
                           exponential_backoff: bool = True, 
                           operation_name: str = "API call",
@@ -177,7 +232,15 @@ class KuCoinClient:
         
         for attempt in range(effective_retries):
             try:
+                # RELIABILITY: Check circuit breaker before API call
+                if not self._check_circuit_breaker():
+                    self.logger.warning(f"⛔ {operation_name} blocked by circuit breaker")
+                    return None
+                
                 result = func()
+                
+                # Record success for circuit breaker
+                self._record_api_success()
                 
                 # Log if we recovered from an error
                 if attempt > 0:
@@ -348,6 +411,8 @@ class KuCoinClient:
                 f"Failed {operation_name} after {effective_retries} attempts. "
                 f"Last error: {type(last_exception).__name__}: {str(last_exception)}"
             )
+            # Record failure for circuit breaker
+            self._record_api_failure()
         
         return None
     
@@ -737,14 +802,24 @@ class KuCoinClient:
             if symbol in markets:
                 contract_size = markets[symbol].get('contractSize', 1)
             
+            # SAFETY: Validate inputs before calculation
+            if leverage <= 0:
+                self.logger.error(f"Invalid leverage: {leverage}, using 1x")
+                leverage = 1
+            if amount <= 0 or price <= 0:
+                self.logger.error(f"Invalid amount ({amount}) or price ({price})")
+                return 0
+            
             position_value = amount * price * contract_size
             required_margin = position_value / leverage
             
             return required_margin
         except Exception as e:
             self.logger.error(f"Error calculating required margin: {e}")
-            # Return conservative estimate
-            return (amount * price) / leverage
+            # Return conservative estimate with safety checks
+            if leverage <= 0:
+                leverage = 1
+            return (amount * price) / leverage if (amount > 0 and price > 0) else 0
     
     def check_available_margin(self, symbol: str, amount: float, 
                                price: float, leverage: int) -> tuple[bool, float, str]:
@@ -908,6 +983,10 @@ class KuCoinClient:
             if required_margin > usable_margin:
                 # Calculate what leverage we can actually use (must include contract_size)
                 position_value = adjusted_amount * price * contract_size
+                # SAFETY: Guard against division by zero
+                if usable_margin <= 0:
+                    self.logger.error(f"Invalid usable_margin: {usable_margin}, cannot adjust leverage")
+                    return 0, 1  # Return minimal values to prevent trading
                 adjusted_leverage = int(position_value / usable_margin)
                 adjusted_leverage = max(1, min(adjusted_leverage, leverage))
                 

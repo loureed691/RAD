@@ -98,8 +98,9 @@ class RiskManager:
         
         # Track recent trades (rolling window)
         self.recent_trades.append(pnl)
+        # MEMORY: Keep only last N trades (more efficient than pop(0))
         if len(self.recent_trades) > self.max_recent_trades:
-            self.recent_trades.pop(0)
+            self.recent_trades = self.recent_trades[-self.max_recent_trades:]
     
     def get_win_rate(self) -> float:
         """Calculate overall win rate"""
@@ -382,6 +383,11 @@ class RiskManager:
         
         # Cap at maximum position size
         position_value = min(position_value, self.max_position_size)
+        
+        # SAFETY: Guard against invalid entry price
+        if entry_price <= 0:
+            self.logger.error(f"Invalid entry_price: {entry_price}, cannot calculate position size")
+            return 0.0
         
         # Convert to contracts
         position_size = position_value / entry_price

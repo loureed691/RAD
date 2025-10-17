@@ -33,6 +33,10 @@ class AdvancedAnalytics:
             'duration': trade_data.get('duration', 0),
             'leverage': trade_data.get('leverage', 1)
         })
+        
+        # MEMORY: Limit history size to prevent unbounded growth
+        if len(self.trade_history) > self.max_history_size:
+            self.trade_history = self.trade_history[-self.max_history_size:]
     
     def record_equity(self, balance: float):
         """Record current equity for curve tracking"""
@@ -40,6 +44,14 @@ class AdvancedAnalytics:
             'timestamp': datetime.now(),
             'balance': balance
         })
+        
+        # MEMORY: Limit equity curve size to prevent unbounded growth
+        if len(self.equity_curve) > self.max_history_size:
+            self.equity_curve = self.equity_curve[-self.max_history_size:]
+        
+        # MEMORY: Limit equity curve size to prevent unbounded growth
+        if len(self.equity_curve) > self.max_history_size:
+            self.equity_curve = self.equity_curve[-self.max_history_size:]
     
     def calculate_sortino_ratio(self, risk_free_rate: float = 0.0) -> float:
         """
@@ -135,6 +147,9 @@ class AdvancedAnalytics:
         
         # Annualize return
         days_elapsed = max(1, (recent_equity[-1]['timestamp'] - recent_equity[0]['timestamp']).days)
+        # SAFETY: Prevent division by zero in edge cases
+        if days_elapsed <= 0:
+            days_elapsed = 1
         annualized_return = total_return * (365 / days_elapsed)
         
         calmar_ratio = annualized_return / max_dd
@@ -169,7 +184,8 @@ class AdvancedAnalytics:
         avg_excess_return = np.mean(excess_returns)
         tracking_error = np.std(excess_returns)
         
-        if tracking_error == 0:
+        # SAFETY: Guard against division by zero
+        if tracking_error == 0 or np.isnan(tracking_error):
             return float('inf') if avg_excess_return > 0 else 0.0
         
         information_ratio = avg_excess_return / tracking_error

@@ -199,7 +199,11 @@ class KuCoinWebSocket:
         if self.should_reconnect:
             self.logger.info("Attempting to reconnect WebSocket in 5 seconds...")
             time.sleep(5)
-            self.connect()
+            try:
+                self.connect()
+            except Exception as e:
+                self.logger.error(f"Failed to reconnect WebSocket: {e}")
+                # Will retry on next _on_close call if reconnection fails
     
     def _start_ping(self):
         """Start ping thread to keep connection alive"""

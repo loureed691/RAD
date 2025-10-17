@@ -698,9 +698,13 @@ class TradingBot:
         # This ensures we catch any positions opened manually or by other means
         if not hasattr(self, '_cycle_count'):
             self._cycle_count = 0
-        self._cycle_count += 1
         
-        if self._cycle_count % 10 == 0:
+        # Thread-safe cycle counter update
+        with self._scan_lock:
+            self._cycle_count += 1
+            cycle_num = self._cycle_count
+        
+        if cycle_num % 10 == 0:
             self.logger.debug("Periodic sync of existing positions...")
             self.position_manager.sync_existing_positions()
         

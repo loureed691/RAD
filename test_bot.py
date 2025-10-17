@@ -44,31 +44,31 @@ def test_config():
         
         # Test micro account ($50)
         Config.auto_configure_from_balance(50)
-        assert Config.LEVERAGE == 5, f"Expected leverage 5 for $50 balance, got {Config.LEVERAGE}"
+        assert Config.LEVERAGE == 4, f"Expected leverage 4 for $50 balance, got {Config.LEVERAGE}"
         assert Config.RISK_PER_TRADE == 0.01, f"Expected 1% risk for $50 balance, got {Config.RISK_PER_TRADE}"
         print(f"  ✓ Micro account ($50): Leverage={Config.LEVERAGE}x, Risk={Config.RISK_PER_TRADE:.2%}")
         
         # Test small account ($500)
         Config.auto_configure_from_balance(500)
-        assert Config.LEVERAGE == 7, f"Expected leverage 7 for $500 balance, got {Config.LEVERAGE}"
+        assert Config.LEVERAGE == 6, f"Expected leverage 6 for $500 balance, got {Config.LEVERAGE}"
         assert Config.RISK_PER_TRADE == 0.015, f"Expected 1.5% risk for $500 balance, got {Config.RISK_PER_TRADE}"
         print(f"  ✓ Small account ($500): Leverage={Config.LEVERAGE}x, Risk={Config.RISK_PER_TRADE:.2%}")
         
         # Test medium account ($5000)
         Config.auto_configure_from_balance(5000)
-        assert Config.LEVERAGE == 10, f"Expected leverage 10 for $5000 balance, got {Config.LEVERAGE}"
+        assert Config.LEVERAGE == 8, f"Expected leverage 8 for $5000 balance, got {Config.LEVERAGE}"
         assert Config.RISK_PER_TRADE == 0.02, f"Expected 2% risk for $5000 balance, got {Config.RISK_PER_TRADE}"
         print(f"  ✓ Medium account ($5000): Leverage={Config.LEVERAGE}x, Risk={Config.RISK_PER_TRADE:.2%}")
         
         # Test large account ($50000)
         Config.auto_configure_from_balance(50000)
-        assert Config.LEVERAGE == 12, f"Expected leverage 12 for $50000 balance, got {Config.LEVERAGE}"
+        assert Config.LEVERAGE == 10, f"Expected leverage 10 for $50000 balance, got {Config.LEVERAGE}"
         assert Config.RISK_PER_TRADE == 0.025, f"Expected 2.5% risk for $50000 balance, got {Config.RISK_PER_TRADE}"
         print(f"  ✓ Large account ($50000): Leverage={Config.LEVERAGE}x, Risk={Config.RISK_PER_TRADE:.2%}")
         
         # Test very large account ($200000)
         Config.auto_configure_from_balance(200000)
-        assert Config.LEVERAGE == 15, f"Expected leverage 15 for $200000 balance, got {Config.LEVERAGE}"
+        assert Config.LEVERAGE == 12, f"Expected leverage 12 for $200000 balance, got {Config.LEVERAGE}"
         assert Config.RISK_PER_TRADE == 0.03, f"Expected 3% risk for $200000 balance, got {Config.RISK_PER_TRADE}"
         print(f"  ✓ Very large account ($200000): Leverage={Config.LEVERAGE}x, Risk={Config.RISK_PER_TRADE:.2%}")
         

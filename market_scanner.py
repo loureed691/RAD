@@ -295,9 +295,10 @@ class MarketScanner:
         
         self.scanning_logger.info(f"{'='*80}\n")
         
-        # Cache the results
-        self.scan_results_cache = results
-        self.last_full_scan = datetime.now()
+        # Cache the results - thread-safe update
+        with self._cache_lock:
+            self.scan_results_cache = results
+            self.last_full_scan = datetime.now()
         
         return results
     
