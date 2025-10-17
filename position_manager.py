@@ -8,6 +8,7 @@ from typing import Dict, Optional, Tuple
 from datetime import datetime
 from kucoin_client import KuCoinClient
 from logger import Logger
+from config import Config
 from advanced_exit_strategy import AdvancedExitStrategy
 from volume_profile import VolumeProfile
 
@@ -1057,18 +1058,25 @@ class PositionManager:
             self.position_logger.info(f"  Order filled at: {format_price(fill_price)}")
             
             # Calculate stop loss and take profit
-            # Using 3x risk/reward ratio for better profitability (was 2x)
+            # PROFITABILITY FIX: Ensure take profit covers trading fees (0.12% round-trip)
+            # Get minimum profit threshold (includes fees), default to 0.62% if not set
+            min_profit_threshold = getattr(Config, 'MIN_PROFIT_THRESHOLD', 0.0062)
+            
+            # Calculate take profit distance ensuring it covers fees + desired profit
+            # Use 3x risk/reward ratio but ensure minimum profit threshold is met
+            tp_distance = max(stop_loss_percentage * 3, min_profit_threshold)
+            
             if signal == 'BUY':
                 stop_loss = fill_price * (1 - stop_loss_percentage)
-                take_profit = fill_price * (1 + stop_loss_percentage * 3)
+                take_profit = fill_price * (1 + tp_distance)
             else:
                 stop_loss = fill_price * (1 + stop_loss_percentage)
-                take_profit = fill_price * (1 - stop_loss_percentage * 3)
+                take_profit = fill_price * (1 - tp_distance)
             
             stop_loss_pct = (1 - stop_loss/fill_price) if signal == 'SELL' else (stop_loss/fill_price - 1)
             take_profit_pct = (1 - take_profit/fill_price) if signal == 'SELL' else (take_profit/fill_price - 1)
             self.position_logger.info(f"  Stop Loss: {format_price(stop_loss)} ({stop_loss_pct:.2%})")
-            self.position_logger.info(f"  Take Profit: {format_price(take_profit)} ({take_profit_pct:.2%})")
+            self.position_logger.info(f"  Take Profit: {format_price(take_profit)} ({take_profit_pct:.2%}) [includes {min_profit_threshold:.2%} min profit threshold]")
             
             # Log stop loss and take profit placement to orders logger
             from logger import Logger

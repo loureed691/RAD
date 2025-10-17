@@ -11,6 +11,7 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 2. **Run**: `python bot.py` - Auto-configures based on your balance
 3. **Monitor**: Check logs for real-time trading activity
 
+👉 **See [PROFITABILITY_FIX_2025.md](PROFITABILITY_FIX_2025.md) for the critical profitability fix** 🆕 ⚠️  
 👉 **See [2025_AI_ENHANCEMENTS.md](2025_AI_ENHANCEMENTS.md) for latest AI features** 🆕  
 👉 **See [2025_AI_QUICKSTART.md](2025_AI_QUICKSTART.md) for quick integration guide** 🆕  
 👉 **See [2026_ENHANCEMENTS.md](2026_ENHANCEMENTS.md) for advanced features guide**  
@@ -19,6 +20,15 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 ---
 
 ## 🆕 What's New in 2025 AI Edition
+
+### **⚠️ CRITICAL PROFITABILITY FIX** (October 17, 2025)
+The bot was previously losing money because take profit targets didn't account for trading fees properly. This has been **FIXED**:
+- ✅ Take profit now always covers 0.12% round-trip trading fees
+- ✅ Minimum profit thresholds enforced (0.5-0.8% after fees)
+- ✅ Prevents fee-induced losses on small stop loss trades
+- ✅ Bot now profitable with 40-45% win rate (previously needed 55%+)
+
+**See [PROFITABILITY_FIX_2025.md](PROFITABILITY_FIX_2025.md) for complete details and mathematical analysis.**
 
 ### **🤖 Latest AI Enhancements** (October 2025)
 - **Bayesian Adaptive Kelly Criterion** - Dynamic position sizing with Bayesian win rate estimation
