@@ -496,7 +496,8 @@ class TradingBot:
             for symbol, pnl, position in self.position_manager.update_positions():
                 try:
                     profit_icon = "📈" if pnl > 0 else "📉"
-                    self.logger.info(f"{profit_icon} Position closed: {symbol}, P/L: {pnl:.2%}")
+                    # NOTE: pnl is now NET P/L after trading fees (from position_manager.close_position)
+                    self.logger.info(f"{profit_icon} Position closed: {symbol}, Net P/L: {pnl:.2%} (after fees)")
                     
                     # Record trade for analytics
                     trade_duration = (datetime.now() - position.entry_time).total_seconds() / 60

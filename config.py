@@ -26,6 +26,13 @@ class Config:
     # WebSocket Configuration
     ENABLE_WEBSOCKET = os.getenv('ENABLE_WEBSOCKET', 'true').lower() in ('true', '1', 'yes')
     
+    # Trading Fee Configuration (KuCoin Futures)
+    # https://www.kucoin.com/vip/level
+    TAKER_FEE = float(os.getenv('TAKER_FEE', '0.0006'))  # 0.06% taker fee (market orders)
+    MAKER_FEE = float(os.getenv('MAKER_FEE', '0.0002'))  # 0.02% maker fee (limit orders)
+    # Conservative estimate: assume taker fees for both entry and exit
+    TRADING_FEE_RATE = TAKER_FEE  # Use taker fee as conservative default
+    
     # Trading Configuration - will be auto-configured if not set in .env
     LEVERAGE = None  # Will be set by auto_configure_from_balance()
     MAX_POSITION_SIZE = None  # Will be set by auto_configure_from_balance()

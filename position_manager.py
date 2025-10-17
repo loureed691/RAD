@@ -110,10 +110,18 @@ class Position:
         if self.breakeven_moved:
             return False
         
+        # CRITICAL FIX: Check NET P/L after fees for breakeven move
+        # Don't move to breakeven unless we have enough profit to cover fees
         current_pnl = self.get_pnl(current_price)
+        from config import Config
+        trading_fees_pct = self.calculate_trading_fees()
+        net_pnl = current_pnl - trading_fees_pct
         
-        # PROFITABILITY FIX: Move to breakeven earlier at 1.5% profit (was 2%)
-        if current_pnl > 0.015:  # Changed from 0.02
+        # PROFITABILITY FIX: Move to breakeven when net profit covers fees + 0.5% buffer
+        # This ensures we're actually at breakeven AFTER fees, not before
+        min_profit_for_breakeven = trading_fees_pct + 0.005  # Fees + 0.5% buffer
+        
+        if net_pnl > min_profit_for_breakeven:
             if self.side == 'long':
                 new_stop = self.entry_price * (1 + buffer)
                 if new_stop > self.stop_loss:
@@ -603,6 +611,13 @@ class Position:
         # This ensures positions close at the correct profit/loss levels the user expects
         current_pnl = self.get_leveraged_pnl(current_price)
         
+        # CRITICAL FIX: Calculate NET P/L after fees for profit threshold checks
+        # This ensures we only take profit when we're actually profitable after trading costs
+        from config import Config
+        trading_fees_pct = self.calculate_trading_fees()
+        leveraged_fees_pct = trading_fees_pct * self.leverage
+        net_pnl = current_pnl - leveraged_fees_pct
+        
         # CRITICAL SAFETY: Tiered emergency stop loss based on ROI to prevent catastrophic losses
         # These are absolute maximum loss caps that override all other logic
         # Protects against extreme scenarios where stop loss fails or leverage magnifies losses
@@ -627,12 +642,17 @@ class Position:
             return True, 'emergency_stop_excessive_loss'
         
         # Update favorable excursion tracking for smarter profit taking
-        if current_pnl > self.max_favorable_excursion:
-            self.max_favorable_excursion = current_pnl
+        if net_pnl > self.max_favorable_excursion:
+            self.max_favorable_excursion = net_pnl
+        
+        # CRITICAL FIX: Enforce minimum profit threshold after fees
+        # Don't take profit unless we're actually profitable after trading costs
+        min_profit_threshold = Config.MIN_PROFIT_THRESHOLD if Config.MIN_PROFIT_THRESHOLD else 0.0062
         
         # Intelligent profit taking - take profits at key ROI levels when TP is far away
         # This prevents scenarios where TP gets extended too far and price retraces
-        if current_pnl > 0 and self.take_profit:
+        # NOTE: All profit thresholds now check NET P/L after fees
+        if net_pnl > 0 and self.take_profit:
             # Calculate distance to take profit
             if self.side == 'long':
                 distance_to_tp = (self.take_profit - current_price) / current_price
@@ -640,45 +660,46 @@ class Position:
                 distance_to_tp = (current_price - self.take_profit) / current_price
             
             # Exceptional profit levels - always take profit (no override)
-            if current_pnl >= 0.20:  # 20% price movement
+            # CHANGED: Now requires net_pnl >= 20% (after fees)
+            if net_pnl >= 0.20:
                 return True, 'take_profit_20pct_exceptional'
             
             # Very high profit - take if TP is far (>2%)
-            if current_pnl >= 0.15:
+            if net_pnl >= 0.15:
                 if distance_to_tp > 0.02:
                     return True, 'take_profit_15pct_far_tp'
             
             # Profit velocity check - take profit if we're losing momentum
             # Check this at various profit levels to catch retracements early
             # This takes priority over flat ROI thresholds when losing significant momentum
-            if self.max_favorable_excursion >= 0.10:  # Had at least 10% profit (significant)
-                profit_drawdown = self.max_favorable_excursion - current_pnl
+            if self.max_favorable_excursion >= 0.10:  # Had at least 10% NET profit (significant)
+                profit_drawdown = self.max_favorable_excursion - net_pnl
                 drawdown_pct = profit_drawdown / self.max_favorable_excursion
                 
-                # If we've given back ~50% of peak profit and still above breakeven
+                # If we've given back ~50% of peak profit and still above min threshold
                 # This is checked FIRST as it's more critical than 30% drawdown
                 # Use 0.499 to handle floating point precision issues
-                if drawdown_pct >= 0.499 and current_pnl >= 0.01:
+                if drawdown_pct >= 0.499 and net_pnl >= min_profit_threshold:
                     return True, 'take_profit_major_retracement'
                 
                 # If we've given back ~30% of peak profit and in 3-15% ROI range
                 # Exit before hitting other thresholds to protect profits from further decline
                 # Use 0.299 to handle floating point precision issues
-                if drawdown_pct >= 0.299 and 0.03 <= current_pnl < 0.15:
+                if drawdown_pct >= 0.299 and 0.03 <= net_pnl < 0.15:
                     return True, 'take_profit_momentum_loss'
             
-            # 10% price movement - take profit if TP is >2% away
-            if current_pnl >= 0.10:
+            # 10% NET profit - take profit if TP is >2% away
+            if net_pnl >= 0.10:
                 if distance_to_tp > 0.02:
                     return True, 'take_profit_10pct'
             
-            # 8% price movement - take profit if TP is >3% away
-            if current_pnl >= 0.08:
+            # 8% NET profit - take profit if TP is >3% away
+            if net_pnl >= 0.08:
                 if distance_to_tp > 0.03:
                     return True, 'take_profit_8pct'
             
-            # 5% price movement - take profit if TP is >5% away
-            if current_pnl >= 0.05:
+            # 5% NET profit - take profit if TP is >5% away
+            if net_pnl >= 0.05:
                 if distance_to_tp > 0.05:
                     return True, 'take_profit_5pct'
         
@@ -746,11 +767,15 @@ class Position:
         
         return False, ''
     
-    def get_pnl(self, current_price: float) -> float:
+    def get_pnl(self, current_price: float, include_fees: bool = False) -> float:
         """Calculate profit/loss percentage (price movement only, without leverage)
         
         Returns the percentage change in price. This is the base price movement
         that should be multiplied by leverage to get the leveraged ROI (return on investment).
+        
+        Args:
+            current_price: Current market price
+            include_fees: If True, deducts trading fees from P/L (default: False for compatibility)
         
         Note: This returns the unleveraged price change. To calculate the actual P/L in USD,
         multiply the result by leverage to get the leveraged P/L percentage, then multiply by position_value:
@@ -760,16 +785,38 @@ class Position:
             pnl = (current_price - self.entry_price) / self.entry_price
         else:
             pnl = (self.entry_price - current_price) / self.entry_price
+        
+        # Deduct trading fees if requested (entry fee + exit fee)
+        if include_fees:
+            from config import Config
+            # Round-trip fee: entry fee + exit fee
+            total_fee_pct = Config.TRADING_FEE_RATE * 2
+            pnl = pnl - total_fee_pct
+        
         return pnl
     
-    def get_leveraged_pnl(self, current_price: float) -> float:
+    def get_leveraged_pnl(self, current_price: float, include_fees: bool = False) -> float:
         """Calculate actual ROI including leverage effect
         
         Returns the actual return on investment considering leverage.
         For a 3x leveraged position with 1% price move, this returns 3%.
+        
+        Args:
+            current_price: Current market price
+            include_fees: If True, deducts trading fees from ROI (default: False for compatibility)
         """
-        base_pnl = self.get_pnl(current_price)
+        base_pnl = self.get_pnl(current_price, include_fees=include_fees)
         return base_pnl * self.leverage
+    
+    def calculate_trading_fees(self) -> float:
+        """Calculate total trading fees for this position (entry + exit)
+        
+        Returns:
+            Trading fees as percentage of position value
+        """
+        from config import Config
+        # Round-trip: entry fee + exit fee
+        return Config.TRADING_FEE_RATE * 2
 
 class PositionManager:
     """Manage open positions with trailing stops and advanced exit strategies"""
@@ -1145,14 +1192,24 @@ class PositionManager:
             # Calculate P/L (with leverage for accurate ROI)
             pnl = position.get_pnl(current_price)  # Base price change %
             leveraged_pnl = position.get_leveraged_pnl(current_price)  # Actual ROI %
+            
+            # CRITICAL FIX: Calculate fees and net P/L
+            trading_fees_pct = position.calculate_trading_fees()  # Fee as % of position
+            leveraged_fees_pct = trading_fees_pct * position.leverage  # Fee as % of margin
+            net_leveraged_pnl = leveraged_pnl - leveraged_fees_pct  # Net ROI after fees
+            
             position_value = position.amount * position.entry_price
-            pnl_usd = pnl * position_value * position.leverage  # USD P/L with leverage
+            pnl_usd = pnl * position_value * position.leverage  # Gross USD P/L with leverage
+            fees_usd = position_value * trading_fees_pct  # Fees in USD
+            net_pnl_usd = pnl_usd - fees_usd  # Net USD P/L after fees
             
             # Calculate duration
             duration = datetime.now() - position.entry_time
             duration_mins = duration.total_seconds() / 60
             
-            self.position_logger.info(f"  P/L: {leveraged_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
+            self.position_logger.info(f"  Gross P/L: {leveraged_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
+            self.position_logger.info(f"  Trading Fees: {leveraged_fees_pct:.2%} ({format_pnl_usd(-fees_usd)})")
+            self.position_logger.info(f"  Net P/L: {net_leveraged_pnl:+.2%} ({format_pnl_usd(net_pnl_usd)}) ⚠️  AFTER FEES")
             self.position_logger.info(f"  Duration: {duration_mins:.1f} minutes")
             self.position_logger.info(f"  Max Favorable Excursion: {position.max_favorable_excursion:.2%}")
             
@@ -1184,7 +1241,9 @@ class PositionManager:
                 else:
                     orders_logger.info(f"  Take Profit Price: {format_price(position.take_profit)}")
                     orders_logger.info(f"  Trigger: Price {'rose above' if position.side == 'long' else 'fell below'} take profit")
-                orders_logger.info(f"  P/L: {leveraged_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
+                orders_logger.info(f"  Gross P/L: {leveraged_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
+                orders_logger.info(f"  Trading Fees: {leveraged_fees_pct:.2%} ({format_pnl_usd(-fees_usd)})")
+                orders_logger.info(f"  Net P/L: {net_leveraged_pnl:+.2%} ({format_pnl_usd(net_pnl_usd)})")
                 orders_logger.info(f"  Duration: {duration_mins:.1f} minutes")
                 orders_logger.info(f"  Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                 orders_logger.info("=" * 80)
@@ -1192,7 +1251,8 @@ class PositionManager:
             
             self.logger.info(
                 f"Closed {position.side} position: {symbol} @ {format_price(current_price)}, "
-                f"Entry: {format_price(position.entry_price)}, P/L: {leveraged_pnl:.2%}, Reason: {reason}"
+                f"Entry: {format_price(position.entry_price)}, Gross P/L: {leveraged_pnl:.2%}, "
+                f"Net P/L: {net_leveraged_pnl:.2%} (after {leveraged_fees_pct:.2%} fees), Reason: {reason}"
             )
             
             self.position_logger.info(f"✓ Position closed successfully at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -1202,10 +1262,10 @@ class PositionManager:
             with self._positions_lock:
                 del self.positions[symbol]
             
-            # CRITICAL FIX: Return leveraged P/L for accurate ROI tracking
-            # The bot.py analytics and risk_manager expect ROI (return on investment),
-            # not just price movement. With 5x leverage, a 2% price move = 10% ROI.
-            return leveraged_pnl
+            # CRITICAL FIX: Return NET leveraged P/L after fees for accurate ROI tracking
+            # The bot.py analytics and risk_manager expect ROI (return on investment).
+            # This now includes the actual trading costs that reduce profitability.
+            return net_leveraged_pnl
             
         except Exception as e:
             self.logger.error(f"Error closing position: {e}")
