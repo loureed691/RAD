@@ -46,6 +46,7 @@ This directory contains comprehensive documentation about the RAD KuCoin Futures
 - **TAKE_PROFIT_OPTIMIZATIONS.md** - Take profit strategy
 - **TAKE_PROFIT_QUICKSTART.md** - Quick start for profit taking
 - **PROFITABILITY_IMPROVEMENTS.md** - Profitability enhancements
+- **FEE_ACCOUNTING.md** - 🆕 Trading fee accounting and net P/L calculations
 
 ### Technical Features
 - **LIVE_TRADING_IMPLEMENTATION.md** - Live trading architecture
