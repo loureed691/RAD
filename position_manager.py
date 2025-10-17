@@ -1277,6 +1277,14 @@ class PositionManager:
                 current_price = None
                 ticker = None
                 
+                # Check if circuit breaker is active - if so, skip retries to avoid log spam
+                # Circuit breaker will auto-reset after timeout, so we'll retry in the next cycle
+                if self.client.is_circuit_breaker_active():
+                    self.logger.warning(f"Circuit breaker active, skipping {symbol} position update this cycle")
+                    self.position_logger.warning(f"  ⚠ Circuit breaker active - SKIPPING update")
+                    self.position_logger.warning(f"  ⚠ Will retry after circuit breaker resets")
+                    continue  # Skip this position and try again next cycle
+                
                 # Try to get ticker with retries (max 3 attempts)
                 for attempt in range(3):
                     try:
