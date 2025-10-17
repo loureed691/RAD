@@ -8,6 +8,7 @@ from typing import Dict, Optional, Tuple
 from datetime import datetime
 from kucoin_client import KuCoinClient
 from logger import Logger
+from config import Config
 from advanced_exit_strategy import AdvancedExitStrategy
 from volume_profile import VolumeProfile
 
@@ -1058,9 +1059,6 @@ class PositionManager:
             
             # Calculate stop loss and take profit
             # PROFITABILITY FIX: Ensure take profit covers trading fees (0.12% round-trip)
-            # Import Config to get MIN_PROFIT_THRESHOLD
-            from config import Config
-            
             # Get minimum profit threshold (includes fees), default to 0.62% if not set
             min_profit_threshold = getattr(Config, 'MIN_PROFIT_THRESHOLD', 0.0062)
             
