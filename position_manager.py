@@ -746,11 +746,15 @@ class Position:
         
         return False, ''
     
-    def get_pnl(self, current_price: float) -> float:
+    def get_pnl(self, current_price: float, include_fees: bool = False) -> float:
         """Calculate profit/loss percentage (price movement only, without leverage)
         
         Returns the percentage change in price. This is the base price movement
         that should be multiplied by leverage to get the leveraged ROI (return on investment).
+        
+        Args:
+            current_price: Current market price
+            include_fees: If True, subtract trading fees from P/L (default: False for backward compatibility)
         
         Note: This returns the unleveraged price change. To calculate the actual P/L in USD,
         multiply the result by leverage to get the leveraged P/L percentage, then multiply by position_value:
@@ -760,15 +764,29 @@ class Position:
             pnl = (current_price - self.entry_price) / self.entry_price
         else:
             pnl = (self.entry_price - current_price) / self.entry_price
+        
+        # MONEY LOSS FIX: Subtract trading fees if requested
+        # KuCoin Futures fees: 0.06% taker on entry + 0.06% taker on exit = 0.12% total
+        if include_fees:
+            trading_fees = 0.0012  # 0.12% round-trip trading cost
+            pnl = pnl - trading_fees
+        
         return pnl
     
-    def get_leveraged_pnl(self, current_price: float) -> float:
+    def get_leveraged_pnl(self, current_price: float, include_fees: bool = False) -> float:
         """Calculate actual ROI including leverage effect
         
         Returns the actual return on investment considering leverage.
         For a 3x leveraged position with 1% price move, this returns 3%.
+        
+        Args:
+            current_price: Current market price
+            include_fees: If True, subtract trading fees from P/L (default: False for backward compatibility)
+        
+        Note: Fees are applied BEFORE leverage multiplication because fees are charged on
+        the position value, not the leveraged value. This is the correct calculation.
         """
-        base_pnl = self.get_pnl(current_price)
+        base_pnl = self.get_pnl(current_price, include_fees=include_fees)
         return base_pnl * self.leverage
 
 class PositionManager:
@@ -1144,15 +1162,23 @@ class PositionManager:
             
             # Calculate P/L (with leverage for accurate ROI)
             pnl = position.get_pnl(current_price)  # Base price change %
-            leveraged_pnl = position.get_leveraged_pnl(current_price)  # Actual ROI %
+            leveraged_pnl = position.get_leveraged_pnl(current_price)  # Actual ROI % (without fees)
+            leveraged_pnl_with_fees = position.get_leveraged_pnl(current_price, include_fees=True)  # Actual ROI % (with fees)
             position_value = position.amount * position.entry_price
             pnl_usd = pnl * position_value * position.leverage  # USD P/L with leverage
+            
+            # Calculate fees in USD
+            trading_fees = 0.0012  # 0.12% round-trip
+            fees_usd = position_value * trading_fees * position.leverage
+            pnl_usd_after_fees = pnl_usd - fees_usd
             
             # Calculate duration
             duration = datetime.now() - position.entry_time
             duration_mins = duration.total_seconds() / 60
             
-            self.position_logger.info(f"  P/L: {leveraged_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
+            self.position_logger.info(f"  P/L (before fees): {leveraged_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
+            self.position_logger.info(f"  Trading fees: -0.12% ({format_pnl_usd(-fees_usd)})")
+            self.position_logger.info(f"  P/L (after fees): {leveraged_pnl_with_fees:+.2%} ({format_pnl_usd(pnl_usd_after_fees)})")
             self.position_logger.info(f"  Duration: {duration_mins:.1f} minutes")
             self.position_logger.info(f"  Max Favorable Excursion: {position.max_favorable_excursion:.2%}")
             
@@ -1184,7 +1210,9 @@ class PositionManager:
                 else:
                     orders_logger.info(f"  Take Profit Price: {format_price(position.take_profit)}")
                     orders_logger.info(f"  Trigger: Price {'rose above' if position.side == 'long' else 'fell below'} take profit")
-                orders_logger.info(f"  P/L: {leveraged_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
+                orders_logger.info(f"  P/L (before fees): {leveraged_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
+                orders_logger.info(f"  Trading fees: -0.12% ({format_pnl_usd(-fees_usd)})")
+                orders_logger.info(f"  P/L (after fees): {leveraged_pnl_with_fees:+.2%} ({format_pnl_usd(pnl_usd_after_fees)})")
                 orders_logger.info(f"  Duration: {duration_mins:.1f} minutes")
                 orders_logger.info(f"  Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
                 orders_logger.info("=" * 80)
@@ -1192,7 +1220,7 @@ class PositionManager:
             
             self.logger.info(
                 f"Closed {position.side} position: {symbol} @ {format_price(current_price)}, "
-                f"Entry: {format_price(position.entry_price)}, P/L: {leveraged_pnl:.2%}, Reason: {reason}"
+                f"Entry: {format_price(position.entry_price)}, P/L: {leveraged_pnl_with_fees:.2%} (after fees), Reason: {reason}"
             )
             
             self.position_logger.info(f"✓ Position closed successfully at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -1202,10 +1230,11 @@ class PositionManager:
             with self._positions_lock:
                 del self.positions[symbol]
             
-            # CRITICAL FIX: Return leveraged P/L for accurate ROI tracking
-            # The bot.py analytics and risk_manager expect ROI (return on investment),
-            # not just price movement. With 5x leverage, a 2% price move = 10% ROI.
-            return leveraged_pnl
+            # MONEY LOSS FIX: Return leveraged P/L WITH FEES for accurate ROI tracking
+            # The bot.py analytics and risk_manager expect ROI (return on investment) after all costs.
+            # With 5x leverage and 0.12% fees, a 2% price move = 10% ROI - 0.6% fees = 9.4% actual ROI.
+            # This ensures performance tracking, Kelly Criterion, and risk management use real returns.
+            return leveraged_pnl_with_fees
             
         except Exception as e:
             self.logger.error(f"Error closing position: {e}")
@@ -1881,7 +1910,7 @@ class PositionManager:
             
             # Calculate P/L for closed portion (use leveraged P/L for accurate ROI)
             pnl = position.get_pnl(current_price)  # Base price change %
-            leveraged_pnl = position.get_leveraged_pnl(current_price)  # Actual ROI %
+            leveraged_pnl = position.get_leveraged_pnl(current_price, include_fees=True)  # Actual ROI % with fees
             
             # Thread-safe position update
             with self._positions_lock:
