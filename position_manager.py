@@ -760,6 +760,10 @@ class Position:
         multiply the result by leverage to get the leveraged P/L percentage, then multiply by position_value:
             pnl_usd = get_pnl(current_price) * leverage * position_value
         """
+        # SAFETY: Validate inputs to prevent division by zero
+        if current_price <= 0 or self.entry_price <= 0:
+            return 0.0
+        
         if self.side == 'long':
             pnl = (current_price - self.entry_price) / self.entry_price
         else:

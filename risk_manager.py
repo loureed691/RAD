@@ -383,6 +383,11 @@ class RiskManager:
         # Cap at maximum position size
         position_value = min(position_value, self.max_position_size)
         
+        # SAFETY: Guard against invalid entry price
+        if entry_price <= 0:
+            self.logger.error(f"Invalid entry_price: {entry_price}, cannot calculate position size")
+            return 0.0
+        
         # Convert to contracts
         position_size = position_value / entry_price
         

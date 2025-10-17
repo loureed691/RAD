@@ -258,6 +258,10 @@ class BayesianAdaptiveKelly:
             q = 1 - p
             b = avg_win / avg_loss if avg_loss > 0 else 2.0
             
+            # SAFETY: Validate calculated values
+            if np.isnan(b) or np.isinf(b) or b <= 0:
+                b = 2.0  # Use default if calculation failed
+            
             # Kelly percentage
             if b > 0:
                 kelly_pct = (p * b - q) / b

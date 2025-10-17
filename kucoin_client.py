@@ -81,6 +81,12 @@ class KuCoinClient:
                 'secret': api_secret,
                 'password': api_passphrase,
                 'enableRateLimit': True,
+                # PERFORMANCE: Enable session reuse for better connection management
+                'timeout': 30000,  # 30 second timeout
+                'options': {
+                    'defaultType': 'future',
+                    'adjustForTimeDifference': True,
+                },
             })
             self.logger.info("KuCoin Futures client initialized successfully")
             self.logger.info("✅ API Call Priority System: ENABLED (Trading operations have priority)")
@@ -737,14 +743,24 @@ class KuCoinClient:
             if symbol in markets:
                 contract_size = markets[symbol].get('contractSize', 1)
             
+            # SAFETY: Validate inputs before calculation
+            if leverage <= 0:
+                self.logger.error(f"Invalid leverage: {leverage}, using 1x")
+                leverage = 1
+            if amount <= 0 or price <= 0:
+                self.logger.error(f"Invalid amount ({amount}) or price ({price})")
+                return 0
+            
             position_value = amount * price * contract_size
             required_margin = position_value / leverage
             
             return required_margin
         except Exception as e:
             self.logger.error(f"Error calculating required margin: {e}")
-            # Return conservative estimate
-            return (amount * price) / leverage
+            # Return conservative estimate with safety checks
+            if leverage <= 0:
+                leverage = 1
+            return (amount * price) / leverage if (amount > 0 and price > 0) else 0
     
     def check_available_margin(self, symbol: str, amount: float, 
                                price: float, leverage: int) -> tuple[bool, float, str]:
@@ -908,6 +924,10 @@ class KuCoinClient:
             if required_margin > usable_margin:
                 # Calculate what leverage we can actually use (must include contract_size)
                 position_value = adjusted_amount * price * contract_size
+                # SAFETY: Guard against division by zero
+                if usable_margin <= 0:
+                    self.logger.error(f"Invalid usable_margin: {usable_margin}, cannot adjust leverage")
+                    return 0, 1  # Return minimal values to prevent trading
                 adjusted_leverage = int(position_value / usable_margin)
                 adjusted_leverage = max(1, min(adjusted_leverage, leverage))
                 
