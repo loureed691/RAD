@@ -19,9 +19,14 @@ np.random.seed(RANDOM_SEED)
 try:
     import tensorflow as tf
     tf.random.set_seed(RANDOM_SEED)
-    # Also set hash seed for Python hash-based operations
-    import os as _os
-    _os.environ['PYTHONHASHSEED'] = str(RANDOM_SEED)
+    # For reproducible hash-based operations, PYTHONHASHSEED must be set in the environment before launching Python.
+    # Example: `PYTHONHASHSEED=42 python your_script.py`
+    import logging
+    pythonhashseed_env = os.environ.get('PYTHONHASHSEED')
+    if pythonhashseed_env is None:
+        logging.warning("PYTHONHASHSEED is not set. For reproducible hash-based operations, set PYTHONHASHSEED in your environment before launching Python (e.g., PYTHONHASHSEED=%d)." % RANDOM_SEED)
+    elif pythonhashseed_env != str(RANDOM_SEED):
+        logging.warning("PYTHONHASHSEED (%s) does not match RANDOM_SEED (%d). For full reproducibility, set PYTHONHASHSEED=%d in your environment before launching Python." % (pythonhashseed_env, RANDOM_SEED, RANDOM_SEED))
 except ImportError:
     pass  # TensorFlow not installed or not needed
 
