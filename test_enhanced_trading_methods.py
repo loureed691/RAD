@@ -282,7 +282,8 @@ def test_market_order_with_depth_check():
                         'amount': {'min': 1, 'max': 10000},
                         'cost': {'min': 10, 'max': 1000000}
                     },
-                    'contractSize': 1
+                    'contractSize': 1,
+                    'active': True  # Mark market as active
                 }
             })
             mock_exchange.fetch_ticker = Mock(return_value={
@@ -346,7 +347,8 @@ def test_position_scaling_in():
                         'amount': {'min': 1, 'max': 10000},
                         'cost': {'min': 10, 'max': 1000000}
                     },
-                    'contractSize': 1
+                    'contractSize': 1,
+                    'active': True  # Mark market as active
                 }
             })
             mock_exchange.create_order = Mock(return_value={
@@ -416,7 +418,8 @@ def test_position_scaling_out():
                         'amount': {'min': 1, 'max': 10000},
                         'cost': {'min': 10, 'max': 1000000}
                     },
-                    'contractSize': 1
+                    'contractSize': 1,
+                    'active': True  # Mark market as active
                 }
             })
             mock_exchange.create_order = Mock(return_value={
