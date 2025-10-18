@@ -18,10 +18,10 @@ def test_very_small_balance_config():
         # Test extremely small balance ($10)
         print("\n  Testing $10 account (minimum)...")
         Config.auto_configure_from_balance(10)
-        assert Config.LEVERAGE == 5, f"Expected leverage 5, got {Config.LEVERAGE}"
+        assert Config.LEVERAGE == 4, f"Expected leverage 4, got {Config.LEVERAGE}"  # Updated to match current conservative setting
         assert Config.RISK_PER_TRADE == 0.01, f"Expected 1% risk, got {Config.RISK_PER_TRADE}"
         assert Config.MAX_POSITION_SIZE >= 10, f"Position size too small: ${Config.MAX_POSITION_SIZE}"
-        assert Config.MIN_PROFIT_THRESHOLD == 0.008, f"Expected 0.8% profit threshold, got {Config.MIN_PROFIT_THRESHOLD}"
+        assert Config.MIN_PROFIT_THRESHOLD == 0.0092, f"Expected 0.92% profit threshold (incl fees), got {Config.MIN_PROFIT_THRESHOLD}"  # Updated: 0.12% fees + 0.8% profit
         print(f"  ✓ $10 account: Leverage={Config.LEVERAGE}x, Risk={Config.RISK_PER_TRADE:.2%}, Max Pos=${Config.MAX_POSITION_SIZE:.2f}, Min Profit={Config.MIN_PROFIT_THRESHOLD:.2%}")
         
         # Test $25 account
@@ -33,21 +33,21 @@ def test_very_small_balance_config():
         # Test $75 account
         print("\n  Testing $75 account...")
         Config.auto_configure_from_balance(75)
-        assert Config.LEVERAGE == 5, f"Expected leverage 5 for <$100, got {Config.LEVERAGE}"
+        assert Config.LEVERAGE == 4, f"Expected leverage 4 for <$100, got {Config.LEVERAGE}"  # Updated to match current setting
         print(f"  ✓ $75 account: Leverage={Config.LEVERAGE}x, Risk={Config.RISK_PER_TRADE:.2%}, Max Pos=${Config.MAX_POSITION_SIZE:.2f}")
         
         # Test $99 account (boundary)
         print("\n  Testing $99 account (boundary case)...")
         Config.auto_configure_from_balance(99)
-        assert Config.LEVERAGE == 5, f"Expected leverage 5 for <$100, got {Config.LEVERAGE}"
-        assert Config.MIN_PROFIT_THRESHOLD == 0.008, f"Expected 0.8% profit threshold, got {Config.MIN_PROFIT_THRESHOLD}"
+        assert Config.LEVERAGE == 4, f"Expected leverage 4 for <$100, got {Config.LEVERAGE}"  # Updated to match current setting
+        assert Config.MIN_PROFIT_THRESHOLD == 0.0092, f"Expected 0.92% profit threshold (incl fees), got {Config.MIN_PROFIT_THRESHOLD}"  # Updated: 0.12% fees + 0.8% profit
         print(f"  ✓ $99 account: Leverage={Config.LEVERAGE}x, Min Profit={Config.MIN_PROFIT_THRESHOLD:.2%}")
         
         # Test $100 account (boundary)
         print("\n  Testing $100 account (boundary case)...")
         Config.auto_configure_from_balance(100)
-        assert Config.LEVERAGE == 7, f"Expected leverage 7 for $100, got {Config.LEVERAGE}"
-        assert Config.MIN_PROFIT_THRESHOLD == 0.006, f"Expected 0.6% profit threshold, got {Config.MIN_PROFIT_THRESHOLD}"
+        assert Config.LEVERAGE == 6, f"Expected leverage 6 for $100, got {Config.LEVERAGE}"  # Updated to match current setting
+        assert Config.MIN_PROFIT_THRESHOLD == 0.0072, f"Expected 0.72% profit threshold (incl fees), got {Config.MIN_PROFIT_THRESHOLD}"  # Updated: 0.12% fees + 0.6% profit
         print(f"  ✓ $100 account: Leverage={Config.LEVERAGE}x, Min Profit={Config.MIN_PROFIT_THRESHOLD:.2%}")
         
         print("\n✓ All small balance configurations working correctly")

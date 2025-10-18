@@ -1930,16 +1930,17 @@ class KuCoinClient:
             if max_amount and amount > max_amount:
                 return False, f"Amount {amount:.4f} exceeds maximum {max_amount}"
             
-            # Validate minimum cost
-            cost = amount * price
-            min_cost = metadata.get('min_cost')
-            if min_cost and cost < min_cost:
-                return False, f"Order cost ${cost:.2f} below minimum ${min_cost:.2f}"
-            
-            # Validate maximum cost
-            max_cost = metadata.get('max_cost')
-            if max_cost and cost > max_cost:
-                return False, f"Order cost ${cost:.2f} exceeds maximum ${max_cost:.2f}"
+            # Validate minimum cost (skip for market orders where price=0)
+            if price > 0:
+                cost = amount * price
+                min_cost = metadata.get('min_cost')
+                if min_cost and cost < min_cost:
+                    return False, f"Order cost ${cost:.2f} below minimum ${min_cost:.2f}"
+                
+                # Validate maximum cost
+                max_cost = metadata.get('max_cost')
+                if max_cost and cost > max_cost:
+                    return False, f"Order cost ${cost:.2f} exceeds maximum ${max_cost:.2f}"
             
             # All validations passed
             return True, "valid"
