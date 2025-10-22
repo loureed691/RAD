@@ -68,10 +68,8 @@ def test_limit_order_with_post_only():
             assert params.get('postOnly') == True, "postOnly should be in params"
             
             print("  ✓ Limit order with post_only created successfully")
-            return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 def test_limit_order_with_reduce_only():
     """Test limit order creation with reduce_only flag"""
@@ -113,10 +111,8 @@ def test_limit_order_with_reduce_only():
             assert params.get('reduceOnly') == True, "reduceOnly should be in params"
             
             print("  ✓ Limit order with reduce_only created successfully")
-            return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 def test_stop_limit_order_creation():
     """Test stop-limit order creation"""
@@ -160,10 +156,8 @@ def test_stop_limit_order_creation():
             assert params.get('reduceOnly') == True, "reduceOnly should be in params"
             
             print("  ✓ Stop-limit order created successfully")
-            return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 def test_order_status_checking():
     """Test order status checking"""
@@ -195,10 +189,8 @@ def test_order_status_checking():
             assert status['remaining'] == 0, "Remaining should be 0"
             
             print("  ✓ Order status checked successfully")
-            return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 def test_order_book_fetching():
     """Test order book depth fetching"""
@@ -224,10 +216,8 @@ def test_order_book_fetching():
             assert order_book['bids'][0][0] == 50000, "Best bid should be 50000"
             
             print("  ✓ Order book fetched successfully")
-            return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 def test_slippage_validation():
     """Test price slippage validation"""
@@ -261,10 +251,8 @@ def test_slippage_validation():
             assert is_valid == False, "Slippage should exceed limit"
             
             print("  ✓ Slippage validation working correctly")
-            return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 def test_market_order_with_depth_check():
     """Test market order with order book depth validation"""
@@ -325,10 +313,8 @@ def test_market_order_with_depth_check():
             assert mock_exchange.fetch_order_book.called, "Order book should be checked"
             
             print("  ✓ Market order with depth check created successfully")
-            return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 def test_position_scaling_in():
     """Test scaling into an existing position"""
@@ -395,10 +381,8 @@ def test_position_scaling_in():
             assert manager.positions['BTC-USDT'].entry_price == 50500, "Entry price should be averaged"
             
             print("  ✓ Position scaled in successfully")
-            return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 def test_position_scaling_out():
     """Test scaling out of an existing position"""
@@ -464,10 +448,8 @@ def test_position_scaling_out():
             assert manager.positions['BTC-USDT'].amount == 1.0, "Amount should be halved"
             
             print("  ✓ Position scaled out successfully")
-            return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 def test_position_target_modification():
     """Test modifying position stop loss and take profit"""
@@ -505,10 +487,8 @@ def test_position_target_modification():
             assert manager.positions['BTC-USDT'].take_profit == 56000, "Take profit should be updated"
             
             print("  ✓ Position targets modified successfully")
-            return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 def test_close_position_with_limit_order():
     """Test closing position with limit order"""
@@ -550,10 +530,8 @@ def test_close_position_with_limit_order():
             assert params.get('reduceOnly') == True, "Should have reduceOnly flag"
             
             print("  ✓ Position closed with limit order successfully")
-            return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 def main():
     """Run all enhanced trading methods tests"""

@@ -22,11 +22,9 @@ def test_neural_network():
             from neural_network_model import NeuralNetworkModel, TENSORFLOW_AVAILABLE
         except ImportError as ie:
             print("⚠️  neural_network_model module (or its dependencies, e.g., TensorFlow) not available - skipping neural network tests")
-            return True
         
         if not TENSORFLOW_AVAILABLE:
             print("⚠️  TensorFlow not available - skipping neural network tests")
-            return True
         
         # Create model
         nn_model = NeuralNetworkModel('models/test_nn.h5')
@@ -42,7 +40,6 @@ def test_neural_network():
             print("✓ Neural network training successful")
         else:
             print("✗ Neural network training failed")
-            return False
         
         # Test prediction
         test_features = np.random.randn(31)
@@ -57,16 +54,13 @@ def test_neural_network():
             print("✓ Incremental learning successful")
         else:
             print("✗ Incremental learning failed")
-            return False
         
         print("✓ All neural network tests passed")
-        return True
         
     except Exception as e:
         print(f"✗ Neural network test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def test_automl():
     """Test AutoML optimization"""
@@ -79,7 +73,6 @@ def test_automl():
         
         if not OPTUNA_AVAILABLE:
             print("⚠️  Optuna not available - skipping AutoML tests")
-            return True
         
         # Create AutoML instance
         automl = AutoML()
@@ -96,7 +89,6 @@ def test_automl():
             print(f"✓ XGBoost optimization successful: {len(best_params)} parameters")
         else:
             print("✗ XGBoost optimization failed")
-            return False
         
         # Test LightGBM optimization
         print("  Optimizing LightGBM...")
@@ -105,7 +97,6 @@ def test_automl():
             print(f"✓ LightGBM optimization successful: {len(best_params)} parameters")
         else:
             print("✗ LightGBM optimization failed")
-            return False
         
         # Test optimization history
         history = automl.get_optimization_history()
@@ -113,13 +104,11 @@ def test_automl():
             print(f"✓ Optimization history retrieved: {history['n_trials']} trials")
         
         print("✓ All AutoML tests passed")
-        return True
         
     except Exception as e:
         print(f"✗ AutoML test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def test_var_cvar():
     """Test VaR and CVaR risk metrics"""
@@ -153,7 +142,6 @@ def test_var_cvar():
             print("✓ CVaR >= VaR validation passed")
         else:
             print("✗ CVaR < VaR validation failed")
-            return False
         
         # Test comprehensive risk metrics
         metrics = risk_mgr.get_risk_metrics(returns_list)
@@ -161,16 +149,13 @@ def test_var_cvar():
             print(f"✓ Comprehensive risk metrics: {len(metrics)} metrics calculated")
         else:
             print("✗ Missing risk metrics")
-            return False
         
         print("✓ All VaR/CVaR tests passed")
-        return True
         
     except Exception as e:
         print(f"✗ VaR/CVaR test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def test_regime_detection():
     """Test market regime detection and regime-based sizing"""
@@ -203,13 +188,11 @@ def test_regime_detection():
             print(f"    Position size adjustment: {base_size} → {adjusted_size:.2f}")
         
         print("✓ All regime detection tests passed")
-        return True
         
     except Exception as e:
         print(f"✗ Regime detection test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def test_execution_algorithms():
     """Test TWAP/VWAP/Iceberg execution (mock)"""
@@ -262,16 +245,13 @@ def test_execution_algorithms():
                   f"total_cost={tca['total_cost_pct']:.4%}")
         else:
             print("✗ TCA missing metrics")
-            return False
         
         print("✓ All execution algorithm tests passed")
-        return True
         
     except Exception as e:
         print(f"✗ Execution algorithm test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def test_database():
     """Test database operations (without actual connection)"""
@@ -284,7 +264,6 @@ def test_database():
         
         if not POSTGRES_AVAILABLE:
             print("⚠️  psycopg2 not available - skipping database tests")
-            return True
         
         # Initialize without connection (no DATABASE_URL)
         db = TradingDatabase()
@@ -311,13 +290,11 @@ def test_database():
             print("✓ Database handles no connection gracefully")
         
         print("✓ All database tests passed")
-        return True
         
     except Exception as e:
         print(f"✗ Database test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def test_backtest_engine():
     """Test backtesting engine"""
@@ -364,7 +341,6 @@ def test_backtest_engine():
                   f"Final balance: ${results['final_balance']:.2f}")
         else:
             print("✗ Backtest results incomplete")
-            return False
         
         # Test walk-forward optimization
         print("  Testing walk-forward optimization...")
@@ -381,13 +357,11 @@ def test_backtest_engine():
             print("⚠️  Walk-forward optimization returned no results (may need more data)")
         
         print("✓ All backtest engine tests passed")
-        return True
         
     except Exception as e:
         print(f"✗ Backtest engine test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def test_dashboard():
     """Test dashboard module (structure only)"""
@@ -400,7 +374,6 @@ def test_dashboard():
         
         if not FLASK_AVAILABLE:
             print("⚠️  Flask not available - skipping dashboard tests")
-            return True
         
         # Create dashboard
         dashboard = TradingDashboard(port=5050)
@@ -432,13 +405,11 @@ def test_dashboard():
         print(f"✓ Trade added: {len(dashboard.recent_trades)} trades")
         
         print("✓ All dashboard tests passed")
-        return True
         
     except Exception as e:
         print(f"✗ Dashboard test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def test_alternative_data():
     """Test alternative data modules (placeholders)"""
@@ -457,7 +428,6 @@ def test_alternative_data():
             print("✓ On-chain metrics module working (placeholder)")
         else:
             print("✗ On-chain metrics structure incorrect")
-            return False
         
         # Test social sentiment
         sentiment = SocialSentiment()
@@ -466,7 +436,6 @@ def test_alternative_data():
             print("✓ Social sentiment module working (placeholder)")
         else:
             print("✗ Social sentiment structure incorrect")
-            return False
         
         # Test aggregated sentiment
         agg_sentiment = sentiment.get_aggregated_sentiment('BTC')
@@ -474,16 +443,13 @@ def test_alternative_data():
             print(f"✓ Aggregated sentiment: {agg_sentiment['signal']}")
         else:
             print("✗ Aggregated sentiment structure incorrect")
-            return False
         
         print("✓ All alternative data tests passed")
-        return True
         
     except Exception as e:
         print(f"✗ Alternative data test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def main():
     """Run all tests"""

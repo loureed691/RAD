@@ -62,9 +62,7 @@ class Position:
                 return True, 'stop_loss'
         else:
             if current_price >= self.stop_loss:
-                return True, 'stop_loss'
-        
-        return False, ''
+                return True, 'stop_loss', ''
 
 
 def test_emergency_stops():

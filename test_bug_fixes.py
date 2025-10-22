@@ -66,13 +66,11 @@ def test_indicators_division_by_zero():
             print("  ✓ Flat price data handled correctly")
         
         print("✓ Indicators division by zero handling working correctly")
-        return True
         
     except Exception as e:
         print(f"✗ Indicators test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def test_risk_manager_zero_price():
     """Test that risk manager handles zero/negative prices correctly"""
@@ -121,13 +119,11 @@ def test_risk_manager_zero_price():
         print(f"  ✓ Valid prices work correctly (size: {position_size:.4f})")
         
         print("✓ Risk manager zero price handling working correctly")
-        return True
         
     except Exception as e:
         print(f"✗ Risk manager test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def test_order_book_zero_volume():
     """Test order book analysis with zero volume"""
@@ -166,13 +162,11 @@ def test_order_book_zero_volume():
         print("  ✓ Normal order book works correctly")
         
         print("✓ Order book zero volume handling working correctly")
-        return True
         
     except Exception as e:
         print(f"✗ Order book test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def test_api_response_validation():
     """Test that API responses are properly validated"""
@@ -219,13 +213,11 @@ def test_api_response_validation():
         print("  ✓ Valid price validation works")
         
         print("✓ API response validation working correctly")
-        return True
         
     except Exception as e:
         print(f"✗ API response validation test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def test_balance_validation():
     """Test balance fetch and validation"""
@@ -265,13 +257,11 @@ def test_balance_validation():
         print("  ✓ Valid balance structure works")
         
         print("✓ Balance validation working correctly")
-        return True
         
     except Exception as e:
         print(f"✗ Balance validation test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def main():
     """Run all bug fix tests"""

@@ -122,7 +122,6 @@ def test_roi_based_profit_taking():
     print("   ✓ Position closes at 20% ROI (exceptional, unconditional)")
     
     print("\n✓ All ROI-based profit taking tests passed!")
-    return True
 
 def test_momentum_loss_detection():
     """Test that positions close when giving back significant profits"""
@@ -201,7 +200,6 @@ def test_momentum_loss_detection():
     print("   ✓ Position closes after 50% profit drawdown (major retracement)")
     
     print("\n✓ All momentum loss detection tests passed!")
-    return True
 
 def test_conservative_tp_extensions():
     """Test that TP extensions are very conservative when already profitable"""
@@ -316,7 +314,6 @@ def test_conservative_tp_extensions():
     print(f"   ✓ TP extension capped at {tp_increase3:.2%} (moderate)")
     
     print("\n✓ All conservative TP extension tests passed!")
-    return True
 
 def test_progress_based_restrictions():
     """Test that TP extensions are restricted based on progress to target"""
@@ -430,7 +427,6 @@ def test_progress_based_restrictions():
     print(f"   ✓ TP frozen at 70%+ progress (prevents moving target)")
     
     print("\n✓ All progress-based restriction tests passed!")
-    return True
 
 def test_short_position_profit_taking():
     """Test that all enhancements work correctly for short positions"""
@@ -494,7 +490,6 @@ def test_short_position_profit_taking():
     print("   ✓ Short position detects momentum loss correctly")
     
     print("\n✓ All short position tests passed!")
-    return True
 
 def run_all_tests():
     """Run all test suites"""

@@ -62,7 +62,6 @@ def test_trading_fees_calculation():
     print(f"   ✓ Actual net PnL: ${trade['net_pnl']:.2f}")
     
     print("\n✅ Trading fees calculation test PASSED")
-    return True
 
 def test_funding_fees_calculation():
     """Test that funding fees are correctly calculated"""
@@ -110,7 +109,6 @@ def test_funding_fees_calculation():
     print(f"   ✓ Actual funding fees: ${trade['funding_fees']:.2f}")
     
     print("\n✅ Funding fees calculation test PASSED")
-    return True
 
 def test_fee_impact_on_profitability():
     """Test that fees significantly impact reported profitability"""
@@ -175,7 +173,6 @@ def test_fee_impact_on_profitability():
     print(f"   ✓ Fee impact: {results_with_fees['fee_impact_pct']:.1f}%")
     
     print("\n✅ Fee impact test PASSED")
-    return True
 
 def test_leverage_amplifies_fees():
     """Test that leverage amplifies fee impact correctly"""
@@ -229,7 +226,6 @@ def test_leverage_amplifies_fees():
     print(f"   ✓ 10x gross PnL: ${trade_10x['gross_pnl']:.2f}, net: ${trade_10x['net_pnl']:.2f}")
     
     print("\n✅ Leverage and fees test PASSED")
-    return True
 
 def test_realistic_fee_scenario():
     """Test with realistic KuCoin fee structure"""
@@ -293,7 +289,6 @@ def test_realistic_fee_scenario():
     print(f"   ✓ Realistic fee scenario calculated correctly")
     
     print("\n✅ Realistic fee scenario test PASSED")
-    return True
 
 def run_all_tests():
     """Run all funding & fees tests"""

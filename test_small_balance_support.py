@@ -51,13 +51,11 @@ def test_very_small_balance_config():
         print(f"  ✓ $100 account: Leverage={Config.LEVERAGE}x, Min Profit={Config.MIN_PROFIT_THRESHOLD:.2%}")
         
         print("\n✓ All small balance configurations working correctly")
-        return True
         
     except Exception as e:
         print(f"\n✗ Small balance config error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_position_sizing_small_balances():
@@ -117,13 +115,11 @@ def test_position_sizing_small_balances():
         print(f"  ✓ Zero distance handled: Position size = {size:.6f} contracts")
         
         print("\n✓ Position sizing works correctly with small balances")
-        return True
         
     except Exception as e:
         print(f"\n✗ Position sizing error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_should_open_position_small_balance():
@@ -166,13 +162,11 @@ def test_should_open_position_small_balance():
         print(f"  ✓ Max positions check: {reason}")
         
         print("\n✓ Position opening logic works correctly")
-        return True
         
     except Exception as e:
         print(f"\n✗ Position opening error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_division_by_zero_protection():
@@ -214,13 +208,11 @@ def test_division_by_zero_protection():
         print(f"  ✓ None orderbook handled: {result}")
         
         print("\n✓ Division by zero protection working correctly")
-        return True
         
     except Exception as e:
         print(f"\n✗ Division by zero test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_kelly_criterion_edge_cases():
@@ -271,13 +263,11 @@ def test_kelly_criterion_edge_cases():
         print(f"  ✓ Adaptive threshold = {threshold:.2f}")
         
         print("\n✓ Kelly Criterion working correctly")
-        return True
         
     except Exception as e:
         print(f"\n✗ Kelly Criterion test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_market_regime_detection():
@@ -315,13 +305,11 @@ def test_market_regime_detection():
         print(f"  ✓ Ranging market detected: {regime}")
         
         print("\n✓ Market regime detection working correctly")
-        return True
         
     except Exception as e:
         print(f"\n✗ Market regime detection error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_adaptive_leverage():
@@ -364,13 +352,11 @@ def test_adaptive_leverage():
         assert lev3 > 0, "Leverage should be positive"
         
         print("\n✓ Adaptive leverage working correctly")
-        return True
         
     except Exception as e:
         print(f"\n✗ Adaptive leverage test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_portfolio_diversification():
@@ -415,13 +401,11 @@ def test_portfolio_diversification():
         print(f"  ✓ Duplicate rejected: {reason}")
         
         print("\n✓ Portfolio diversification working correctly")
-        return True
         
     except Exception as e:
         print(f"\n✗ Portfolio diversification test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def main():

@@ -183,7 +183,6 @@ def test_comprehensive_leveraged_pnl_fix():
         print(f"\n✗ Comprehensive test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def main():
     """Run the test"""

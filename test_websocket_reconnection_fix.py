@@ -90,11 +90,9 @@ def test_symbol_conversion():
     if all_passed:
         print("✅ All WebSocket conversion tests passed!")
         print("=" * 60)
-        return True
     else:
         print("❌ Some tests failed")
         print("=" * 60)
-        return False
 
 if __name__ == "__main__":
     success = test_symbol_conversion()

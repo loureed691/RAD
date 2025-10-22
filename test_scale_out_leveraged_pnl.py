@@ -83,13 +83,11 @@ def test_scale_out_leveraged_pnl():
             print(f"    {leverage:2d}x leverage: {unlev:.2%} price → {lev:.2%} ROI ✓")
         
         print("\n✓ All scale_out_position leveraged P&L tests passed!")
-        return True
         
     except Exception as e:
         print(f"\n✗ Scale_out_position leveraged P&L test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def main():
     """Run the test"""

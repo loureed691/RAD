@@ -56,13 +56,11 @@ def test_full_bot_initialization():
         print("  ✓ MLModel initializes correctly")
         
         print("✓ Full bot initialization test passed")
-        return True
         
     except Exception as e:
         print(f"✗ Full bot initialization test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def test_data_flow():
     """Test data flow through the system"""
@@ -124,13 +122,11 @@ def test_data_flow():
         print(f"  ✓ Position sizing works (size: {position_size:.4f} contracts)")
         
         print("✓ Data flow test passed")
-        return True
         
     except Exception as e:
         print(f"✗ Data flow test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def test_edge_cases():
     """Test edge cases and boundary conditions"""
@@ -197,13 +193,11 @@ def test_edge_cases():
         print(f"  ✓ Low volatility handled (stop loss: {stop_loss_pct:.2%})")
         
         print("✓ Edge cases test passed")
-        return True
         
     except Exception as e:
         print(f"✗ Edge cases test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def test_thread_safety():
     """Test thread safety of shared components"""
@@ -250,13 +244,11 @@ def test_thread_safety():
         print("  ✓ Concurrent cache access safe")
         
         print("✓ Thread safety test passed")
-        return True
         
     except Exception as e:
         print(f"✗ Thread safety test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def main():
     """Run all integration tests"""

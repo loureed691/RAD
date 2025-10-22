@@ -94,7 +94,6 @@ def test_config_validation():
             try:
                 Config.validate()
                 print("  ✗ Should reject leverage = 0")
-                return False
             except ValueError as e:
                 print(f"  ✓ Correctly rejected leverage = 0: {e}")
             
@@ -102,7 +101,6 @@ def test_config_validation():
             try:
                 Config.validate()
                 print("  ✗ Should reject leverage = 25")
-                return False
             except ValueError as e:
                 print(f"  ✓ Correctly rejected leverage = 25: {e}")
             
@@ -122,7 +120,6 @@ def test_config_validation():
             try:
                 Config.validate()
                 print("  ✗ Should reject negative position size")
-                return False
             except ValueError as e:
                 print(f"  ✓ Correctly rejected negative size: {e}")
             
@@ -130,7 +127,6 @@ def test_config_validation():
             try:
                 Config.validate()
                 print("  ✗ Should reject unreasonably large position size")
-                return False
             except ValueError as e:
                 print(f"  ✓ Correctly rejected large size: {e}")
             
@@ -142,7 +138,6 @@ def test_config_validation():
             Config.MAX_POSITION_SIZE = original_size
         
         print("\n✓ Configuration validation works correctly")
-        return True
         
     finally:
         # Restore original API keys
@@ -229,7 +224,6 @@ def test_reproducibility():
     assert np.array_equal(np_nums_1, np_nums_2), "Numpy arrays should be reproducible"
     
     print("\n✓ Reproducibility confirmed - random seed working")
-    return True
 
 
 def main():

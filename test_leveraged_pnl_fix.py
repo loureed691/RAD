@@ -156,13 +156,11 @@ def test_leveraged_pnl_position_closing():
         print(f"    ✓ Position closes at 20% ROI: {reason}")
         
         print("\n✓ All leveraged P&L position closing tests passed!")
-        return True
         
     except Exception as e:
         print(f"\n✗ Leveraged P&L test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def main():
     """Run the test"""

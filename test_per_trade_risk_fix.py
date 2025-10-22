@@ -60,7 +60,6 @@ def test_estimation_passes_guardrail():
     print("\n" + "="*70)
     print("✅ ALL ESTIMATION TESTS PASSED")
     print("="*70)
-    return True
 
 def test_old_formula_would_fail():
     """Demonstrate that the old formula would have failed"""
@@ -121,7 +120,6 @@ def test_old_formula_would_fail():
     print("\n" + "="*70)
     print("✅ Confirmed: Old formula fails, new formula works")
     print("="*70)
-    return True
 
 if __name__ == "__main__":
     print("\n" + "="*70)

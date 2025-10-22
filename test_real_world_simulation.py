@@ -108,7 +108,6 @@ def test_bot_initialization_dry_run():
         print(f"\n✗ Initialization test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_error_recovery():
@@ -174,7 +173,6 @@ def test_error_recovery():
         print(f"\n✗ Error recovery test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def main():

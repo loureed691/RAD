@@ -57,7 +57,6 @@ def test_portfolio_heat():
     print("   ✓ Multiple position heat calculated")
     
     print("\n✓ All portfolio heat tests passed!")
-    return True
 
 def test_correlation_risk():
     """Test correlation risk checking"""
@@ -116,7 +115,6 @@ def test_correlation_risk():
     print("   ✓ Different correlation groups allowed")
     
     print("\n✓ All correlation risk tests passed!")
-    return True
 
 def test_risk_adjustment():
     """Test dynamic risk adjustment"""
@@ -199,7 +197,6 @@ def test_risk_adjustment():
     print("   ✓ Combined effects work correctly")
     
     print("\n✓ All risk adjustment tests passed!")
-    return True
 
 def main():
     """Run all tests"""

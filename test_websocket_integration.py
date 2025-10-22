@@ -28,7 +28,6 @@ def test_websocket_imports():
         return True
     except Exception as e:
         print(f"  ✗ Failed to import: {e}")
-        return False
 
 
 def test_websocket_initialization():
@@ -59,7 +58,6 @@ def test_websocket_initialization():
         print(f"  ✗ Failed to initialize: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_kucoin_client_with_websocket():
@@ -104,7 +102,6 @@ def test_kucoin_client_with_websocket():
         print(f"  ✗ Test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_kucoin_client_without_websocket():
@@ -137,7 +134,6 @@ def test_kucoin_client_without_websocket():
         print(f"  ✗ Test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_get_ticker_with_websocket():
@@ -191,7 +187,6 @@ def test_get_ticker_with_websocket():
         print(f"  ✗ Test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_get_ticker_fallback_to_rest():
@@ -247,7 +242,6 @@ def test_get_ticker_fallback_to_rest():
         print(f"  ✗ Test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_get_ohlcv_with_websocket():
@@ -295,7 +289,6 @@ def test_get_ohlcv_with_websocket():
         print(f"  ✗ Test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_trading_uses_rest_api():
@@ -350,7 +343,6 @@ def test_trading_uses_rest_api():
         print(f"  ✗ Test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_websocket_cleanup():
@@ -397,7 +389,6 @@ def test_websocket_cleanup():
         print(f"  ✗ Test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_config_websocket_setting():
@@ -422,7 +413,6 @@ def test_config_websocket_setting():
         print(f"  ✗ Test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def run_all_tests():

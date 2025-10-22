@@ -90,13 +90,11 @@ class TradeSimulationTester:
             print("  ✓ Duplicate position handling working")
             
             print("\n✓ Position opening tests PASSED")
-            return True
             
         except Exception as e:
             print(f"\n✗ Position opening test FAILED: {e}")
             import traceback
             traceback.print_exc()
-            return False
     
     def test_position_pnl_calculation(self):
         """Test P/L calculations for different scenarios"""
@@ -154,13 +152,11 @@ class TradeSimulationTester:
             print(f"  ✓ SHORT +3% price move: {pnl_up:.2%} P/L (expected {expected_pnl_up:.2%})")
             
             print("\n✓ P/L calculation tests PASSED")
-            return True
             
         except Exception as e:
             print(f"\n✗ P/L calculation test FAILED: {e}")
             import traceback
             traceback.print_exc()
-            return False
     
     def test_stop_loss_trigger(self):
         """Test stop loss triggering"""
@@ -216,13 +212,11 @@ class TradeSimulationTester:
             print(f"  ✓ Price 105.0 (at SL 105.0): Triggered with reason '{reason}'")
             
             print("\n✓ Stop loss tests PASSED")
-            return True
             
         except Exception as e:
             print(f"\n✗ Stop loss test FAILED: {e}")
             import traceback
             traceback.print_exc()
-            return False
     
     def test_take_profit_trigger(self):
         """Test take profit triggering"""
@@ -314,13 +308,11 @@ class TradeSimulationTester:
                 print(f"  ✓ High profit immediate exit triggered at {pnl:.2%} P/L")
             
             print("\n✓ Take profit tests PASSED")
-            return True
             
         except Exception as e:
             print(f"\n✗ Take profit test FAILED: {e}")
             import traceback
             traceback.print_exc()
-            return False
     
     def test_trailing_stop(self):
         """Test trailing stop loss functionality"""
@@ -403,13 +395,11 @@ class TradeSimulationTester:
             print(f"  ✓ Price up to 97.0: SL stayed at {new_sl:.2f}")
             
             print("\n✓ Trailing stop tests PASSED")
-            return True
             
         except Exception as e:
             print(f"\n✗ Trailing stop test FAILED: {e}")
             import traceback
             traceback.print_exc()
-            return False
     
     def test_position_closing(self):
         """Test position closing through position manager"""
@@ -451,13 +441,11 @@ class TradeSimulationTester:
             print("  ✓ Non-existent position handled correctly")
             
             print("\n✓ Position closing tests PASSED")
-            return True
             
         except Exception as e:
             print(f"\n✗ Position closing test FAILED: {e}")
             import traceback
             traceback.print_exc()
-            return False
     
     def test_risk_management(self):
         """Test risk management calculations"""
@@ -520,13 +508,11 @@ class TradeSimulationTester:
             print(f"  ✓ High volatility stop: {stop_high_vol:.2%}")
             
             print("\n✓ Risk management tests PASSED")
-            return True
             
         except Exception as e:
             print(f"\n✗ Risk management test FAILED: {e}")
             import traceback
             traceback.print_exc()
-            return False
     
     def test_complete_trade_flow(self):
         """Test a complete trade from opening to closing"""
@@ -612,13 +598,11 @@ class TradeSimulationTester:
             assert pnl < 0, "Trade should be at a loss"
             
             print("\n✓ Complete trade flow tests PASSED")
-            return True
             
         except Exception as e:
             print(f"\n✗ Complete trade flow test FAILED: {e}")
             import traceback
             traceback.print_exc()
-            return False
     
     def _create_sample_ohlcv(self, base_price):
         """Create sample OHLCV data for testing"""

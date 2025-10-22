@@ -38,12 +38,10 @@ def test_position_tracking_enhancements():
         print("  ✓ Position tracks max favorable excursion")
         print("  ✓ Position stores initial stop loss and take profit")
         print("✓ Position tracking enhancements working correctly")
-        return True
     except Exception as e:
         print(f"✗ Position tracking error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_adaptive_trailing_stop():
@@ -144,12 +142,10 @@ def test_adaptive_trailing_stop():
         print(f"  ✓ Strong momentum trailing stop: {position4.stop_loss:.2f}")
         
         print("✓ Adaptive trailing stop working correctly")
-        return True
     except Exception as e:
         print(f"✗ Adaptive trailing stop error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_dynamic_take_profit():
@@ -254,12 +250,10 @@ def test_dynamic_take_profit():
         print(f"  ✓ High volatility extended TP from {initial_tp4:.2f} to {position4.take_profit:.2f}")
         
         print("✓ Dynamic take profit working correctly")
-        return True
     except Exception as e:
         print(f"✗ Dynamic take profit error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_max_favorable_excursion_tracking():
@@ -301,12 +295,10 @@ def test_max_favorable_excursion_tracking():
         print(f"  ✓ MFE maintained after pullback: {position.max_favorable_excursion:.2%}")
         
         print("✓ Max favorable excursion tracking working correctly")
-        return True
     except Exception as e:
         print(f"✗ MFE tracking error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_adaptive_parameters_bounds():
@@ -354,12 +346,10 @@ def test_adaptive_parameters_bounds():
             print(f"  ✓ {description}: stop at {position.stop_loss:.2f} ({distance/51000:.2%} away)")
         
         print("✓ Adaptive parameters bounds working correctly")
-        return True
     except Exception as e:
         print(f"✗ Bounds test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_rsi_based_adjustments():
@@ -441,12 +431,10 @@ def test_rsi_based_adjustments():
         print(f"  ✓ Short with overbought RSI (70): TP at {position3.take_profit:.2f} (initial: {initial_tp3:.2f})")
         
         print("✓ RSI-based adjustments working correctly")
-        return True
     except Exception as e:
         print(f"✗ RSI adjustment error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_support_resistance_awareness():
@@ -533,12 +521,10 @@ def test_support_resistance_awareness():
         print(f"  ✓ Short position TP extended to {position2.take_profit:.2f}, capped by support at 2800")
         
         print("✓ Support/resistance awareness working correctly")
-        return True
     except Exception as e:
         print(f"✗ S/R awareness error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_profit_velocity_tracking():
@@ -588,12 +574,10 @@ def test_profit_velocity_tracking():
         print(f"  ✓ Last P/L: {position.last_pnl:.2%}")
         
         print("✓ Profit velocity tracking working correctly")
-        return True
     except Exception as e:
         print(f"✗ Profit velocity error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_time_based_adjustments():
@@ -655,12 +639,10 @@ def test_time_based_adjustments():
         print(f"  ✓ Aged position (30h) TP: {aged_tp:.2f} (initial: {initial_tp2:.2f})")
         
         print("✓ Time-based adjustments working correctly")
-        return True
     except Exception as e:
         print(f"✗ Time-based adjustment error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def main():

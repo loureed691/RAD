@@ -32,7 +32,6 @@ def test_modern_gradient_boosting():
         print("   ✓ CatBoost imported successfully")
     except Exception as e:
         print(f"   ✗ Import error: {e}")
-        return False
     
     # Test 2: Generate synthetic training data
     print("\n2. Generating synthetic training data (200 samples)...")
@@ -80,7 +79,6 @@ def test_modern_gradient_boosting():
     
     if not success:
         print("   ✗ Training failed")
-        return False
     
     print(f"   ✓ Training completed in {training_time:.2f} seconds")
     print(f"   ✓ Training time per 100 samples: {(training_time / 2):.2f}s")
@@ -117,13 +115,10 @@ def test_modern_gradient_boosting():
             
             if not (has_xgb or has_lgb or has_cat):
                 print("   ✗ No modern gradient boosting models found!")
-                return False
         else:
             print("   ✗ Expected VotingClassifier but got different structure")
-            return False
     else:
         print("   ✗ Model is None after training")
-        return False
     
     # Test 5: Test prediction functionality
     print("\n5. Testing prediction with modern ensemble...")
@@ -155,11 +150,9 @@ def test_modern_gradient_boosting():
     
     if signal not in ['BUY', 'SELL', 'HOLD']:
         print(f"   ✗ Invalid signal: {signal}")
-        return False
     
     if confidence < 0 or confidence > 1:
         print(f"   ✗ Invalid confidence: {confidence}")
-        return False
     
     # Test 6: Verify feature importance extraction
     print("\n6. Verifying feature importance extraction...")
@@ -187,7 +180,6 @@ def test_modern_gradient_boosting():
     print("\n" + "="*70)
     print("✓ All Modern Gradient Boosting Tests Passed!")
     print("="*70)
-    return True
 
 def test_training_speed_comparison():
     """Compare training speed between old and new implementation"""

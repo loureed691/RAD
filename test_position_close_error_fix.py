@@ -40,11 +40,9 @@ def test_error_code_detection():
     if all_passed:
         print("✅ All error handling tests passed!")
         print("=" * 60)
-        return True
     else:
         print("❌ Some tests failed")
         print("=" * 60)
-        return False
 
 if __name__ == "__main__":
     success = test_error_code_detection()

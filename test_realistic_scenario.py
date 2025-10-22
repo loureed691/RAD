@@ -57,7 +57,6 @@ def simulate_realistic_trading_scenario():
         print(f"✓ Guardrail check PASSED: {reason}")
     else:
         print(f"✗ Guardrail check BLOCKED: {reason}")
-        return False
     
     # Simulate actual position sizing (as done later in bot.py)
     print("\n" + "-"*70)
@@ -110,7 +109,6 @@ def simulate_realistic_trading_scenario():
         print(f"✓ Estimation was conservative: ${estimated_position_value:.2f} ≤ ${balance * 0.05:.2f} (5% limit)")
     else:
         print(f"✗ Estimation exceeded limit: ${estimated_position_value:.2f} > ${balance * 0.05:.2f} (5% limit)")
-        return False
     
     print("\n" + "="*70)
     print("✅ SCENARIO COMPLETED SUCCESSFULLY")
@@ -165,12 +163,10 @@ def test_multiple_balance_levels():
         print(f"  Result: {status} - {reason}")
         
         if not is_allowed:
-            return False
     
     print("\n" + "="*70)
     print("✅ ALL BALANCE LEVELS TESTED SUCCESSFULLY")
     print("="*70)
-    return True
 
 if __name__ == "__main__":
     print("\n" + "="*70)

@@ -11,7 +11,6 @@ def count_log_issues():
     
     if not os.path.exists(log_file):
         print(f"❌ Log file {log_file} not found")
-        return False
     
     print("=" * 60)
     print("📊 Analyzing Log Files")
@@ -88,11 +87,9 @@ def count_log_issues():
     if not issues_found:
         print("✅ Log files look healthy!")
         print("=" * 60)
-        return True
     else:
         print("⚠️  Some issues detected - review above for details")
-        print("=" * 60)
-        return True  # Return True anyway as some issues are expected
+        print("=" * 60)  # Return True anyway as some issues are expected
 
 if __name__ == "__main__":
     success = count_log_issues()

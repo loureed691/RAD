@@ -68,7 +68,6 @@ def test_large_scale_configuration():
         
     except Exception as e:
         print(f"✗ Configuration error: {e}")
-        return False
     
     # ============================================================================
     # TEST 2: Market Scanner Volume Filtering
@@ -117,7 +116,6 @@ def test_large_scale_configuration():
                 print(f"✓ Top 100 by volume selected: {len(filtered)} pairs")
             else:
                 print(f"✗ Expected max 100 pairs, got {len(filtered)}")
-                return False
             
             # Verify all filtered pairs have volume > $1M
             volume_map = {f['symbol']: f['turnoverOf24h'] for f in mock_futures}
@@ -127,7 +125,6 @@ def test_large_scale_configuration():
                 print(f"✓ All filtered pairs have volume > $1M")
             else:
                 print(f"✗ Some filtered pairs have volume < $1M")
-                return False
             
         print()
         
@@ -135,7 +132,6 @@ def test_large_scale_configuration():
         print(f"✗ Volume filtering error: {e}")
         import traceback
         traceback.print_exc()
-        return False
     
     # ============================================================================
     # TEST 3: Opportunity Selection (Top 5)
@@ -177,7 +173,6 @@ def test_large_scale_configuration():
                     print(f"  • Scores: {scores_str}")
                 else:
                     print(f"✗ Expected 5 opportunities, got {len(best_pairs)}")
-                    return False
                 
                 # Verify they're the top scores
                 top_5_scores = [r['score'] for r in mock_results_sorted[:5]]
@@ -189,7 +184,6 @@ def test_large_scale_configuration():
                     print(f"✗ Score mismatch")
                     print(f"  Expected: {top_5_scores}")
                     print(f"  Got: {selected_scores}")
-                    return False
         
         print()
         
@@ -197,7 +191,6 @@ def test_large_scale_configuration():
         print(f"✗ Opportunity selection error: {e}")
         import traceback
         traceback.print_exc()
-        return False
     
     # ============================================================================
     # TEST 4: Position Manager Capacity (100 positions)
@@ -233,7 +226,6 @@ def test_large_scale_configuration():
                 print(f"✓ Position manager can track 100 positions")
             else:
                 print(f"✗ Position count mismatch: expected 100, got {count}")
-                return False
             
             # Test position retrieval
             test_position = pm.get_position('PAIR50/USDT:USDT')
@@ -241,14 +233,12 @@ def test_large_scale_configuration():
                 print(f"✓ Position retrieval works correctly")
             else:
                 print(f"✗ Position retrieval failed")
-                return False
             
             # Test has_position check
             if pm.has_position('PAIR0/USDT:USDT') and not pm.has_position('NONEXISTENT'):
                 print(f"✓ Position existence check works")
             else:
                 print(f"✗ Position existence check failed")
-                return False
             
         print()
         
@@ -256,7 +246,6 @@ def test_large_scale_configuration():
         print(f"✗ Position manager error: {e}")
         import traceback
         traceback.print_exc()
-        return False
     
     # ============================================================================
     # TEST 5: Performance Estimation

@@ -64,7 +64,6 @@ def test_kill_switch():
     print(f"   ✓ Kill switch deactivated: {is_active}")
     
     print("\n✅ Kill switch tests PASSED")
-    return True
 
 def test_per_trade_risk_limit():
     """Test per-trade max risk % of equity guardrail"""
@@ -113,7 +112,6 @@ def test_per_trade_risk_limit():
     print(f"   ✓ Position $50 (5%) allowed: {reason}")
     
     print("\n✅ Per-trade risk limit tests PASSED")
-    return True
 
 def test_daily_loss_limit():
     """Test daily loss limit guardrail"""
@@ -157,7 +155,6 @@ def test_daily_loss_limit():
     print(f"   ✓ Kill switch auto-activated: {kill_reason}")
     
     print("\n✅ Daily loss limit tests PASSED")
-    return True
 
 def test_max_concurrent_positions():
     """Test max concurrent positions guardrail"""
@@ -202,7 +199,6 @@ def test_max_concurrent_positions():
     print(f"   ✓ Exit allowed at max positions: {reason}")
     
     print("\n✅ Max concurrent positions tests PASSED")
-    return True
 
 def test_fractional_kelly_caps():
     """Test Kelly Criterion hard caps at 0.25-0.5"""
@@ -265,7 +261,6 @@ def test_fractional_kelly_caps():
     print(f"   ✓ Kelly with best conditions: {kelly:.4f} (HARD CAP at 2.5%)")
     
     print("\n✅ Fractional Kelly cap tests PASSED")
-    return True
 
 def test_comprehensive_guardrails_integration():
     """Test all guardrails working together"""
@@ -308,7 +303,6 @@ def test_comprehensive_guardrails_integration():
     print(f"   ✓ Exit allowed: {reason}")
     
     print("\n✅ Comprehensive integration tests PASSED")
-    return True
 
 def run_all_tests():
     """Run all Priority 1 safety tests"""

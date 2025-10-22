@@ -58,12 +58,10 @@ def test_kelly_criterion_with_tracked_losses():
         print(f"  ✓ Tracked {metrics['losses']} losses with avg loss: {metrics['avg_loss']:.2%}")
         print(f"  ✓ Kelly-optimized risk: {optimal_risk:.2%}")
         print("✓ Kelly Criterion with tracked losses working correctly")
-        return True
     except Exception as e:
         print(f"✗ Kelly Criterion test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_drawdown_protection():
@@ -102,12 +100,10 @@ def test_drawdown_protection():
         print(f"  ✓ 25% drawdown: 50% risk")
         print(f"  ✓ New peak: reset to 100% risk")
         print("✓ Drawdown protection working correctly")
-        return True
     except Exception as e:
         print(f"✗ Drawdown protection test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_position_sizing_with_risk_override():
@@ -145,12 +141,10 @@ def test_position_sizing_with_risk_override():
         print(f"  ✓ Kelly low (1% risk): {size_kelly_low:.4f} contracts")
         print(f"  ✓ Kelly high (3% risk): {size_kelly_high:.4f} contracts")
         print("✓ Position sizing with risk override working correctly")
-        return True
     except Exception as e:
         print(f"✗ Position sizing test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_market_scanner_volume_filter():
@@ -199,12 +193,10 @@ def test_market_scanner_volume_filter():
         print(f"  ✓ Filtered to {len(filtered)} high-quality pairs")
         print(f"  ✓ Low volume pairs excluded")
         print("✓ Market scanner volume filter working correctly")
-        return True
     except Exception as e:
         print(f"✗ Market scanner filter test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_risk_adjusted_scoring():
@@ -240,12 +232,10 @@ def test_risk_adjusted_scoring():
         print(f"  ✓ Good risk/reward score: {score_good:.1f}")
         print(f"  ✓ Poor risk/reward score: {score_poor:.1f}")
         print("✓ Risk-adjusted scoring working correctly")
-        return True
     except Exception as e:
         print(f"✗ Risk-adjusted scoring test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def main():

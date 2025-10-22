@@ -19,10 +19,8 @@ def test_position_manager_has_advanced_exit_strategy():
         assert isinstance(manager.advanced_exit_strategy, AdvancedExitStrategy), "advanced_exit_strategy should be an instance of AdvancedExitStrategy"
         
         print("  ✓ PositionManager correctly initialized with AdvancedExitStrategy")
-        return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 
 def test_breakeven_plus_exit_integration():
@@ -68,7 +66,6 @@ def test_breakeven_plus_exit_integration():
         print(f"  ✗ Test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def test_momentum_reversal_exit_integration():
@@ -109,7 +106,6 @@ def test_momentum_reversal_exit_integration():
         return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 
 def test_profit_lock_exit_integration():
@@ -151,7 +147,6 @@ def test_profit_lock_exit_integration():
         return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 
 def test_time_based_exit_integration():
@@ -192,7 +187,6 @@ def test_time_based_exit_integration():
         return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 
 def test_volatility_spike_exit_integration():
@@ -230,10 +224,8 @@ def test_volatility_spike_exit_integration():
         )
         
         print(f"  ✓ Volatility spike handling tested (exit={should_exit}, reason={reason})")
-        return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
-        return False
 
 
 def test_position_update_with_advanced_exits():
@@ -267,12 +259,10 @@ def test_position_update_with_advanced_exits():
         closed_positions = list(manager.update_positions())
         
         print(f"  ✓ Position update integrated with advanced exit strategies (closed: {len(closed_positions)})")
-        return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 
 def main():

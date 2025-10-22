@@ -57,7 +57,6 @@ def test_volume_profile_calculation():
     print(f"  ✓ Volume nodes: {len(profile['volume_nodes'])}")
     print(f"  ✓ Total volume: {profile['total_volume']:.0f}")
     print("✓ Volume profile calculation working correctly")
-    return True
 
 
 def test_high_volume_node_detection():
@@ -101,7 +100,6 @@ def test_high_volume_node_detection():
     print(f"  ✓ Correctly identified no proximity at price {current_price:.2f}")
     
     print("✓ High-volume node detection working correctly")
-    return True
 
 
 def test_support_resistance_from_volume():
@@ -162,7 +160,6 @@ def test_support_resistance_from_volume():
     print(f"  ✓ Correctly handled price above all levels")
     
     print("✓ Support/resistance from volume working correctly")
-    return True
 
 
 def test_empty_data_handling():
@@ -206,7 +203,6 @@ def test_empty_data_handling():
     print("  ✓ Invalid price range handled correctly")
     
     print("✓ Empty data handling working correctly")
-    return True
 
 
 def main():

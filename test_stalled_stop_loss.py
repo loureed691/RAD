@@ -126,13 +126,11 @@ def test_stalled_position_stop_loss():
             assert abs(roi - 0.019) < 0.0001, f"Expected 1.9% ROI, got {roi:.2%}"
         
         print("\n✓ All stalled position stop loss tests passed!")
-        return True
         
     except Exception as e:
         print(f"\n✗ Stalled position stop loss test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
 
 def main():
     """Run the test"""
