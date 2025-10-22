@@ -651,6 +651,9 @@ class SignalGenerator:
                 score += 8  # Good risk/reward - increased from 10
             elif risk_reward_ratio < 0.5:
                 score -= 8  # Poor risk/reward - increased penalty from -5
+        else:
+            # Negative or zero momentum - penalize low risk/reward
+            score -= 5
         
         # ENHANCED: Volume Profile Analysis (NEW)
         close = indicators.get('close', 0)

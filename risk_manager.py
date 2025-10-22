@@ -123,6 +123,73 @@ class RiskManager:
             return 0.0
         return self.total_loss / self.losses
     
+    def calculate_kelly_fraction(self, win_rate: float = None, avg_win: float = None, 
+                                 avg_loss: float = None, volatility_adj: float = 1.0) -> float:
+        """
+        Calculate optimal Kelly Criterion fraction for position sizing
+        
+        OPTIMIZATION: Uses actual performance metrics with volatility adjustment
+        
+        Formula: f = (bp - q) / b
+        where:
+            b = avg_win / avg_loss (payoff ratio)
+            p = win_rate (probability of winning)
+            q = 1 - p (probability of losing)
+            f = optimal fraction to risk
+        
+        Args:
+            win_rate: Override win rate (uses tracked if None)
+            avg_win: Override average win (uses tracked if None)
+            avg_loss: Override average loss (uses tracked if None)
+            volatility_adj: Volatility adjustment factor (higher = more conservative)
+        
+        Returns:
+            Kelly fraction (typically 0.005 to 0.03 for half-Kelly with caps)
+        """
+        # Use provided values or fall back to tracked metrics
+        p = win_rate if win_rate is not None else self.get_win_rate()
+        win = avg_win if avg_win is not None else self.get_avg_win()
+        loss = avg_loss if avg_loss is not None else self.get_avg_loss()
+        
+        # Need minimum data for reliable Kelly
+        if self.total_trades < 10:
+            return self.risk_per_trade  # Use default until enough data
+        
+        # If insufficient loss data, estimate conservatively
+        if loss == 0:
+            if win > 0:
+                loss = win * 0.6  # Conservative estimate: losses are 60% of wins
+            else:
+                return self.risk_per_trade  # Not enough data
+        
+        # Calculate payoff ratio (b)
+        b = win / loss if loss > 0 else 1.5
+        
+        # Calculate Kelly fraction: f = (bp - q) / b
+        q = 1 - p
+        f = (b * p - q) / b if b > 0 else 0
+        
+        # OPTIMIZATION: Apply half-Kelly for safety (reduces risk of ruin)
+        f = f * 0.5
+        
+        # OPTIMIZATION: Adjust for market volatility
+        # Higher volatility = reduce Kelly fraction
+        f = f / volatility_adj
+        
+        # OPTIMIZATION: Cap at reasonable bounds (0.5% to 3%)
+        # This prevents over-betting even with good historical performance
+        f = max(0.005, min(f, 0.03))
+        
+        # OPTIMIZATION: If Kelly suggests less than default risk, use Kelly
+        # If Kelly suggests more, use Kelly but with caution
+        if f < self.risk_per_trade:
+            return f  # Kelly is more conservative, use it
+        elif f > self.risk_per_trade * 1.5:
+            # Kelly is too aggressive, moderate it
+            return self.risk_per_trade * 1.2
+        else:
+            return f
+    
     def get_recent_win_rate(self) -> float:
         """Calculate win rate from recent trades"""
         if not self.recent_trades:

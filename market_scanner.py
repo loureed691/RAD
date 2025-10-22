@@ -32,6 +32,12 @@ class MarketScanner:
         
         # Thread lock for cache access to prevent race conditions
         self._cache_lock = threading.Lock()
+        
+        # OPTIMIZATION: Batch request optimization
+        self._batch_size = 50  # Process pairs in batches for better memory management
+        self._last_futures_fetch = None
+        self._cached_futures = None
+        self._futures_cache_duration = 300  # Cache futures list for 5 minutes
     
     def scan_pair(self, symbol: str) -> Tuple[str, float, str, float, Dict]:
         """
