@@ -522,7 +522,7 @@ class TradingBot:
                             entry_price=position.entry_price,
                             exit_price=exit_price,
                             side=position.side,
-                            size=position.size,
+                            size=position.amount,
                             pnl=pnl,
                             entry_time=position.entry_time,
                             exit_time=datetime.now(),
