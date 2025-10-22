@@ -824,6 +824,7 @@ class TradingBot:
         
         # Initialize timing for full cycles
         last_full_cycle = datetime.now()
+        last_memory_cleanup = datetime.now()
         
         try:
             while self.running:
@@ -836,6 +837,12 @@ class TradingBot:
                         # Run full trading cycle (includes opportunity scanning)
                         self.run_cycle()
                         last_full_cycle = datetime.now()
+                    
+                    # OPTIMIZATION: Periodic memory cleanup (every 30 minutes)
+                    time_since_cleanup = (datetime.now() - last_memory_cleanup).total_seconds()
+                    if time_since_cleanup > 1800:  # 30 minutes
+                        self._perform_memory_cleanup()
+                        last_memory_cleanup = datetime.now()
                     
                     # Very short sleep to avoid CPU hogging while staying responsive
                     # Main loop is now lightweight - heavy work delegated to background threads
@@ -854,6 +861,52 @@ class TradingBot:
         
         finally:
             self.shutdown()
+    
+    def _perform_memory_cleanup(self):
+        """
+        OPTIMIZATION: Perform periodic memory cleanup to prevent memory leaks
+        and reduce memory footprint during long-running sessions
+        """
+        try:
+            import gc
+            
+            # Clean up scanner cache
+            with self.scanner._cache_lock:
+                # Keep only recent cache entries (last 50 symbols)
+                if len(self.scanner.cache) > 50:
+                    # Sort by timestamp and keep newest 50
+                    sorted_cache = sorted(
+                        self.scanner.cache.items(),
+                        key=lambda x: x[1][1],  # x[1][1] is timestamp
+                        reverse=True
+                    )
+                    self.scanner.cache = dict(sorted_cache[:50])
+                    self.logger.debug(f"Cleaned scanner cache: {len(sorted_cache)} → 50 entries")
+            
+            # Clean up ML model training data
+            if len(self.ml_model.training_data) > 10000:
+                self.ml_model.training_data = self.ml_model.training_data[-10000:]
+                self.logger.debug("Cleaned ML training data: kept last 10,000 records")
+            
+            # Clean up analytics old equity records (keep last 7 days)
+            from datetime import timedelta
+            cutoff_time = datetime.now() - timedelta(days=7)
+            if hasattr(self.analytics, 'equity_history'):
+                original_len = len(self.analytics.equity_history)
+                self.analytics.equity_history = [
+                    (ts, equity) for ts, equity in self.analytics.equity_history
+                    if ts > cutoff_time
+                ]
+                cleaned = original_len - len(self.analytics.equity_history)
+                if cleaned > 0:
+                    self.logger.debug(f"Cleaned analytics history: removed {cleaned} old records")
+            
+            # Force garbage collection
+            collected = gc.collect()
+            self.logger.debug(f"Memory cleanup complete: {collected} objects collected")
+            
+        except Exception as e:
+            self.logger.error(f"Error during memory cleanup: {e}")
     
     def shutdown(self):
         """Clean shutdown of the bot"""
