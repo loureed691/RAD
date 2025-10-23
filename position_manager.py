@@ -1273,36 +1273,52 @@ class PositionManager:
                 self.position_logger.debug(f"  Leverage: {position.leverage}x")
                 self.position_logger.debug(f"  Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
                 
-                # Get current price with retry logic - NEVER skip position monitoring
+                # Get current price with aggressive retry logic - NEVER skip position monitoring
                 current_price = None
                 ticker = None
                 
-                # Try to get ticker with retries (max 3 attempts)
-                for attempt in range(3):
+                # CRITICAL FIX: Increase retries to 10 with longer backoff times
+                # Position monitoring is CRITICAL for stop loss protection - we must be persistent
+                # Retry schedule: 1s, 2s, 3s, 5s, 8s, 10s, 15s, 20s, 25s, 30s (total ~119s)
+                max_retries = 10
+                retry_delays = [1, 2, 3, 5, 8, 10, 15, 20, 25, 30]
+                
+                for attempt in range(max_retries):
                     try:
                         ticker = self.client.get_ticker(symbol)
                         if ticker:
                             current_price = ticker.get('last')
                             if current_price and current_price > 0:
+                                # Success! Log if it took multiple attempts
+                                if attempt > 0:
+                                    self.position_logger.info(f"  ✓ Price fetched successfully on attempt {attempt + 1}")
                                 break  # Got valid price, exit retry loop
                             else:
-                                self.position_logger.debug(f"  Attempt {attempt + 1}: Invalid price in ticker: {current_price}")
+                                self.position_logger.debug(f"  Attempt {attempt + 1}/{max_retries}: Invalid price in ticker: {current_price}")
                         else:
-                            self.position_logger.debug(f"  Attempt {attempt + 1}: API returned None")
+                            self.position_logger.debug(f"  Attempt {attempt + 1}/{max_retries}: API returned None")
                     except Exception as e:
-                        self.position_logger.debug(f"  Attempt {attempt + 1}: API error: {type(e).__name__}")
+                        self.position_logger.debug(f"  Attempt {attempt + 1}/{max_retries}: API error: {type(e).__name__}: {str(e)[:100]}")
                     
-                    # Wait before retry (exponential backoff: 0.5s, 1s, 2s)
-                    if attempt < 2:  # Don't wait after last attempt
-                        time.sleep(0.5 * (2 ** attempt))
+                    # Wait before retry with increasing delays
+                    if attempt < max_retries - 1:  # Don't wait after last attempt
+                        delay = retry_delays[attempt]
+                        # Add small jitter (±20%) to avoid thundering herd
+                        import random
+                        jitter = delay * random.uniform(0.8, 1.2)
+                        self.position_logger.debug(f"  Waiting {jitter:.1f}s before retry {attempt + 2}...")
+                        time.sleep(jitter)
                 
                 # CRITICAL FIX: If all retries failed, skip this update cycle
                 # Using entry_price as fallback is DANGEROUS because it prevents stop losses from triggering
                 # Better to skip one cycle and retry on next iteration than to use stale data
                 if not current_price or current_price <= 0:
-                    self.logger.warning(f"All ticker retries failed for {symbol}, skipping position update this cycle")
-                    self.position_logger.warning(f"  ⚠ API failed to fetch price - SKIPPING update to avoid using stale data")
-                    self.position_logger.warning(f"  ⚠ Stop loss protection: Will retry on next cycle")
+                    self.logger.error(
+                        f"❌ CRITICAL: All {max_retries} ticker retries failed for {symbol}! "
+                        f"Skipping position update this cycle. Position monitoring will resume on next cycle."
+                    )
+                    self.position_logger.warning(f"  ⚠ API failed after {max_retries} attempts - SKIPPING update to avoid using stale data")
+                    self.position_logger.warning(f"  ⚠ Stop loss protection: Will retry persistently on next cycle")
                     continue  # Skip this position and try again next cycle
                 
                 self.position_logger.info(f"  Current Price: {format_price(current_price)}")
