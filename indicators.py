@@ -12,10 +12,6 @@ from ta.volatility import BollingerBands, AverageTrueRange
 class Indicators:
     """Calculate technical indicators for trading"""
     
-    # Class-level cache for indicator calculations
-    _indicator_cache = {}
-    _cache_max_size = 100
-    
     @staticmethod
     def calculate_all(ohlcv_data: List) -> pd.DataFrame:
         """
