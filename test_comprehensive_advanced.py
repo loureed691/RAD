@@ -36,8 +36,8 @@ def test_neural_network():
         X_train = np.random.randn(100, 31)
         y_train = np.random.randint(0, 3, 100)
         
-        # Test training
-        success = nn_model.train(X_train, y_train, epochs=5, batch_size=16)
+        # Test training (reduced epochs for faster testing)
+        success = nn_model.train(X_train, y_train, epochs=2, batch_size=16)
         if success:
             print("✓ Neural network training successful")
         else:

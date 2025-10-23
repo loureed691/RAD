@@ -39,6 +39,7 @@ def test_limit_order_with_post_only():
             mock_exchange.set_leverage = Mock()
             mock_exchange.load_markets = Mock(return_value={
                 'BTC-USDT': {
+                    'active': True,
                     'limits': {
                         'amount': {'min': 1, 'max': 10000},
                         'cost': {'min': 10, 'max': 1000000}
@@ -85,6 +86,7 @@ def test_limit_order_with_reduce_only():
             mock_exchange.set_leverage = Mock()
             mock_exchange.load_markets = Mock(return_value={
                 'BTC-USDT': {
+                    'active': True,
                     'limits': {
                         'amount': {'min': 1, 'max': 10000},
                         'cost': {'min': 10, 'max': 1000000}
@@ -130,6 +132,7 @@ def test_stop_limit_order_creation():
             mock_exchange.set_leverage = Mock()
             mock_exchange.load_markets = Mock(return_value={
                 'BTC-USDT': {
+                    'active': True,
                     'limits': {
                         'amount': {'min': 1, 'max': 10000},
                         'cost': {'min': 10, 'max': 1000000}
@@ -278,6 +281,7 @@ def test_market_order_with_depth_check():
             mock_exchange.set_leverage = Mock()
             mock_exchange.load_markets = Mock(return_value={
                 'BTC-USDT': {
+                    'active': True,
                     'limits': {
                         'amount': {'min': 1, 'max': 10000},
                         'cost': {'min': 10, 'max': 1000000}
@@ -342,6 +346,7 @@ def test_position_scaling_in():
             mock_exchange.set_leverage = Mock()
             mock_exchange.load_markets = Mock(return_value={
                 'BTC-USDT': {
+                    'active': True,
                     'limits': {
                         'amount': {'min': 1, 'max': 10000},
                         'cost': {'min': 10, 'max': 1000000}
@@ -412,6 +417,7 @@ def test_position_scaling_out():
             mock_exchange.set_leverage = Mock()
             mock_exchange.load_markets = Mock(return_value={
                 'BTC-USDT': {
+                    'active': True,
                     'limits': {
                         'amount': {'min': 1, 'max': 10000},
                         'cost': {'min': 10, 'max': 1000000}
