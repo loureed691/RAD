@@ -6,6 +6,19 @@ All notable changes to the RAD KuCoin Futures Trading Bot will be documented in 
 
 ### Changed
 
+#### Time-Based Exit Removal (2025-10-23)
+- **Removed Time-Based Trade Closures**: Eliminated the 4-hour time limit for position exits
+  - Previously: Positions would close after 4 hours if ROI was below 2%
+  - Now: Trades can stay open indefinitely based solely on market conditions
+  - **Impact**: Positions are no longer forced to close due to time constraints
+  - **Files**: `position_manager.py`, `test_stalled_stop_loss.py`, `verify_no_time_limit.py`
+  - **Exit Conditions**: Trades now only close based on:
+    - Stop loss triggers
+    - Take profit targets
+    - Emergency stops (risk management at -15%, -25%, -40% ROI)
+    - Market-based exit conditions
+  - **Testing**: All existing tests updated and pass; new verification script added
+
 #### Repository Cleanup (2025-10-12)
 - **Documentation Cleanup**: Removed 17 outdated summary, report, and verification files
   - Removed: BOT_REVIEW_REPORT.md, BUG_FIX_REPORT.md, CHANGES_SUMMARY.md, CLEANUP_COMPLETE.md
