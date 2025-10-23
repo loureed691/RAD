@@ -1234,6 +1234,9 @@ class PositionManager:
             fast_mode: If True, only checks critical exit conditions (stop loss, take profit)
                       without fetching OHLCV or updating adaptive parameters. Use for frequent
                       checks to catch exit opportunities quickly while minimizing API calls.
+        
+        Yields:
+            tuple: (symbol, pnl, position) for each position that is closed during the update.
         """
         # Get a thread-safe snapshot of positions to iterate over
         with self._positions_lock:
