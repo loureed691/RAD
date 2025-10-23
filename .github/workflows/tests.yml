@@ -11,6 +11,8 @@ jobs:
   unit-integration:
     name: Unit & Integration Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         python-version: ['3.11', '3.12']
@@ -49,6 +51,8 @@ jobs:
   resilience:
     name: Resilience Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
       - name: Checkout code
@@ -72,6 +76,8 @@ jobs:
   lint:
     name: Code Quality
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
       - name: Checkout code
