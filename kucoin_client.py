@@ -252,21 +252,26 @@ class KuCoinClient:
                 
             except ccxt.RateLimitExceeded as e:
                 last_exception = e
-                # Calculate backoff delay
+                # Calculate backoff delay with jitter to prevent thundering herd
+                import random
                 base_delay = 1  # Base delay in seconds
                 if exponential_backoff:
                     delay = (2 ** attempt) * base_delay  # 1s, 2s, 4s, 8s...
                 else:
                     delay = base_delay  # Fixed 1s delay
                 
+                # Add jitter: ±20% randomness to spread out retry attempts
+                jitter = delay * 0.2 * (2 * random.random() - 1)  # -20% to +20%
+                delay = delay + jitter
+                
                 # Cap maximum delay at 30 seconds
-                delay = min(delay, 30)
+                delay = min(max(delay, 0.1), 30)  # Ensure delay >= 0.1s
                 
                 if attempt < effective_retries - 1:
                     self.logger.warning(
                         f"Rate limit exceeded for {operation_name} "
                         f"(attempt {attempt + 1}/{effective_retries}). "
-                        f"Waiting {delay}s before retry... Error: {str(e)}"
+                        f"Waiting {delay:.2f}s before retry... Error: {str(e)}"
                     )
                     time.sleep(delay)
                 else:
@@ -308,19 +313,24 @@ class KuCoinClient:
                 
             except ccxt.NetworkError as e:
                 last_exception = e
-                # Retry for network errors
+                # Retry for network errors with jitter
+                import random
                 if exponential_backoff:
                     delay = (2 ** attempt)
                 else:
                     delay = 2
+                
+                # Add jitter: ±20% randomness
+                jitter = delay * 0.2 * (2 * random.random() - 1)
+                delay = delay + jitter
                     
-                delay = min(delay, 30)
+                delay = min(max(delay, 0.1), 30)  # 0.1s to 30s
                 
                 if attempt < effective_retries - 1:
                     self.logger.warning(
                         f"Network error for {operation_name} "
                         f"(attempt {attempt + 1}/{effective_retries}). "
-                        f"Waiting {delay}s before retry... Error: {str(e)}"
+                        f"Waiting {delay:.2f}s before retry... Error: {str(e)}"
                     )
                     time.sleep(delay)
                 else:
@@ -669,17 +679,67 @@ class KuCoinClient:
             self.logger.error(f"Error fetching market limits for {symbol}: {e}")
             return None
     
+    def _round_to_precision(self, value: float, precision: Optional[int]) -> float:
+        """
+        Round value to specified decimal precision
+        
+        Args:
+            value: Value to round
+            precision: Number of decimal places (None means no rounding)
+            
+        Returns:
+            Rounded value
+        """
+        if precision is None or precision < 0:
+            return value
+        
+        try:
+            # Use decimal for precise rounding
+            from decimal import Decimal, ROUND_DOWN
+            decimal_value = Decimal(str(value))
+            quantizer = Decimal(10) ** -precision
+            rounded = decimal_value.quantize(quantizer, rounding=ROUND_DOWN)
+            return float(rounded)
+        except Exception as e:
+            self.logger.debug(f"Error rounding to precision: {e}, returning original value")
+            return value
+    
+    def _round_to_step_size(self, value: float, step_size: Optional[float]) -> float:
+        """
+        Round value down to nearest step size (lot size / tick size)
+        
+        Args:
+            value: Value to round
+            step_size: Step size (e.g., 0.001 for price, 1 for contracts)
+            
+        Returns:
+            Value rounded to step size
+        """
+        if step_size is None or step_size <= 0:
+            return value
+        
+        try:
+            # Round down to nearest multiple of step_size
+            import math
+            rounded = math.floor(value / step_size) * step_size
+            return rounded
+        except Exception as e:
+            self.logger.debug(f"Error rounding to step size: {e}, returning original value")
+            return value
+    
     def validate_and_cap_amount(self, symbol: str, amount: float) -> float:
-        """Validate and cap order amount to exchange limits
+        """Validate and cap order amount to exchange limits with proper precision
         
         Args:
             symbol: Trading pair symbol
             amount: Desired order amount in contracts
             
         Returns:
-            Validated amount capped at exchange limits
+            Validated amount capped at exchange limits and rounded to precision
         """
         limits = self.get_market_limits(symbol)
+        metadata = self.get_cached_symbol_metadata(symbol)
+        
         if not limits:
             # If we can't get limits, apply a conservative default cap
             # KuCoin typically has a 10,000 contract limit
@@ -691,6 +751,13 @@ class KuCoinClient:
                 )
                 return default_max
             return amount
+        
+        # Round to amount precision first (before min/max checks)
+        if metadata:
+            amount_precision = metadata.get('amount_precision')
+            if amount_precision is not None:
+                amount = self._round_to_precision(amount, amount_precision)
+                self.logger.debug(f"Rounded amount to {amount_precision} decimals: {amount}")
         
         # Check minimum
         min_amount = limits['amount']['min']

@@ -191,19 +191,35 @@ class KuCoinWebSocket:
         self.logger.error(f"WebSocket error: {error}")
     
     def _on_close(self, ws, close_status_code, close_msg):
-        """Handle WebSocket connection closed"""
+        """Handle WebSocket connection closed with exponential backoff"""
         self.connected = False
         self.logger.warning(f"WebSocket connection closed: {close_status_code} - {close_msg}")
         
         # Attempt reconnection if enabled
         if self.should_reconnect:
-            self.logger.info("Attempting to reconnect WebSocket in 5 seconds...")
-            time.sleep(5)
-            try:
-                self.connect()
-            except Exception as e:
-                self.logger.error(f"Failed to reconnect WebSocket: {e}")
-                # Will retry on next _on_close call if reconnection fails
+            # Exponential backoff with jitter for reconnection
+            import random
+            max_attempts = 5
+            base_delay = 2  # Start with 2 seconds
+            
+            for attempt in range(max_attempts):
+                # Calculate delay: 2s, 4s, 8s, 16s, 32s with ±20% jitter
+                delay = min((2 ** attempt) * base_delay, 60)  # Cap at 60s
+                jitter = delay * 0.2 * (2 * random.random() - 1)
+                delay = max(delay + jitter, 0.5)  # Minimum 0.5s
+                
+                self.logger.info(f"Attempting to reconnect WebSocket (attempt {attempt + 1}/{max_attempts}) in {delay:.1f}s...")
+                time.sleep(delay)
+                
+                try:
+                    self.connect()
+                    if self.connected:
+                        self.logger.info(f"✅ WebSocket reconnected successfully after {attempt + 1} attempt(s)")
+                        return
+                except Exception as e:
+                    self.logger.error(f"Failed to reconnect WebSocket (attempt {attempt + 1}): {e}")
+                    
+            self.logger.error(f"❌ Failed to reconnect WebSocket after {max_attempts} attempts")
     
     def _start_ping(self):
         """Start ping thread to keep connection alive"""

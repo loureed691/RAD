@@ -119,6 +119,29 @@ class SignalGenerator:
             self.logger.debug(f"Error detecting divergence: {e}")
             return {'rsi_divergence': None, 'macd_divergence': None, 'strength': 0.0}
     
+    def _safe_get_float(self, indicators: Dict, key: str, default: float = 0.0) -> float:
+        """
+        Safely get float value from indicators dict, handling NaN/Inf
+        
+        Args:
+            indicators: Dictionary of indicators
+            key: Key to retrieve
+            default: Default value if key missing or invalid
+            
+        Returns:
+            Safe float value
+        """
+        value = indicators.get(key, default)
+        
+        # Guard against NaN and Inf
+        if not isinstance(value, (int, float)):
+            return default
+        
+        if np.isnan(value) or np.isinf(value):
+            return default
+        
+        return float(value)
+    
     def calculate_confluence_score(self, indicators: Dict, signal: str) -> float:
         """
         Calculate confluence score - how many signals align
@@ -132,35 +155,40 @@ class SignalGenerator:
         aligned_signals = 0
         total_signals = 0
         
-        # Check trend alignment
+        # Check trend alignment (with NaN guards)
         total_signals += 1
-        if signal == 'BUY' and indicators.get('ema_12', 0) > indicators.get('ema_26', 0):
+        ema_12 = self._safe_get_float(indicators, 'ema_12', 0)
+        ema_26 = self._safe_get_float(indicators, 'ema_26', 0)
+        if signal == 'BUY' and ema_12 > ema_26:
             aligned_signals += 1
-        elif signal == 'SELL' and indicators.get('ema_12', 0) < indicators.get('ema_26', 0):
+        elif signal == 'SELL' and ema_12 < ema_26:
             aligned_signals += 1
         
         # Check momentum
         total_signals += 1
-        momentum = indicators.get('momentum', 0)
+        momentum = self._safe_get_float(indicators, 'momentum', 0)
         if (signal == 'BUY' and momentum > 0) or (signal == 'SELL' and momentum < 0):
             aligned_signals += 1
         
         # Check RSI
         total_signals += 1
-        rsi = indicators.get('rsi', 50)
+        rsi = self._safe_get_float(indicators, 'rsi', 50)
         if (signal == 'BUY' and rsi < 50) or (signal == 'SELL' and rsi > 50):
             aligned_signals += 1
         
         # Check MACD
         total_signals += 1
-        if signal == 'BUY' and indicators.get('macd', 0) > indicators.get('macd_signal', 0):
+        macd = self._safe_get_float(indicators, 'macd', 0)
+        macd_signal = self._safe_get_float(indicators, 'macd_signal', 0)
+        if signal == 'BUY' and macd > macd_signal:
             aligned_signals += 1
-        elif signal == 'SELL' and indicators.get('macd', 0) < indicators.get('macd_signal', 0):
+        elif signal == 'SELL' and macd < macd_signal:
             aligned_signals += 1
         
         # Check volume confirmation
         total_signals += 1
-        if indicators.get('volume_ratio', 0) > 1.2:
+        volume_ratio = self._safe_get_float(indicators, 'volume_ratio', 0)
+        if volume_ratio > 1.2:
             aligned_signals += 1
         
         return aligned_signals / total_signals if total_signals > 0 else 0.0
@@ -175,21 +203,25 @@ class SignalGenerator:
         if df.empty or len(df) < 20:
             return 'neutral'
         
-        indicators = Indicators.get_latest_indicators(df)
-        
-        # Use ADX-like logic with ATR and momentum
-        volatility = indicators.get('bb_width', 0)
-        momentum = abs(indicators.get('momentum', 0))
-        roc = abs(indicators.get('roc', 0))
-        
-        # Strong trend indicators
-        if momentum > 0.03 or roc > 3.0:
-            return 'trending'
-        # Low volatility and momentum = ranging
-        elif volatility < 0.02 and momentum < 0.01:
-            return 'ranging'
-        
-        return 'neutral'
+        try:
+            indicators = Indicators.get_latest_indicators(df)
+            
+            # Use ADX-like logic with ATR and momentum (with NaN guards)
+            volatility = self._safe_get_float(indicators, 'bb_width', 0)
+            momentum = abs(self._safe_get_float(indicators, 'momentum', 0))
+            roc = abs(self._safe_get_float(indicators, 'roc', 0))
+            
+            # Strong trend indicators
+            if momentum > 0.03 or roc > 3.0:
+                return 'trending'
+            # Low volatility and momentum = ranging
+            elif volatility < 0.02 and momentum < 0.01:
+                return 'ranging'
+            
+            return 'neutral'
+        except Exception as e:
+            self.logger.debug(f"Error detecting market regime: {e}")
+            return 'neutral'
     
     def analyze_multi_timeframe(self, df_1h: pd.DataFrame, df_4h: pd.DataFrame = None, 
                                df_1d: pd.DataFrame = None) -> Dict:
