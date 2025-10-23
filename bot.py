@@ -486,14 +486,20 @@ class TradingBot:
         
         return success
     
-    def update_open_positions(self):
-        """Update existing open positions - called frequently for live monitoring"""
+    def update_open_positions(self, fast_mode: bool = False):
+        """Update existing open positions - called frequently for live monitoring
+        
+        Args:
+            fast_mode: If True, only checks critical exit conditions (stop loss, take profit)
+                      without fetching OHLCV or updating adaptive parameters. Use for frequent
+                      checks to catch exit opportunities quickly while minimizing API calls.
+        """
         # Update existing positions
         # CRITICAL FIX: Wrap generator iteration in try/except to handle generator exceptions
         # Without this, if update_positions() raises during iteration (e.g., API errors),
         # the entire update_open_positions() call fails and NO positions get updated
         try:
-            for symbol, pnl, position in self.position_manager.update_positions():
+            for symbol, pnl, position in self.position_manager.update_positions(fast_mode=fast_mode):
                 try:
                     profit_icon = "📈" if pnl > 0 else "📉"
                     self.logger.info(f"{profit_icon} Position closed: {symbol}, P/L: {pnl:.2%}")
@@ -537,13 +543,14 @@ class TradingBot:
                     except Exception as e:
                         self.logger.debug(f"Error recording 2026 metrics: {e}")
                     
-                    # Record outcome for ML model
-                    ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
-                    df = Indicators.calculate_all(ohlcv)
-                    indicators = Indicators.get_latest_indicators(df)
-                    
-                    signal = 'BUY' if position.side == 'long' else 'SELL'
-                    self.ml_model.record_outcome(indicators, signal, pnl)
+                    # Record outcome for ML model (skip in fast mode to save time)
+                    if not fast_mode:
+                        ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
+                        df = Indicators.calculate_all(ohlcv)
+                        indicators = Indicators.get_latest_indicators(df)
+                        
+                        signal = 'BUY' if position.side == 'long' else 'SELL'
+                        self.ml_model.record_outcome(indicators, signal, pnl)
                     
                     # Record outcome for risk manager (for streak tracking)
                     self.risk_manager.record_trade_outcome(pnl)
@@ -614,20 +621,36 @@ class TradingBot:
         """Dedicated thread for monitoring positions - runs independently of scanning"""
         self.logger.info("👁️ Position monitor thread started")
         
+        # Track last full update time separately from fast checks
+        last_full_update = datetime.now()
+        
         while self._position_monitor_running:
             try:
                 # Only update if we have positions
                 if self.position_manager.get_open_positions_count() > 0:
+                    current_time = datetime.now()
+                    
                     # Thread-safe access to timing variable
                     with self._position_monitor_lock:
-                        time_since_last = (datetime.now() - self._last_position_check).total_seconds()
+                        time_since_last_check = (current_time - self._last_position_check).total_seconds()
                     
-                    # Update positions at configured interval
-                    if time_since_last >= Config.POSITION_UPDATE_INTERVAL:
-                        self.update_open_positions()
-                        # Thread-safe update of timing variable
+                    time_since_full_update = (current_time - last_full_update).total_seconds()
+                    
+                    # Fast check mode: Very frequent checks for critical exits only (stop loss, take profit)
+                    # This is lightweight and doesn't fetch OHLCV or update adaptive parameters
+                    if time_since_last_check >= Config.POSITION_FAST_CHECK_INTERVAL:
+                        # Decide whether to do fast or full update
+                        use_fast_mode = time_since_full_update < Config.POSITION_UPDATE_INTERVAL
+                        
+                        self.update_open_positions(fast_mode=use_fast_mode)
+                        
+                        # Update timing
                         with self._position_monitor_lock:
-                            self._last_position_check = datetime.now()
+                            self._last_position_check = current_time
+                        
+                        # If we did a full update, record that too
+                        if not use_fast_mode:
+                            last_full_update = current_time
                 
                 # Short sleep to avoid CPU hogging but stay responsive
                 time.sleep(Config.LIVE_LOOP_INTERVAL)  # Use config constant for consistency
@@ -791,7 +814,8 @@ class TradingBot:
         self.logger.info("=" * 60)
         self.logger.info(f"⏱️  Opportunity scan interval: {Config.CHECK_INTERVAL}s")
         self.logger.info(f"⚡ Position monitoring: DEDICATED THREAD (independent of scanning)")
-        self.logger.info(f"🔥 Position update throttle: {Config.POSITION_UPDATE_INTERVAL}s minimum between API calls")
+        self.logger.info(f"🔥 Position full update interval: {Config.POSITION_UPDATE_INTERVAL}s")
+        self.logger.info(f"⚡ Position fast check interval: {Config.POSITION_FAST_CHECK_INTERVAL}s (critical exits only)")
         self.logger.info(f"📊 Max positions: {Config.MAX_OPEN_POSITIONS}")
         self.logger.info(f"💪 Leverage: {Config.LEVERAGE}x")
         self.logger.info(f"⚙️  Parallel workers: {Config.MAX_WORKERS} (market scanning)")

@@ -1227,16 +1227,23 @@ class PositionManager:
             self.position_logger.info(f"{'='*80}\n")
             return None
     
-    def update_positions(self):
-        """Update all positions and manage trailing stops with adaptive parameters"""
+    def update_positions(self, fast_mode: bool = False):
+        """Update all positions and manage trailing stops with adaptive parameters
+        
+        Args:
+            fast_mode: If True, only checks critical exit conditions (stop loss, take profit)
+                      without fetching OHLCV or updating adaptive parameters. Use for frequent
+                      checks to catch exit opportunities quickly while minimizing API calls.
+        """
         # Get a thread-safe snapshot of positions to iterate over
         with self._positions_lock:
             positions_snapshot = list(self.positions.keys())
             position_count = len(self.positions)
         
         if position_count > 0:
+            mode_label = "FAST CHECK" if fast_mode else "FULL UPDATE"
             self.position_logger.info(f"\n{'='*80}")
-            self.position_logger.info(f"UPDATING {position_count} OPEN POSITION(S) - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            self.position_logger.info(f"{mode_label}: {position_count} OPEN POSITION(S) - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             self.position_logger.info(f"{'='*80}")
         
         for symbol in positions_snapshot:
@@ -1249,57 +1256,85 @@ class PositionManager:
                     position = self.positions[symbol]
                 
                 self.position_logger.info(f"\n--- Position: {symbol} ({position.side.upper()}) ---")
-                self.position_logger.debug(f"  Entry Price: {format_price(position.entry_price)}")
-                self.position_logger.debug(f"  Amount: {position.amount:.4f} contracts")
-                self.position_logger.debug(f"  Leverage: {position.leverage}x")
-                self.position_logger.debug(f"  Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                if not fast_mode:
+                    self.position_logger.debug(f"  Entry Price: {format_price(position.entry_price)}")
+                    self.position_logger.debug(f"  Amount: {position.amount:.4f} contracts")
+                    self.position_logger.debug(f"  Leverage: {position.leverage}x")
+                    self.position_logger.debug(f"  Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
                 
-                # Get current price with retry logic - NEVER skip position monitoring
+                # Get current price - in fast mode, use single attempt without retries
                 current_price = None
                 ticker = None
                 
-                # Try to get ticker with retries (max 3 attempts)
-                for attempt in range(3):
+                if fast_mode:
+                    # Fast mode: Single API call, no retries
                     try:
                         ticker = self.client.get_ticker(symbol)
                         if ticker:
                             current_price = ticker.get('last')
-                            if current_price and current_price > 0:
-                                break  # Got valid price, exit retry loop
-                            else:
-                                self.position_logger.debug(f"  Attempt {attempt + 1}: Invalid price in ticker: {current_price}")
-                        else:
-                            self.position_logger.debug(f"  Attempt {attempt + 1}: API returned None")
                     except Exception as e:
-                        self.position_logger.debug(f"  Attempt {attempt + 1}: API error: {type(e).__name__}")
+                        self.position_logger.debug(f"  Fast check: API error: {type(e).__name__}")
                     
-                    # Wait before retry (exponential backoff: 0.5s, 1s, 2s)
-                    if attempt < 2:  # Don't wait after last attempt
-                        time.sleep(0.5 * (2 ** attempt))
-                
-                # CRITICAL FIX: If all retries failed, skip this update cycle
-                # Using entry_price as fallback is DANGEROUS because it prevents stop losses from triggering
-                # Better to skip one cycle and retry on next iteration than to use stale data
-                if not current_price or current_price <= 0:
-                    self.logger.warning(f"All ticker retries failed for {symbol}, skipping position update this cycle")
-                    self.position_logger.warning(f"  ⚠ API failed to fetch price - SKIPPING update to avoid using stale data")
-                    self.position_logger.warning(f"  ⚠ Stop loss protection: Will retry on next cycle")
-                    continue  # Skip this position and try again next cycle
+                    # Skip position if no price available in fast mode
+                    if not current_price or current_price <= 0:
+                        continue
+                else:
+                    # Full mode: Retry logic for reliability
+                    # Try to get ticker with retries (max 3 attempts)
+                    for attempt in range(3):
+                        try:
+                            ticker = self.client.get_ticker(symbol)
+                            if ticker:
+                                current_price = ticker.get('last')
+                                if current_price and current_price > 0:
+                                    break  # Got valid price, exit retry loop
+                                else:
+                                    self.position_logger.debug(f"  Attempt {attempt + 1}: Invalid price in ticker: {current_price}")
+                            else:
+                                self.position_logger.debug(f"  Attempt {attempt + 1}: API returned None")
+                        except Exception as e:
+                            self.position_logger.debug(f"  Attempt {attempt + 1}: API error: {type(e).__name__}")
+                        
+                        # Wait before retry (exponential backoff: 0.5s, 1s, 2s)
+                        if attempt < 2:  # Don't wait after last attempt
+                            time.sleep(0.5 * (2 ** attempt))
+                    
+                    # CRITICAL FIX: If all retries failed, skip this update cycle
+                    # Using entry_price as fallback is DANGEROUS because it prevents stop losses from triggering
+                    # Better to skip one cycle and retry on next iteration than to use stale data
+                    if not current_price or current_price <= 0:
+                        self.logger.warning(f"All ticker retries failed for {symbol}, skipping position update this cycle")
+                        self.position_logger.warning(f"  ⚠ API failed to fetch price - SKIPPING update to avoid using stale data")
+                        self.position_logger.warning(f"  ⚠ Stop loss protection: Will retry on next cycle")
+                        continue  # Skip this position and try again next cycle
                 
                 self.position_logger.info(f"  Current Price: {format_price(current_price)}")
                 
                 # Calculate current P/L (with leverage for accurate ROI)
                 current_pnl = position.get_pnl(current_price)  # Base price change %
                 leveraged_pnl = position.get_leveraged_pnl(current_price)  # Actual ROI %
-                position_value = position.amount * position.entry_price
-                pnl_usd = current_pnl * position_value * position.leverage  # USD P/L with leverage
                 
-                self.position_logger.info(f"  Current P/L: {leveraged_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
-                self.position_logger.debug(f"  Stop Loss: {format_price(position.stop_loss)}")
-                self.position_logger.debug(f"  Take Profit: {format_price(position.take_profit)}")
-                self.position_logger.debug(f"  Max Favorable Excursion: {position.max_favorable_excursion:.2%}")
+                if not fast_mode:
+                    position_value = position.amount * position.entry_price
+                    pnl_usd = current_pnl * position_value * position.leverage  # USD P/L with leverage
+                    self.position_logger.info(f"  Current P/L: {leveraged_pnl:+.2%} ({format_pnl_usd(pnl_usd)})")
+                    self.position_logger.debug(f"  Stop Loss: {format_price(position.stop_loss)}")
+                    self.position_logger.debug(f"  Take Profit: {format_price(position.take_profit)}")
+                    self.position_logger.debug(f"  Max Favorable Excursion: {position.max_favorable_excursion:.2%}")
                 
-                # Get market data for adaptive parameters with better error handling
+                # In fast mode, only check critical exit conditions without updating adaptive parameters
+                if fast_mode:
+                    # Quick check for stop loss and take profit
+                    should_close, reason = position.should_close(current_price)
+                    if should_close:
+                        self.position_logger.info(f"  ✓ Closing position: {reason}")
+                        pnl = self.close_position(symbol, reason)
+                        if pnl is not None:
+                            yield symbol, pnl, position
+                    # Skip the expensive OHLCV/indicator calculations
+                    continue
+                
+                # Full mode: Get market data for adaptive parameters with better error handling
                 try:
                     ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
                 except Exception as e:
