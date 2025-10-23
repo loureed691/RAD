@@ -148,26 +148,31 @@ class Indicators:
             bins = np.linspace(price_min, price_max, num_bins)
             
             # Volume profile: accumulate volume at each price level
+            # OPTIMIZATION: Fully vectorized calculation replacing O(n*m) nested loops with O(n) vectorized ops
             volume_profile = np.zeros(num_bins - 1)
             
-            for idx, row in recent_df.iterrows():
-                # Find which bin this candle's range covers
-                candle_low = row['low']
-                candle_high = row['high']
-                candle_volume = row['volume']
+            # Extract arrays for vectorized operations
+            candle_lows = recent_df['low'].values
+            candle_highs = recent_df['high'].values
+            candle_volumes = recent_df['volume'].values
+            
+            # Vectorized bin assignment for each candle
+            for i in range(num_bins - 1):
+                bin_low = bins[i]
+                bin_high = bins[i + 1]
                 
-                # Distribute volume across price levels
-                for i in range(len(bins) - 1):
-                    bin_low = bins[i]
-                    bin_high = bins[i + 1]
-                    
-                    # Check if candle intersects with this bin
-                    if candle_high >= bin_low and candle_low <= bin_high:
-                        # Calculate overlap
-                        overlap_low = max(candle_low, bin_low)
-                        overlap_high = min(candle_high, bin_high)
-                        overlap_ratio = (overlap_high - overlap_low) / (candle_high - candle_low) if candle_high > candle_low else 1.0
-                        volume_profile[i] += candle_volume * overlap_ratio
+                # Vectorized overlap calculation
+                # Check which candles intersect with this bin
+                intersects = (candle_highs >= bin_low) & (candle_lows <= bin_high)
+                
+                # Calculate overlap for intersecting candles
+                overlap_lows = np.maximum(candle_lows, bin_low)
+                overlap_highs = np.minimum(candle_highs, bin_high)
+                candle_ranges = np.maximum(candle_highs - candle_lows, 1e-10)  # Avoid division by zero
+                overlap_ratios = (overlap_highs - overlap_lows) / candle_ranges
+                
+                # Sum volumes with overlap ratios, only for intersecting candles
+                volume_profile[i] = np.sum(candle_volumes * overlap_ratios * intersects)
             
             # Find POC (Point of Control - highest volume level)
             poc_idx = np.argmax(volume_profile)

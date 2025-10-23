@@ -68,24 +68,32 @@ class BacktestEngine:
         try:
             self.logger.info(f"Starting backtest with {len(data)} candles")
             
-            for idx, row in data.iterrows():
+            # OPTIMIZATION: Use itertuples() instead of iterrows() for 10-100x speedup
+            # itertuples() returns named tuples which are much faster than row objects
+            for row_tuple in data.itertuples():
+                # Access fields by name from namedtuple
+                close_price = row_tuple.close
+                timestamp = getattr(row_tuple, 'timestamp', row_tuple.Index)
+                
                 # Update equity curve
-                current_equity = self.calculate_equity(row['close'])
+                current_equity = self.calculate_equity(close_price)
                 self.equity_curve.append({
-                    'timestamp': row.get('timestamp', idx),
+                    'timestamp': timestamp,
                     'balance': self.balance,
                     'equity': current_equity
                 })
                 
                 # Check for position exits first
-                self.check_exits(row)
+                # Convert namedtuple back to dict-like object for compatibility
+                row_dict = row_tuple._asdict()
+                self.check_exits(row_dict)
                 
                 # Get signal from strategy
-                signal = strategy_func(row, self.balance, self.positions)
+                signal = strategy_func(row_dict, self.balance, self.positions)
                 
                 # Execute signal
                 if signal and signal != 'HOLD':
-                    self.execute_signal(signal, row)
+                    self.execute_signal(signal, row_dict)
             
             # Close any remaining positions at end
             if self.positions:
@@ -373,7 +381,8 @@ class BacktestEngine:
                     'sharpe_ratio': 0,
                     'total_trading_fees': 0,
                     'total_funding_fees': 0,
-                    'total_fees': 0
+                    'total_fees': 0,
+                    'fee_impact_pct': 0
                 }
             
             total_trades = len(self.closed_trades)
