@@ -1,7 +1,6 @@
 """
 Position management with trailing stop loss
 """
-import time
 import threading
 import pandas as pd
 from typing import Dict, Optional, Tuple
@@ -1273,34 +1272,23 @@ class PositionManager:
                 self.position_logger.debug(f"  Leverage: {position.leverage}x")
                 self.position_logger.debug(f"  Entry Time: {position.entry_time.strftime('%Y-%m-%d %H:%M:%S')}")
                 
-                # Get current price with retry logic - NEVER skip position monitoring
-                current_price = None
+                # Get current price - get_ticker() has built-in retry logic
+                # Don't add extra retries here as it causes redundant API calls
                 ticker = None
+                current_price = None
                 
-                # Try to get ticker with retries (max 3 attempts)
-                for attempt in range(3):
-                    try:
-                        ticker = self.client.get_ticker(symbol)
-                        if ticker:
-                            current_price = ticker.get('last')
-                            if current_price and current_price > 0:
-                                break  # Got valid price, exit retry loop
-                            else:
-                                self.position_logger.debug(f"  Attempt {attempt + 1}: Invalid price in ticker: {current_price}")
-                        else:
-                            self.position_logger.debug(f"  Attempt {attempt + 1}: API returned None")
-                    except Exception as e:
-                        self.position_logger.debug(f"  Attempt {attempt + 1}: API error: {type(e).__name__}")
-                    
-                    # Wait before retry (exponential backoff: 0.5s, 1s, 2s)
-                    if attempt < 2:  # Don't wait after last attempt
-                        time.sleep(0.5 * (2 ** attempt))
+                try:
+                    ticker = self.client.get_ticker(symbol)
+                    if ticker:
+                        current_price = ticker.get('last')
+                except Exception as e:
+                    self.position_logger.debug(f"  Exception getting ticker: {type(e).__name__}: {e}")
                 
-                # CRITICAL FIX: If all retries failed, skip this update cycle
+                # CRITICAL FIX: If ticker fetch failed, skip this update cycle
                 # Using entry_price as fallback is DANGEROUS because it prevents stop losses from triggering
                 # Better to skip one cycle and retry on next iteration than to use stale data
-                if not current_price or current_price <= 0:
-                    self.logger.warning(f"All ticker retries failed for {symbol}, skipping position update this cycle")
+                if not ticker or not current_price or current_price <= 0:
+                    self.logger.warning(f"Failed to get ticker for {symbol}, skipping position update this cycle")
                     self.position_logger.warning(f"  ⚠ API failed to fetch price - SKIPPING update to avoid using stale data")
                     self.position_logger.warning(f"  ⚠ Stop loss protection: Will retry on next cycle")
                     continue  # Skip this position and try again next cycle
