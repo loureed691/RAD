@@ -143,9 +143,10 @@ The bot consists of several key components:
 
 ### Prerequisites
 
-- Python 3.11 or higher
+- **Python 3.11 or higher** (Python 3.12+ recommended for best performance)
 - KuCoin Futures account with API credentials
 - Sufficient balance for trading (recommended minimum: $500)
+- Modern operating system (Linux, macOS, Windows 10+)
 
 ### Setup
 

@@ -1,18 +1,38 @@
-ccxt>=4.0.0
-python-dotenv>=1.0.0
-pandas>=2.0.0
-numpy>=1.24.0
-scikit-learn>=1.3.0
-ta>=0.11.0
-requests>=2.31.0
-websocket-client>=1.6.0
+# Core Trading and API
+ccxt>=4.5.0
+python-dotenv>=1.1.0
+
+# Data Processing and Analysis
+pandas>=2.2.0
+numpy>=1.26.0
 python-dateutil>=2.8.0
-joblib>=1.3.0
-xgboost>=2.0.0
-lightgbm>=4.0.0
+
+# Machine Learning
+scikit-learn>=1.5.0
+xgboost>=2.1.0
+lightgbm>=4.5.0
 catboost>=1.2.0
-tensorflow>=2.13.0
-optuna>=3.3.0
-psycopg2-binary>=2.9.0
-flask>=2.3.0
-plotly>=5.17.0
+tensorflow>=2.18.0
+optuna>=4.0.0
+joblib>=1.4.0
+
+# Technical Analysis
+ta>=0.11.0
+
+# Network and Communication
+requests>=2.32.0
+websocket-client>=1.8.0
+
+# Database
+psycopg2-binary>=2.9.9
+
+# Web Dashboard
+flask>=3.1.0
+plotly>=5.24.0
+
+# Development and Quality (optional but recommended)
+# Uncomment to enable:
+# flake8>=7.0.0
+# pylint>=3.3.0
+# black>=24.0.0
+# mypy>=1.11.0

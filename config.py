@@ -24,9 +24,9 @@ try:
     import logging
     pythonhashseed_env = os.environ.get('PYTHONHASHSEED')
     if pythonhashseed_env is None:
-        logging.warning("PYTHONHASHSEED is not set. For reproducible hash-based operations, set PYTHONHASHSEED in your environment before launching Python (e.g., PYTHONHASHSEED=%d)." % RANDOM_SEED)
+        logging.warning(f"PYTHONHASHSEED is not set. For reproducible hash-based operations, set PYTHONHASHSEED in your environment before launching Python (e.g., PYTHONHASHSEED={RANDOM_SEED}).")
     elif pythonhashseed_env != str(RANDOM_SEED):
-        logging.warning("PYTHONHASHSEED (%s) does not match RANDOM_SEED (%d). For full reproducibility, set PYTHONHASHSEED=%d in your environment before launching Python." % (pythonhashseed_env, RANDOM_SEED, RANDOM_SEED))
+        logging.warning(f"PYTHONHASHSEED ({pythonhashseed_env}) does not match RANDOM_SEED ({RANDOM_SEED}). For full reproducibility, set PYTHONHASHSEED={RANDOM_SEED} in your environment before launching Python.")
 except ImportError:
     pass  # TensorFlow not installed or not needed
 
