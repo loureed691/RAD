@@ -10,10 +10,11 @@ from logger import Logger
 class AdvancedAnalytics:
     """Calculate advanced risk and performance metrics"""
     
-    def __init__(self):
+    def __init__(self, max_history_size: int = 10000):
         self.logger = Logger.get_logger()
         self.trade_history = []
         self.equity_curve = []
+        self.max_history_size = max_history_size
     
     def record_trade(self, trade_data: Dict):
         """
@@ -46,11 +47,7 @@ class AdvancedAnalytics:
         })
         
         # MEMORY: Limit equity curve size to prevent unbounded growth
-        if len(self.equity_curve) > self.max_history_size:
-            self.equity_curve = self.equity_curve[-self.max_history_size:]
-        
-        # MEMORY: Limit equity curve size to prevent unbounded growth
-        if len(self.equity_curve) > self.max_history_size:
+        if len(self.equity_curve) >= self.max_history_size:
             self.equity_curve = self.equity_curve[-self.max_history_size:]
     
     def calculate_sortino_ratio(self, risk_free_rate: float = 0.0) -> float:
