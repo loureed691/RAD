@@ -1,1 +1,5 @@
-# Contract Tests\n\nValidate assumptions about KuCoin API (testnet).\n\nRun: `pytest tests_contract/ -v`
+# Contract Tests
+
+Validate assumptions about KuCoin API (testnet).
+
+Run: `pytest tests_contract/ -v`
