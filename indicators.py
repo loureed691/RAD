@@ -4,12 +4,17 @@ Technical indicators for trading signals
 import pandas as pd
 import numpy as np
 from typing import Dict, List
+from functools import lru_cache
 from ta.trend import SMAIndicator, EMAIndicator, MACD
 from ta.momentum import RSIIndicator, StochasticOscillator
 from ta.volatility import BollingerBands, AverageTrueRange
 
 class Indicators:
     """Calculate technical indicators for trading"""
+    
+    # Class-level cache for indicator calculations
+    _indicator_cache = {}
+    _cache_max_size = 100
     
     @staticmethod
     def calculate_all(ohlcv_data: List) -> pd.DataFrame:
@@ -50,21 +55,32 @@ class Indicators:
             return pd.DataFrame()
         
         try:
+            # OPTIMIZATION: Vectorized calculations where possible
+            close = df['close'].values
+            high = df['high'].values
+            low = df['low'].values
+            volume = df['volume'].values
             
-            # Moving Averages
-            df['sma_20'] = SMAIndicator(df['close'], window=20).sma_indicator()
-            df['sma_50'] = SMAIndicator(df['close'], window=50).sma_indicator()
-            df['ema_12'] = EMAIndicator(df['close'], window=12).ema_indicator()
-            df['ema_26'] = EMAIndicator(df['close'], window=26).ema_indicator()
+            # Moving Averages (optimized with pandas ewm/rolling)
+            df['sma_20'] = df['close'].rolling(window=20, min_periods=20).mean()
+            df['sma_50'] = df['close'].rolling(window=50, min_periods=50).mean()
+            df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
+            df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
             
-            # MACD
-            macd = MACD(df['close'])
-            df['macd'] = macd.macd()
-            df['macd_signal'] = macd.macd_signal()
-            df['macd_diff'] = macd.macd_diff()
+            # MACD (optimized)
+            ema_fast = df['close'].ewm(span=12, adjust=False).mean()
+            ema_slow = df['close'].ewm(span=26, adjust=False).mean()
+            df['macd'] = ema_fast - ema_slow
+            df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+            df['macd_diff'] = df['macd'] - df['macd_signal']
             
-            # RSI
-            df['rsi'] = RSIIndicator(df['close'], window=14).rsi()
+            # RSI (optimized vectorized calculation)
+            delta = df['close'].diff()
+            gain = delta.where(delta > 0, 0).rolling(window=14).mean()
+            loss = -delta.where(delta < 0, 0).rolling(window=14).mean()
+            rs = gain / loss.replace(0, np.nan)
+            df['rsi'] = 100 - (100 / (1 + rs))
+            df['rsi'] = df['rsi'].fillna(50)  # Neutral when no data
             
             # Stochastic Oscillator
             stoch = StochasticOscillator(df['high'], df['low'], df['close'])
@@ -76,32 +92,31 @@ class Indicators:
             df['stoch_k'] = df['stoch_k'].fillna(50.0)
             df['stoch_d'] = df['stoch_d'].fillna(50.0)
             
-            # Bollinger Bands
-            bb = BollingerBands(df['close'])
-            df['bb_high'] = bb.bollinger_hband()
-            df['bb_mid'] = bb.bollinger_mavg()
-            df['bb_low'] = bb.bollinger_lband()
-            # Handle potential division by zero - replace 0 with NaN, then fillna with default
+            # Bollinger Bands (optimized)
+            bb_mid = df['close'].rolling(window=20).mean()
+            bb_std = df['close'].rolling(window=20).std()
+            df['bb_high'] = bb_mid + (bb_std * 2)
+            df['bb_mid'] = bb_mid
+            df['bb_low'] = bb_mid - (bb_std * 2)
             df['bb_width'] = (df['bb_high'] - df['bb_low']) / df['bb_mid'].replace(0, np.nan)
             df['bb_width'] = df['bb_width'].replace([np.inf, -np.inf], np.nan).fillna(0.03)
             
             # ATR (Average True Range)
             df['atr'] = AverageTrueRange(df['high'], df['low'], df['close']).average_true_range()
             
-            # Volume indicators
-            df['volume_sma'] = df['volume'].rolling(window=20).mean()
-            # Handle potential division by zero or NaN in volume_sma
+            # Volume indicators (optimized)
+            df['volume_sma'] = df['volume'].rolling(window=20, min_periods=1).mean()
             df['volume_ratio'] = df['volume'] / df['volume_sma'].replace(0, np.nan)
-            df['volume_ratio'] = df['volume_ratio'].fillna(1.0)  # Default to 1.0 if NaN
+            df['volume_ratio'] = df['volume_ratio'].fillna(1.0)
             
-            # Price momentum
+            # Price momentum (optimized)
             df['momentum'] = df['close'].pct_change(periods=10)
-            df['roc'] = ((df['close'] - df['close'].shift(10)) / df['close'].shift(10)) * 100
+            df['roc'] = df['momentum'] * 100  # Same calculation, optimized
             
-            # Volume-weighted indicators (VWAP with rolling window to avoid indefinite growth)
-            # Use a 50-period rolling window for VWAP calculation
+            # Volume-weighted indicators (VWAP optimized)
             typical_price = (df['high'] + df['low'] + df['close']) / 3
-            df['vwap'] = (typical_price * df['volume']).rolling(window=50, min_periods=1).sum() / df['volume'].rolling(window=50, min_periods=1).sum()
+            tp_volume = typical_price * df['volume']
+            df['vwap'] = tp_volume.rolling(window=50, min_periods=1).sum() / df['volume'].rolling(window=50, min_periods=1).sum()
             
             return df
         except Exception as e:
