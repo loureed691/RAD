@@ -26,6 +26,7 @@ from performance_metrics_2026 import AdvancedPerformanceMetrics2026
 from smart_entry_exit import SmartEntryExit
 from enhanced_mtf_analysis import EnhancedMultiTimeframeAnalysis
 from position_correlation import PositionCorrelationManager
+from bayesian_kelly_2025 import BayesianAdaptiveKelly
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -131,6 +132,10 @@ class TradingBot:
         self.smart_entry_exit = SmartEntryExit()
         self.enhanced_mtf = EnhancedMultiTimeframeAnalysis()
         self.position_correlation = PositionCorrelationManager()
+        self.bayesian_kelly = BayesianAdaptiveKelly(
+            base_kelly_fraction=0.25,
+            window_size=50
+        )
         
         self.logger.info("🚀 2026 Advanced Features Activated:")
         self.logger.info("   ✅ Advanced Risk Manager (Regime-aware Kelly)")
@@ -142,6 +147,7 @@ class TradingBot:
         self.logger.info("   ✅ Smart Entry/Exit (Order book timing)")
         self.logger.info("   ✅ Enhanced Multi-Timeframe Analysis")
         self.logger.info("   ✅ Position Correlation Management")
+        self.logger.info("   ✅ Bayesian Adaptive Kelly Criterion")
         
         # State
         self.running = False
@@ -514,19 +520,38 @@ class TradingBot:
         # Only use Kelly if we have sufficient trade history (20+ trades)
         kelly_fraction = None
         if total_trades >= 20 and win_rate > 0 and avg_profit > 0 and avg_loss > 0:
-            # 2026 FEATURE: Use regime-aware Kelly Criterion
+            # 2025 OPTIMIZATION: Try Bayesian Adaptive Kelly first (if enough data)
             try:
-                kelly_fraction = self.advanced_risk_2026.calculate_regime_aware_kelly(
-                    win_rate, avg_profit, avg_loss, market_regime, confidence
-                )
-                self.logger.info(f"💰 Regime-Aware Kelly: {kelly_fraction:.3f} (regime={market_regime})")
+                if total_trades >= 30:  # Need more trades for Bayesian to be effective
+                    bayesian_sizing = self.bayesian_kelly.calculate_optimal_position_size(
+                        balance=available_balance,
+                        confidence=confidence,
+                        market_volatility=volatility,
+                        use_recent_window=True
+                    )
+                    
+                    kelly_fraction = bayesian_sizing.get('kelly_fraction', None)
+                    if kelly_fraction:
+                        self.logger.info(f"💰 Bayesian Adaptive Kelly: {kelly_fraction:.3f}")
+                        self.logger.info(f"   Win rate (Bayesian): {bayesian_sizing.get('win_rate_mean', 0):.3f} ± {bayesian_sizing.get('win_rate_std', 0):.3f}")
+                        
             except Exception as e:
-                # Fallback to standard Kelly with PRIORITY 1 fractional caps
-                self.logger.debug(f"Using standard Kelly: {e}")
-                kelly_fraction = self.risk_manager.calculate_kelly_criterion(
-                    win_rate, avg_profit, avg_loss, use_fractional=True, volatility=volatility
-                )
-                self.logger.info(f"💰 Fractional Kelly (0.25-0.5 cap): {kelly_fraction:.3f}")
+                self.logger.debug(f"Bayesian Kelly error: {e}, falling back to standard")
+            
+            # 2026 FEATURE: Use regime-aware Kelly Criterion if Bayesian not used
+            if kelly_fraction is None:
+                try:
+                    kelly_fraction = self.advanced_risk_2026.calculate_regime_aware_kelly(
+                        win_rate, avg_profit, avg_loss, market_regime, confidence
+                    )
+                    self.logger.info(f"💰 Regime-Aware Kelly: {kelly_fraction:.3f} (regime={market_regime})")
+                except Exception as e:
+                    # Fallback to standard Kelly with PRIORITY 1 fractional caps
+                    self.logger.debug(f"Using standard Kelly: {e}")
+                    kelly_fraction = self.risk_manager.calculate_kelly_criterion(
+                        win_rate, avg_profit, avg_loss, use_fractional=True, volatility=volatility
+                    )
+                    self.logger.info(f"💰 Fractional Kelly (0.25-0.5 cap): {kelly_fraction:.3f}")
         else:
             self.logger.debug(f"Insufficient trade history ({total_trades} trades), using default risk")
         
@@ -655,6 +680,13 @@ class TradingBot:
                     
                     # Record outcome for risk manager (for streak tracking)
                     self.risk_manager.record_trade_outcome(pnl)
+                    
+                    # 2025 OPTIMIZATION: Record trade for Bayesian Kelly
+                    try:
+                        is_win = pnl > 0.005  # >0.5% is a win
+                        self.bayesian_kelly.update_trade_outcome(is_win, pnl)
+                    except Exception as e:
+                        self.logger.debug(f"Error recording Bayesian Kelly trade: {e}")
                 
                 except Exception as e:
                     self.logger.error(f"Error recording closed position {symbol}: {e}", exc_info=True)
