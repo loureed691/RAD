@@ -320,7 +320,7 @@ class EnhancedMultiTimeframeAnalysis:
                 return 'ranging'
             else:
                 return 'neutral'
-        except:
+        except Exception:
             return 'neutral'
     
     def get_optimal_timeframe_for_entry(self,
