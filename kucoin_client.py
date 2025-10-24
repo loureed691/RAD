@@ -63,6 +63,10 @@ class KuCoinClient:
         self._critical_call_lock = threading.Lock()
         self._closing = False  # Flag to indicate client is shutting down
         
+        # PERFORMANCE FIX: Add rate limiting with semaphore to prevent API saturation
+        # Limit concurrent API calls to prevent blocking position management
+        self._api_semaphore = threading.Semaphore(8)  # Max 8 concurrent API calls
+        
         # RELIABILITY: Circuit breaker for API failures
         self._consecutive_failures = 0
         self._max_consecutive_failures = 5  # Threshold for circuit breaker
@@ -419,9 +423,9 @@ class KuCoinClient:
     def _execute_with_priority(self, func: Callable, priority: APICallPriority, 
                                call_name: str, *args, **kwargs) -> Any:
         """
-        Execute an API call with priority handling.
+        Execute an API call with priority handling and rate limiting.
         Critical calls (orders, position closing) execute immediately.
-        Non-critical calls (scanning) wait for critical calls to complete.
+        Non-critical calls (scanning) wait for critical calls to complete and acquire semaphore.
         """
         # Wait for critical calls if this is a non-critical call
         self._wait_for_critical_calls(priority)
@@ -429,14 +433,27 @@ class KuCoinClient:
         # Track if this is a critical call
         self._track_critical_call(priority, increment=True)
         
+        # PERFORMANCE FIX: Use semaphore to limit concurrent API calls
+        # Critical calls bypass semaphore for immediate execution
+        use_semaphore = priority > APICallPriority.CRITICAL
+        
         try:
             # Log priority for critical operations
             if priority == APICallPriority.CRITICAL:
                 self.logger.debug(f"🔴 CRITICAL API call: {call_name}")
             
-            # Execute the actual API call
-            result = func(*args, **kwargs)
-            return result
+            # Acquire semaphore for non-critical calls to prevent API saturation
+            if use_semaphore:
+                self._api_semaphore.acquire()
+            
+            try:
+                # Execute the actual API call
+                result = func(*args, **kwargs)
+                return result
+            finally:
+                # Release semaphore for non-critical calls
+                if use_semaphore:
+                    self._api_semaphore.release()
         finally:
             # Always decrement critical call counter
             self._track_critical_call(priority, increment=False)

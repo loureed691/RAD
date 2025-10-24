@@ -222,23 +222,23 @@ class Position:
         # Base multiplier for extending take profit
         tp_multiplier = 1.0
         
-        # 1. Strong momentum - extend take profit target (REDUCED from 1.5/1.25)
+        # 1. Strong momentum - extend take profit target (FURTHER REDUCED for profitability)
         if self.side == 'long' and momentum > 0.03:
-            tp_multiplier = 1.2  # Extend 20% further (was 50%)
+            tp_multiplier = 1.05  # Extend 5% further (was 20%)
         elif self.side == 'short' and momentum < -0.03:
-            tp_multiplier = 1.2
+            tp_multiplier = 1.05
         elif abs(momentum) > 0.02:
-            tp_multiplier = 1.1  # Moderate extension (was 25%)
+            tp_multiplier = 1.03  # Moderate extension (was 10%)
         
-        # 2. Trend strength - extend in strong trends (REDUCED from 1.3/1.15)
+        # 2. Trend strength - extend in strong trends (FURTHER REDUCED for profitability)
         if trend_strength > 0.7:
-            tp_multiplier *= 1.15  # Strong trend bonus (was 1.3)
+            tp_multiplier *= 1.05  # Strong trend bonus (was 1.15)
         elif trend_strength > 0.5:
-            tp_multiplier *= 1.08  # Moderate trend bonus (was 1.15)
+            tp_multiplier *= 1.03  # Moderate trend bonus (was 1.08)
         
-        # 3. High volatility - extend target to capture bigger moves (REDUCED from 1.2)
+        # 3. High volatility - extend target to capture bigger moves (FURTHER REDUCED)
         if volatility > 0.05:
-            tp_multiplier *= 1.1  # (was 1.2)
+            tp_multiplier *= 1.03  # (was 1.1)
         
         # 4. RSI-based adjustments - tighten when overbought/oversold (reversal risk)
         if self.side == 'long' and rsi > 75:
@@ -254,20 +254,20 @@ class Position:
             # Overbought in short - still room to run
             tp_multiplier *= 1.1
         
-        # 5. Profit velocity and acceleration (REDUCED multipliers)
+        # 5. Profit velocity and acceleration (FURTHER REDUCED for profitability)
         if abs(self.profit_velocity) > 0.05:  # >5% per hour - fast move
-            tp_multiplier *= 1.1  # (was 1.2)
+            tp_multiplier *= 1.03  # (was 1.1)
         elif abs(self.profit_velocity) < 0.01:  # <1% per hour - slow move
-            tp_multiplier *= 0.96  # Slightly tighter (was 0.95)
+            tp_multiplier *= 0.95  # Tighter to secure profits (was 0.96)
         
-        # NEW: Profit acceleration - detect if profit is accelerating (REDUCED from 1.15)
+        # NEW: Profit acceleration - detect if profit is accelerating (FURTHER REDUCED)
         if time_delta > 0.1:  # At least 6 minutes between updates
             old_velocity = (self.last_pnl - 0) / max(time_delta, 0.1)
             self.profit_acceleration = (self.profit_velocity - old_velocity) / time_delta
             
             # If profit is accelerating rapidly, extend TP more
             if self.profit_acceleration > 0.02:  # Rapid acceleration
-                tp_multiplier *= 1.08  # (was 1.15)
+                tp_multiplier *= 1.03  # (was 1.08)
                 
         # 6. Time-based adjustment - be more conservative on aging positions (MORE AGGRESSIVE)
         position_age_hours = (now - self.entry_time).total_seconds() / 3600
@@ -278,13 +278,13 @@ class Position:
         elif position_age_hours > 12:  # > 12 hours old - NEW
             tp_multiplier *= 0.92  # Tighten 8% on aging positions
         
-        # 7. Already profitable - be more conservative with extensions (CAP EARLIER)
-        if current_pnl > 0.10:  # High profit (>10%) - start capping earlier
-            tp_multiplier = min(tp_multiplier, 1.03)  # Very minimal extension (was 1.1)
+        # 7. Already profitable - be MORE conservative with extensions (LOCK IN PROFITS)
+        if current_pnl > 0.10:  # High profit (>10%) - lock it in!
+            tp_multiplier = min(tp_multiplier, 1.01)  # Almost no extension (was 1.03)
         elif current_pnl > 0.05:  # Moderate profit (>5%)
-            tp_multiplier = min(tp_multiplier, 1.08)  # Limited extension (was 1.2)
-        elif current_pnl > 0.03:  # Small profit (>3%) - NEW
-            tp_multiplier = min(tp_multiplier, 1.15)  # Cap moderate extensions
+            tp_multiplier = min(tp_multiplier, 1.03)  # Very limited extension (was 1.08)
+        elif current_pnl > 0.03:  # Small profit (>3%) - secure it!
+            tp_multiplier = min(tp_multiplier, 1.05)  # Cap extensions early (was 1.15)
         
         # Additional safeguard: never extend TP if it would move beyond current price by too much
         # This prevents the scenario where TP keeps moving away as price approaches it
