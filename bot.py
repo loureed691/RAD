@@ -22,6 +22,10 @@ from advanced_risk_2026 import AdvancedRiskManager2026
 from market_microstructure_2026 import MarketMicrostructure2026
 from adaptive_strategy_2026 import AdaptiveStrategySelector2026
 from performance_metrics_2026 import AdvancedPerformanceMetrics2026
+# 2025 Optimization Features
+from smart_entry_exit import SmartEntryExit
+from enhanced_mtf_analysis import EnhancedMultiTimeframeAnalysis
+from position_correlation import PositionCorrelationManager
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -123,11 +127,21 @@ class TradingBot:
         self.strategy_selector_2026 = AdaptiveStrategySelector2026()
         self.performance_2026 = AdvancedPerformanceMetrics2026()
         
+        # 2025 Optimization Features
+        self.smart_entry_exit = SmartEntryExit()
+        self.enhanced_mtf = EnhancedMultiTimeframeAnalysis()
+        self.position_correlation = PositionCorrelationManager()
+        
         self.logger.info("🚀 2026 Advanced Features Activated:")
         self.logger.info("   ✅ Advanced Risk Manager (Regime-aware Kelly)")
         self.logger.info("   ✅ Market Microstructure (Order flow analysis)")
         self.logger.info("   ✅ Adaptive Strategy Selector (4 strategies)")
         self.logger.info("   ✅ Performance Metrics (Sharpe, Sortino, Calmar)")
+        
+        self.logger.info("🎯 2025 Optimization Features Activated:")
+        self.logger.info("   ✅ Smart Entry/Exit (Order book timing)")
+        self.logger.info("   ✅ Enhanced Multi-Timeframe Analysis")
+        self.logger.info("   ✅ Position Correlation Management")
         
         # State
         self.running = False
@@ -304,6 +318,39 @@ class TradingBot:
         indicators = Indicators.get_latest_indicators(df)
         volatility = indicators.get('bb_width', 0.03)
         
+        # 2025 OPTIMIZATION: Enhanced multi-timeframe analysis
+        try:
+            # Fetch 4h and 1d data for confluence analysis
+            ohlcv_4h = self.client.get_ohlcv(symbol, timeframe='4h', limit=50)
+            df_4h = Indicators.calculate_all(ohlcv_4h) if ohlcv_4h else None
+            
+            ohlcv_1d = self.client.get_ohlcv(symbol, timeframe='1d', limit=30)
+            df_1d = Indicators.calculate_all(ohlcv_1d) if ohlcv_1d else None
+            
+            # Analyze timeframe confluence
+            mtf_confluence = self.enhanced_mtf.analyze_timeframe_confluence(
+                df, df_4h, df_1d, signal, volatility
+            )
+            
+            self.logger.info(f"📊 Multi-Timeframe Analysis:")
+            self.logger.info(f"   Alignment: {mtf_confluence['alignment']}")
+            self.logger.info(f"   Confluence score: {mtf_confluence['confluence_score']:.2f}")
+            self.logger.info(f"   Confidence multiplier: {mtf_confluence['confidence_multiplier']:.2f}")
+            
+            # Apply confidence adjustment from MTF analysis
+            confidence *= mtf_confluence['confidence_multiplier']
+            self.logger.info(f"   ✅ MTF-adjusted confidence: {confidence:.2f}")
+            
+            # Check for timeframe divergence
+            mtf_divergence = self.enhanced_mtf.detect_timeframe_divergence(df, df_4h)
+            if mtf_divergence['divergence'] and mtf_divergence['strength'] > 0.6:
+                self.logger.warning(f"⚠️  Timeframe divergence detected: {mtf_divergence['type']} (strength: {mtf_divergence['strength']:.2f})")
+                confidence *= 0.9  # Reduce confidence for diverging timeframes
+                
+        except Exception as e:
+            self.logger.debug(f"MTF analysis error: {e}")
+            mtf_confluence = {'confidence_multiplier': 1.0}
+        
         # 2026 FEATURE: Get order book for microstructure analysis
         try:
             orderbook = self.client.get_order_book(symbol, depth=20)
@@ -319,10 +366,34 @@ class TradingBot:
             self.logger.info(f"   Order book imbalance: {orderbook_metrics['imbalance']:.3f} ({orderbook_metrics['signal']})")
             self.logger.info(f"   Spread: {orderbook_metrics['spread_bps']:.2f} bps")
             self.logger.info(f"   Liquidity score: {liquidity_score:.2f}")
+            
+            # 2025 OPTIMIZATION: Smart entry timing analysis
+            entry_analysis = self.smart_entry_exit.analyze_entry_timing(
+                orderbook, entry_price, signal, volatility
+            )
+            
+            self.logger.info(f"🎯 Smart Entry Analysis:")
+            self.logger.info(f"   Timing score: {entry_analysis['timing_score']:.2f}")
+            self.logger.info(f"   Recommendation: {entry_analysis['recommendation']}")
+            self.logger.info(f"   Reason: {entry_analysis['reason']}")
+            
+            # Adjust confidence based on entry timing
+            if entry_analysis['timing_score'] > 0.7:
+                confidence *= 1.1  # Boost confidence by 10% for excellent timing
+                self.logger.info(f"   ✅ Excellent entry timing - confidence boosted to {confidence:.2f}")
+            elif entry_analysis['timing_score'] < 0.4:
+                confidence *= 0.9  # Reduce confidence by 10% for poor timing
+                self.logger.info(f"   ⚠️  Suboptimal entry timing - confidence reduced to {confidence:.2f}")
+            
         except Exception as e:
             self.logger.debug(f"Could not fetch orderbook data: {e}")
             orderbook_metrics = {'imbalance': 0.0, 'signal': 'neutral'}
             liquidity_score = 0.7  # Default moderate liquidity
+            entry_analysis = {
+                'timing_score': 0.5,
+                'recommendation': 'market',
+                'reason': 'No orderbook data'
+            }
         
         # Get additional market context for smarter leverage calculation
         momentum = indicators.get('momentum', 0.0)
@@ -467,6 +538,43 @@ class TradingBot:
             available_balance, entry_price, stop_loss_price, leverage, 
             kelly_fraction=kelly_fraction * risk_adjustment if kelly_fraction is not None else None
         )
+        
+        # 2025 OPTIMIZATION: Correlation-based position sizing adjustment
+        try:
+            # Update price history for correlation tracking
+            self.position_correlation.update_price_history(symbol, entry_price)
+            
+            # Get existing positions for correlation analysis
+            existing_positions = [
+                {
+                    'symbol': pos_symbol,
+                    'value': getattr(pos, 'amount', 0) * entry_price  # Approximate value
+                }
+                for pos_symbol, pos in self.position_manager.positions.items()
+            ]
+            
+            if existing_positions:
+                # Check category concentration limits
+                is_allowed, concentration_reason = self.position_correlation.check_category_concentration(
+                    symbol, existing_positions, available_balance
+                )
+                
+                if not is_allowed:
+                    self.logger.warning(f"🔗 Concentration limit exceeded: {concentration_reason}")
+                    return False
+                
+                # Adjust position size based on correlations
+                original_size = position_size
+                position_size = self.position_correlation.get_correlation_adjusted_size(
+                    symbol, position_size, existing_positions
+                )
+                
+                if position_size != original_size:
+                    reduction_pct = (1 - position_size / original_size) * 100
+                    self.logger.info(f"🔗 Position size adjusted for correlation: {original_size:.4f} → {position_size:.4f} ({reduction_pct:.1f}% reduction)")
+                    
+        except Exception as e:
+            self.logger.debug(f"Correlation analysis error: {e}, using unadjusted size")
         
         # Open position
         success = self.position_manager.open_position(
