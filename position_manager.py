@@ -1472,9 +1472,7 @@ class PositionManager:
                     market_trend_strength = market_data.get('trend_strength', 0.5)
                     
                     # Get volume ratio from indicators if available
-                    volume_ratio = 1.0
-                    if 'indicators' in locals() and indicators:
-                        volume_ratio = indicators.get('volume_ratio', 1.0)
+                    volume_ratio = market_data.get('indicators', {}).get('volume_ratio', 1.0)
                     
                     # Detect trend weakening based on position direction
                     trend_weakening = False
