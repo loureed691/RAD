@@ -178,7 +178,12 @@ class Config:
         Validate that required configuration is set and parameters are within safe limits
         
         SAFETY: Enhanced validation to prevent catastrophic configuration errors
+        OPTIMIZED: Cache validation result to avoid repeated checks
         """
+        # Check if already validated
+        if hasattr(cls, '_validated') and cls._validated:
+            return
+        
         # Check API credentials
         if not cls.API_KEY or not cls.API_SECRET or not cls.API_PASSPHRASE:
             raise ValueError("KuCoin API credentials are required. Please set them in .env file")
@@ -197,6 +202,9 @@ class Config:
         if cls.RISK_PER_TRADE is not None:
             if not (0.001 <= cls.RISK_PER_TRADE <= 0.10):  # 0.1% to 10%
                 raise ValueError(f"RISK_PER_TRADE must be between 0.001 and 0.10, got {cls.RISK_PER_TRADE}")
+        
+        # Mark as validated
+        cls._validated = True
         
         if cls.MAX_OPEN_POSITIONS < 1 or cls.MAX_OPEN_POSITIONS > 20:
             raise ValueError(f"MAX_OPEN_POSITIONS must be between 1 and 20, got {cls.MAX_OPEN_POSITIONS}")

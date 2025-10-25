@@ -136,6 +136,7 @@ class KuCoinClient:
         """
         Wait if there are pending critical calls and current call is not critical.
         This ensures trading operations complete before scanning operations start.
+        OPTIMIZED: Reduced sleep interval for better responsiveness.
         """
         if priority > APICallPriority.CRITICAL:
             # Non-critical call - wait for any pending critical calls to complete
@@ -146,7 +147,7 @@ class KuCoinClient:
                 with self._critical_call_lock:
                     if self._pending_critical_calls == 0:
                         break
-                time.sleep(0.05)  # Short sleep to avoid busy waiting
+                time.sleep(0.01)  # OPTIMIZED: Reduced from 0.05 to 0.01 for faster response
     
     def _track_critical_call(self, priority: APICallPriority, increment: bool):
         """Track critical API calls in progress"""
@@ -561,6 +562,57 @@ class KuCoinClient:
             return result
         
         return self._execute_with_priority(_fetch, priority, f'get_ticker({symbol})')
+    
+    @track_api_performance
+    def get_tickers_batch(self, symbols: List[str], priority: APICallPriority = APICallPriority.NORMAL) -> Dict[str, Dict]:
+        """
+        OPTIMIZED: Get ticker information for multiple symbols in a single API call.
+        This significantly reduces API overhead when scanning many pairs.
+        
+        Args:
+            symbols: List of trading pair symbols
+            priority: Priority level (NORMAL for scanning)
+        
+        Returns:
+            Dict mapping symbol to ticker data
+        """
+        # Check if client is closing
+        if getattr(self, '_closing', False):
+            self.logger.debug("Skipping get_tickers_batch - client is closing")
+            return {}
+        
+        # Check batch cache
+        current_time = time.time()
+        if (hasattr(self, '_ticker_batch_cache_time') and 
+            self._ticker_batch_cache_time and 
+            current_time - self._ticker_batch_cache_time < getattr(self, '_ticker_batch_cache_duration', 30)):
+            # Return cached data for requested symbols
+            cached_result = {sym: self._ticker_batch_cache.get(sym) for sym in symbols if sym in self._ticker_batch_cache}
+            if len(cached_result) == len(symbols):
+                self.logger.debug(f"Using cached batch ticker data for {len(symbols)} symbols")
+                return cached_result
+        
+        # Fetch all tickers in one API call
+        def _fetch():
+            def _fetch_tickers():
+                all_tickers = self.exchange.fetch_tickers()
+                # Initialize cache if needed
+                if not hasattr(self, '_ticker_batch_cache'):
+                    self._ticker_batch_cache = {}
+                # Update cache
+                self._ticker_batch_cache.update(all_tickers)
+                self._ticker_batch_cache_time = time.time()
+                return {sym: all_tickers[sym] for sym in symbols if sym in all_tickers}
+            
+            result = self._handle_api_error(
+                _fetch_tickers,
+                max_retries=2,
+                exponential_backoff=True,
+                operation_name=f"get_tickers_batch({len(symbols)} symbols)"
+            )
+            return result or {}
+        
+        return self._execute_with_priority(_fetch, priority, f'get_tickers_batch({len(symbols)} symbols)')
     
     def get_ohlcv(self, symbol: str, timeframe: str = '1h', limit: int = 100) -> List:
         """Get OHLCV data for a symbol with retry logic

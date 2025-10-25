@@ -737,11 +737,15 @@ class TradingBot:
                         self.logger.warning(f"⚠️  PERFORMANCE WARNING: {reason}")
                 
                 # Sleep for the configured scan interval before next scan
-                # Check periodically if we should stop - yield control more frequently
-                for _ in range(Config.CHECK_INTERVAL):
+                # OPTIMIZED: Use event-based waiting instead of polling loop
+                sleep_start = time.time()
+                while time.time() - sleep_start < Config.CHECK_INTERVAL:
                     if not self._scan_thread_running:
                         break
-                    time.sleep(1)
+                    # Sleep in larger chunks to reduce CPU overhead
+                    remaining = Config.CHECK_INTERVAL - (time.time() - sleep_start)
+                    if remaining > 0:
+                        time.sleep(min(5, remaining))  # Sleep up to 5 seconds at a time
                     
             except Exception as e:
                 self.logger.error(f"❌ Error in background scanner: {e}", exc_info=True)
