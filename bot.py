@@ -30,6 +30,11 @@ from bayesian_kelly_2025 import BayesianAdaptiveKelly
 # 2025 AI Enhancements
 from enhanced_order_book_2025 import EnhancedOrderBookAnalyzer
 from attention_features_2025 import AttentionFeatureSelector
+# Smart Trading Enhancements
+from smart_trading_enhancements import (
+    SmartTradeFilter, SmartPositionSizer, SmartExitOptimizer,
+    MarketContextAnalyzer, VolatilityAdaptiveParameters
+)
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -150,6 +155,13 @@ class TradingBot:
         # Connect attention selector to ML model for feature weighting
         self.ml_model.attention_selector = self.attention_features_2025
         
+        # Smart Trading Enhancements
+        self.smart_trade_filter = SmartTradeFilter()
+        self.smart_position_sizer = SmartPositionSizer()
+        self.smart_exit_optimizer = SmartExitOptimizer()
+        self.market_context_analyzer = MarketContextAnalyzer()
+        self.volatility_adaptive_params = VolatilityAdaptiveParameters()
+        
         self.logger.info("🚀 2026 Advanced Features Activated:")
         self.logger.info("   ✅ Advanced Risk Manager (Regime-aware Kelly)")
         self.logger.info("   ✅ Market Microstructure (Order flow analysis)")
@@ -165,6 +177,13 @@ class TradingBot:
         self.logger.info("🤖 2025 AI Enhancements Activated:")
         self.logger.info("   ✅ Enhanced Order Book Analyzer (VAMP, WDOP, OBI)")
         self.logger.info("   ✅ Attention-Based Feature Selection")
+        
+        self.logger.info("🧠 Smart Trading Enhancements Activated:")
+        self.logger.info("   ✅ Smart Trade Filter (Quality prediction)")
+        self.logger.info("   ✅ Smart Position Sizer (Multi-factor sizing)")
+        self.logger.info("   ✅ Smart Exit Optimizer (ML-based timing)")
+        self.logger.info("   ✅ Market Context Analyzer (Sentiment analysis)")
+        self.logger.info("   ✅ Volatility-Adaptive Parameters")
         
         # State
         self.running = False
@@ -533,6 +552,41 @@ class TradingBot:
         except Exception as e:
             self.logger.warning(f"2026 risk check error: {e}, proceeding with caution")
         
+        # SMART ENHANCEMENT: Trade Quality Filter
+        try:
+            rsi = indicators.get('rsi', 50)
+            volume_ratio = indicators.get('volume_ratio', 1.0)
+            recent_win_rate = self.risk_manager.get_win_rate()
+            
+            trade_quality = self.smart_trade_filter.calculate_trade_quality_score(
+                signal_confidence=confidence,
+                volatility=volatility,
+                volume_ratio=volume_ratio,
+                trend_strength=trend_strength,
+                rsi=rsi,
+                recent_win_rate=recent_win_rate,
+                market_regime=market_regime
+            )
+            
+            self.logger.info(f"🧠 Smart Trade Quality Analysis:")
+            self.logger.info(f"   Quality Score: {trade_quality['quality_score']:.2f}")
+            self.logger.info(f"   Recommendation: {trade_quality['recommendation']}")
+            self.logger.info(f"   Position Multiplier: {trade_quality['position_multiplier']:.2f}x")
+            
+            if not trade_quality['passed']:
+                self.logger.warning(f"❌ Trade Quality Filter: Score too low ({trade_quality['quality_score']:.2f})")
+                return False
+            
+            self.logger.info(f"✅ Trade Quality Filter: Passed")
+            
+            # Store quality score for later adjustment
+            trade_quality_multiplier = trade_quality['position_multiplier']
+            
+        except Exception as e:
+            self.logger.warning(f"Trade quality filter error: {e}, proceeding without filter")
+            trade_quality_multiplier = 1.0
+            trade_quality = {'quality_score': 0.7, 'recommendation': 'GOOD'}
+        
         # Calculate support/resistance levels for intelligent profit targeting
         support_resistance = Indicators.calculate_support_resistance(df, lookback=50)
         
@@ -664,10 +718,49 @@ class TradingBot:
         except Exception as e:
             self.logger.debug(f"Correlation analysis error: {e}, using unadjusted size")
         
+        # SMART ENHANCEMENT: Multi-Factor Intelligent Position Sizing
+        try:
+            correlation_risk = 0.5  # Default moderate
+            if len(existing_positions) > 0:
+                # Calculate average correlation risk
+                correlation_risk = min(len(existing_positions) * 0.2, 0.9)
+            
+            smart_sizing = self.smart_position_sizer.calculate_optimal_position_size(
+                base_position_size=position_size,
+                signal_confidence=confidence,
+                trade_quality_score=trade_quality['quality_score'],
+                volatility=volatility,
+                correlation_risk=correlation_risk,
+                portfolio_heat=portfolio_heat,
+                recent_win_rate=recent_win_rate
+            )
+            
+            self.logger.info(f"🧠 Smart Position Sizing:")
+            self.logger.info(f"   Original: {position_size:.4f} {symbol}")
+            self.logger.info(f"   Adjusted: {smart_sizing['adjusted_size']:.4f} {symbol}")
+            self.logger.info(f"   Multiplier: {smart_sizing['multiplier']:.2f}x")
+            self.logger.info(f"   Reasoning: {smart_sizing['reasoning']}")
+            
+            # Apply smart sizing adjustment
+            position_size = smart_sizing['adjusted_size']
+            
+        except Exception as e:
+            self.logger.warning(f"Smart position sizing error: {e}, using base size")
+        
         # Open position
         success = self.position_manager.open_position(
             symbol, signal, position_size, leverage, stop_loss_percentage
         )
+        
+        # Record trade quality for learning
+        if success:
+            try:
+                self.smart_trade_filter.record_trade_outcome(
+                    quality_score=trade_quality['quality_score'],
+                    profit_pct=0.0  # Will be updated when position closes
+                )
+            except Exception as e:
+                self.logger.debug(f"Error recording trade quality: {e}")
         
         # 2026 FEATURE: Store strategy with position for tracking
         if success and symbol in self.position_manager.positions:
