@@ -50,6 +50,13 @@ class KuCoinWebSocket:
         
         # Subscriptions
         self._subscriptions = set()
+        # KuCoin's documented maximum subscription limit per connection is 400.
+        # We set our internal limit to 380, leaving a safety margin of 20 subscriptions.
+        # This margin helps avoid unexpected disconnects or errors due to undocumented
+        # server-side constraints, network fluctuations, or future changes in KuCoin's limits.
+        # The value of 20 is chosen as a conservative buffer based on experience and to
+        # ensure stable operation. If KuCoin updates their limits, review and adjust accordingly.
+        self._max_subscriptions = 380
         
         # Rate limiting for subscriptions
         self._subscription_lock = threading.Lock()
@@ -377,6 +384,11 @@ class KuCoinWebSocket:
             self.logger.warning("WebSocket not connected, cannot subscribe")
             return False
         
+        # Check subscription limit
+        if len(self._subscriptions) >= self._max_subscriptions:
+            self.logger.warning(f"Subscription limit reached ({self._max_subscriptions}), cannot subscribe to ticker {symbol}")
+            return False
+        
         # Convert symbol format (BTC/USDT:USDT -> BTCUSDT)
         kucoin_symbol = symbol.replace('/', '').replace(':', '')
         
@@ -386,6 +398,11 @@ class KuCoinWebSocket:
     def _subscribe_ticker(self, kucoin_symbol: str, skip_rate_limit: bool = False):
         """Internal method to subscribe to ticker with optional rate limiting"""
         try:
+            # Check if connection is still valid
+            if not self.connected or self.ws is None:
+                self.logger.debug(f"WebSocket not connected, skipping subscription to ticker {kucoin_symbol}")
+                return False
+            
             # Apply rate limiting unless explicitly skipped
             if not skip_rate_limit:
                 with self._subscription_lock:
@@ -409,8 +426,9 @@ class KuCoinWebSocket:
             self.logger.debug(f"Connection error subscribing to ticker {kucoin_symbol}: {e}")
             return False
         except Exception as e:
-            # SSL errors and other transient errors - log at debug level
-            if 'SSL' in str(e) or 'EOF' in str(e):
+            # Handle "Connection is already closed" errors more gracefully
+            error_msg = str(e)
+            if 'already closed' in error_msg.lower() or 'SSL' in error_msg or 'EOF' in error_msg:
                 self.logger.debug(f"Transient error subscribing to ticker {kucoin_symbol}: {e}")
             else:
                 self.logger.error(f"Error subscribing to ticker {kucoin_symbol}: {e}")
@@ -426,6 +444,11 @@ class KuCoinWebSocket:
         """
         if not self.connected:
             self.logger.warning("WebSocket not connected, cannot subscribe")
+            return False
+        
+        # Check subscription limit
+        if len(self._subscriptions) >= self._max_subscriptions:
+            self.logger.warning(f"Subscription limit reached ({self._max_subscriptions}), cannot subscribe to candles {symbol}")
             return False
         
         # Convert symbol format
@@ -444,6 +467,11 @@ class KuCoinWebSocket:
     def _subscribe_candles(self, kucoin_symbol: str, kucoin_tf: str, skip_rate_limit: bool = False):
         """Internal method to subscribe to candles with optional rate limiting"""
         try:
+            # Check if connection is still valid
+            if not self.connected or self.ws is None:
+                self.logger.debug(f"WebSocket not connected, skipping subscription to candles {kucoin_symbol}")
+                return False
+            
             # Apply rate limiting unless explicitly skipped
             if not skip_rate_limit:
                 with self._subscription_lock:
@@ -467,8 +495,9 @@ class KuCoinWebSocket:
             self.logger.debug(f"Connection error subscribing to candles {kucoin_symbol}: {e}")
             return False
         except Exception as e:
-            # SSL errors and other transient errors - log at debug level
-            if 'SSL' in str(e) or 'EOF' in str(e):
+            # Handle "Connection is already closed" errors more gracefully
+            error_msg = str(e)
+            if 'already closed' in error_msg.lower() or 'SSL' in error_msg or 'EOF' in error_msg:
                 self.logger.debug(f"Transient error subscribing to candles {kucoin_symbol}: {e}")
             else:
                 self.logger.error(f"Error subscribing to candles {kucoin_symbol}: {e}")
