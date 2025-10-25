@@ -45,6 +45,9 @@ class MLModel:
             'recent_trades': []  # Track last 20 trades for momentum
         }
         
+        # 2025 AI Enhancement: Attention-based feature selection
+        self.attention_selector = None  # Will be set by bot if available
+        
         # Create models directory if it doesn't exist
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
         
@@ -192,7 +195,7 @@ class MLModel:
     
     def predict(self, indicators: Dict) -> Tuple[str, float]:
         """
-        Predict trading signal using ML model
+        Predict trading signal using ML model with 2025 attention-based feature weighting
         
         Returns:
             Tuple of (signal, confidence)
@@ -204,6 +207,18 @@ class MLModel:
         
         try:
             features = self.prepare_features(indicators)
+            
+            # 2025 AI ENHANCEMENT: Apply attention-based feature weighting if available
+            if self.attention_selector is not None:
+                try:
+                    # Apply attention weighting to features
+                    weighted_features = self.attention_selector.apply_attention(features.flatten())
+                    features = weighted_features.reshape(1, -1)
+                    
+                    self.logger.debug("Applied attention-based feature weighting")
+                except Exception as e:
+                    self.logger.debug(f"Attention feature weighting error: {e}, using standard features")
+            
             features_scaled = self.scaler.transform(features)
             
             prediction = self.model.predict(features_scaled)[0]
@@ -217,6 +232,7 @@ class MLModel:
             
         except Exception as e:
             self.logger.error(f"Error making prediction: {e}")
+            return 'HOLD', 0.0
             return 'HOLD', 0.0
     
     def record_outcome(self, indicators: Dict, signal: str, profit_loss: float):

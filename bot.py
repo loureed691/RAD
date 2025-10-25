@@ -27,6 +27,9 @@ from smart_entry_exit import SmartEntryExit
 from enhanced_mtf_analysis import EnhancedMultiTimeframeAnalysis
 from position_correlation import PositionCorrelationManager
 from bayesian_kelly_2025 import BayesianAdaptiveKelly
+# 2025 AI Enhancements
+from enhanced_order_book_2025 import EnhancedOrderBookAnalyzer
+from attention_features_2025 import AttentionFeatureSelector
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -137,6 +140,16 @@ class TradingBot:
             window_size=50
         )
         
+        # 2025 AI Enhancements
+        self.enhanced_orderbook_2025 = EnhancedOrderBookAnalyzer()
+        self.attention_features_2025 = AttentionFeatureSelector(
+            n_features=31,  # Match ML model feature count
+            learning_rate=0.01
+        )
+        
+        # Connect attention selector to ML model for feature weighting
+        self.ml_model.attention_selector = self.attention_features_2025
+        
         self.logger.info("🚀 2026 Advanced Features Activated:")
         self.logger.info("   ✅ Advanced Risk Manager (Regime-aware Kelly)")
         self.logger.info("   ✅ Market Microstructure (Order flow analysis)")
@@ -148,6 +161,10 @@ class TradingBot:
         self.logger.info("   ✅ Enhanced Multi-Timeframe Analysis")
         self.logger.info("   ✅ Position Correlation Management")
         self.logger.info("   ✅ Bayesian Adaptive Kelly Criterion")
+        
+        self.logger.info("🤖 2025 AI Enhancements Activated:")
+        self.logger.info("   ✅ Enhanced Order Book Analyzer (VAMP, WDOP, OBI)")
+        self.logger.info("   ✅ Attention-Based Feature Selection")
         
         # State
         self.running = False
@@ -390,6 +407,52 @@ class TradingBot:
             elif entry_analysis['timing_score'] < 0.4:
                 confidence *= 0.9  # Reduce confidence by 10% for poor timing
                 self.logger.info(f"   ⚠️  Suboptimal entry timing - confidence reduced to {confidence:.2f}")
+            
+            # 2025 AI ENHANCEMENT: Enhanced Order Book Analysis (VAMP, WDOP, OBI)
+            try:
+                # Calculate VAMP (Volume Adjusted Mid Price)
+                vamp = self.enhanced_orderbook_2025.calculate_vamp(orderbook)
+                
+                # Calculate WDOP (Weighted-Depth Order Book Price)
+                wdop_bid, wdop_ask = self.enhanced_orderbook_2025.calculate_wdop(orderbook, depth_levels=5)
+                
+                # Calculate Enhanced OBI
+                enhanced_obi = self.enhanced_orderbook_2025.calculate_enhanced_obi(orderbook)
+                
+                # Get execution score
+                execution_score = self.enhanced_orderbook_2025.get_execution_score(
+                    orderbook, entry_price, signal.lower()
+                )
+                
+                # Check if we should execute now
+                should_exec, exec_reason = self.enhanced_orderbook_2025.should_execute_now(
+                    orderbook, entry_price, signal.lower(), min_score=0.5
+                )
+                
+                self.logger.info(f"📊 Enhanced Order Book Analysis (2025):")
+                if vamp:
+                    self.logger.info(f"   VAMP: ${vamp:.2f} (true market price)")
+                if wdop_bid and wdop_ask:
+                    self.logger.info(f"   WDOP: Bid=${wdop_bid:.2f}, Ask=${wdop_ask:.2f}")
+                self.logger.info(f"   Enhanced OBI: {enhanced_obi['obi']:.3f} ({enhanced_obi['obi_strength']}, trend: {enhanced_obi['obi_trend']})")
+                self.logger.info(f"   Execution Score: {execution_score:.2f}")
+                self.logger.info(f"   Should Execute: {should_exec} - {exec_reason}")
+                
+                # Adjust confidence based on execution score
+                if execution_score > 0.75:
+                    confidence *= 1.08  # Boost confidence by 8% for excellent execution conditions
+                    self.logger.info(f"   ✅ Excellent execution conditions - confidence boosted to {confidence:.2f}")
+                elif execution_score < 0.4:
+                    confidence *= 0.92  # Reduce confidence by 8% for poor execution conditions
+                    self.logger.info(f"   ⚠️  Poor execution conditions - confidence reduced to {confidence:.2f}")
+                
+                # If enhanced analysis strongly suggests not executing, respect it
+                if not should_exec and execution_score < 0.3:
+                    self.logger.warning(f"❌ Enhanced order book analysis recommends NOT executing: {exec_reason}")
+                    return False
+                    
+            except Exception as e:
+                self.logger.debug(f"Enhanced order book analysis error: {e}")
             
         except Exception as e:
             self.logger.debug(f"Could not fetch orderbook data: {e}")
@@ -677,6 +740,15 @@ class TradingBot:
                     
                     signal = 'BUY' if position.side == 'long' else 'SELL'
                     self.ml_model.record_outcome(indicators, signal, pnl)
+                    
+                    # 2025 AI ENHANCEMENT: Update attention weights based on trade outcome
+                    try:
+                        features = self.ml_model.prepare_features(indicators).flatten()
+                        trade_success = pnl > 0.005  # Profitable trade
+                        self.attention_features_2025.update_attention_weights(features, trade_success)
+                        self.logger.debug(f"Updated attention weights based on trade outcome (success: {trade_success})")
+                    except Exception as e:
+                        self.logger.debug(f"Error updating attention weights: {e}")
                     
                     # Record outcome for risk manager (for streak tracking)
                     self.risk_manager.record_trade_outcome(pnl)
