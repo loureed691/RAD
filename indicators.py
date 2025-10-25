@@ -116,7 +116,9 @@ class Indicators:
             # Volume-weighted indicators (VWAP optimized)
             typical_price = (df['high'] + df['low'] + df['close']) / 3
             tp_volume = typical_price * df['volume']
-            df['vwap'] = tp_volume.rolling(window=50, min_periods=1).sum() / df['volume'].rolling(window=50, min_periods=1).sum()
+            # SAFETY: Protect against division by zero when volume is 0
+            volume_sum = df['volume'].rolling(window=50, min_periods=1).sum()
+            df['vwap'] = tp_volume.rolling(window=50, min_periods=1).sum() / volume_sum.replace(0, np.nan)
             
             return df
         except Exception as e:
@@ -179,15 +181,18 @@ class Indicators:
             resistance_levels = []
             
             # Find local maxima in volume profile
-            for i in range(1, len(volume_profile) - 1):
-                if volume_profile[i] > volume_profile[i-1] and volume_profile[i] > volume_profile[i+1]:
-                    level_price = (bins[i] + bins[i + 1]) / 2
-                    level_strength = volume_profile[i] / volume_profile.sum()
-                    
-                    if level_price < current_price:
-                        support_levels.append({'price': level_price, 'strength': level_strength})
-                    else:
-                        resistance_levels.append({'price': level_price, 'strength': level_strength})
+            # SAFETY: Check if volume profile has data to avoid division by zero
+            volume_sum = volume_profile.sum()
+            if volume_sum > 0:
+                for i in range(1, len(volume_profile) - 1):
+                    if volume_profile[i] > volume_profile[i-1] and volume_profile[i] > volume_profile[i+1]:
+                        level_price = (bins[i] + bins[i + 1]) / 2
+                        level_strength = volume_profile[i] / volume_sum
+                        
+                        if level_price < current_price:
+                            support_levels.append({'price': level_price, 'strength': level_strength})
+                        else:
+                            resistance_levels.append({'price': level_price, 'strength': level_strength})
             
             # Sort by strength
             support_levels.sort(key=lambda x: x['strength'], reverse=True)
