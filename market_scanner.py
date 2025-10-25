@@ -258,7 +258,9 @@ class MarketScanner:
         
         # Scan pairs in parallel with timeout handling
         scan_timeout = 10  # 10 seconds timeout per pair
-        overall_timeout = len(filtered_symbols) * 2  # 2 seconds per symbol max for entire scan
+        # Calculate overall timeout accounting for parallelism
+        # With parallel execution, total time should be much less than sequential
+        overall_timeout = max(60, (len(filtered_symbols) * 2) // max_workers)
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_symbol = {
@@ -300,8 +302,12 @@ class MarketScanner:
                         self.scanning_logger.error(f"  ✗ Error scanning {symbol}: {e}")
             except TimeoutError:
                 # Overall timeout for entire scan exceeded
-                self.logger.warning(f"⏱️ Overall scan timeout exceeded ({overall_timeout}s)")
-                self.scanning_logger.warning(f"⏱️ Overall scan timeout - some pairs may not have been scanned")
+                # Cancel remaining futures to free up resources
+                remaining_futures = [f for f in future_to_symbol.keys() if not f.done()]
+                for future in remaining_futures:
+                    future.cancel()
+                self.logger.warning(f"⏱️ Overall scan timeout exceeded ({overall_timeout}s) - cancelled {len(remaining_futures)} pending scans")
+                self.scanning_logger.warning(f"⏱️ Overall scan timeout - cancelled {len(remaining_futures)} pending scans")
         
         # Sort by score descending
         results.sort(key=lambda x: x['score'], reverse=True)
