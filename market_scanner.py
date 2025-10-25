@@ -29,6 +29,7 @@ class MarketScanner:
         self.cache_duration = Config.CACHE_DURATION  # Use configurable cache duration
         self.last_full_scan = None
         self.scan_results_cache = []
+        self.last_market_context = None  # Store latest market context analysis
         
         # Thread lock for cache access to prevent race conditions
         self._cache_lock = threading.Lock()
@@ -73,7 +74,7 @@ class MarketScanner:
                             self.scanning_logger.info(f"  ℹ Using cached data as fallback (age: {int(cache_age)}s)")
                             return cached_data
                 # No cache available, return empty result
-                result = (symbol, 0.0, 'HOLD', 0.0, {'error': 'No OHLCV data'})
+                result = (symbol, 0.0, 'HOLD', 0.0, {'error': 'No OHLCV data'}, None)
                 with self._cache_lock:
                     self.cache[cache_key] = (result, time.time())
                 return result
@@ -92,7 +93,7 @@ class MarketScanner:
                             self.scanning_logger.info(f"  ℹ Using cached data as fallback (age: {int(cache_age)}s)")
                             return cached_data
                 # No cache available, return empty result
-                result = (symbol, 0.0, 'HOLD', 0.0, {'error': f'Insufficient data: {len(ohlcv_1h)} candles'})
+                result = (symbol, 0.0, 'HOLD', 0.0, {'error': f'Insufficient data: {len(ohlcv_1h)} candles'}, None)
                 with self._cache_lock:
                     self.cache[cache_key] = (result, time.time())
                 return result
@@ -122,7 +123,7 @@ class MarketScanner:
                             self.scanning_logger.info(f"  ℹ Using cached data as fallback (age: {int(cache_age)}s)")
                             return cached_data
                 # No cache available, return empty result
-                result = (symbol, 0.0, 'HOLD', 0.0, {'error': 'Indicator calculation failed'})
+                result = (symbol, 0.0, 'HOLD', 0.0, {'error': 'Indicator calculation failed'}, None)
                 with self._cache_lock:
                     self.cache[cache_key] = (result, time.time())
                 return result
@@ -138,11 +139,18 @@ class MarketScanner:
             # Calculate score
             score = self.signal_generator.calculate_score(df_1h)
             
+            # Extract metrics for market context (return as 6th element in tuple)
+            indicators = Indicators.get_latest_indicators(df_1h)
+            metrics = {
+                'volatility': indicators.get('bb_width', 0.03),
+                'volume_ratio': indicators.get('volume_ratio', 1.0)
+            } if indicators else None
+            
             self.scanning_logger.info(f"  Result: Signal={signal}, Score={score:.2f}, Confidence={confidence:.2%}")
             if reasons:
                 self.scanning_logger.debug(f"  Reasons: {', '.join([f'{k}={v}' for k, v in reasons.items()])}")
             
-            result = (symbol, score, signal, confidence, reasons)
+            result = (symbol, score, signal, confidence, reasons, metrics)
             
             # Cache the result (thread-safe)
             with self._cache_lock:
@@ -163,7 +171,7 @@ class MarketScanner:
                         self.scanning_logger.info(f"  ℹ Using cached data as fallback (age: {int(cache_age)}s)")
                         return cached_data
             # No cache available, return error result
-            result = (symbol, 0.0, 'HOLD', 0.0, {'error': str(e)})
+            result = (symbol, 0.0, 'HOLD', 0.0, {'error': str(e)}, None)
             with self._cache_lock:
                 self.cache[cache_key] = (result, time.time())
             return result
@@ -262,6 +270,11 @@ class MarketScanner:
         # With parallel execution, total time should be much less than sequential
         overall_timeout = max(60, (len(filtered_symbols) * 2) // max_workers)
         
+        # Track aggregate metrics for market context analysis
+        total_volatility = 0.0
+        total_volume_ratio = 0.0
+        metrics_count = 0
+        
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_symbol = {
                 executor.submit(self.scan_pair, symbol): symbol 
@@ -271,9 +284,18 @@ class MarketScanner:
             try:
                 for future in as_completed(future_to_symbol, timeout=overall_timeout):
                     try:
-                        # Get result with timeout
-                        symbol, score, signal, confidence, reasons = future.result(timeout=scan_timeout)
+                        # Get result with timeout (now includes metrics as 6th element)
+                        scan_result = future.result(timeout=scan_timeout)
+                        symbol, score, signal, confidence, reasons = scan_result[:5]
+                        metrics = scan_result[5] if len(scan_result) > 5 else None
+                        
                         scan_count += 1
+                        
+                        # Aggregate metrics for market context
+                        if metrics:
+                            total_volatility += metrics.get('volatility', 0.03)
+                            total_volume_ratio += metrics.get('volume_ratio', 1.0)
+                            metrics_count += 1
                         
                         # Log all scanned pairs for debugging
                         self.logger.debug(f"Scanned {symbol}: Signal={signal}, Confidence={confidence:.2f}, Score={score:.2f}")
@@ -330,6 +352,45 @@ class MarketScanner:
                 self.scanning_logger.info(f"  {i}. {opp['symbol']}: {opp['signal']} (score: {opp['score']:.2f}, conf: {opp['confidence']:.2%})")
         else:
             self.scanning_logger.info("No trading opportunities found")
+        
+        # SMART ENHANCEMENT: Analyze overall market context
+        try:
+            from smart_trading_enhancements import MarketContextAnalyzer
+            market_context = MarketContextAnalyzer()
+            
+            # Count bullish and bearish signals
+            bullish_count = sum(1 for r in results if r['signal'] == 'BUY')
+            bearish_count = sum(1 for r in results if r['signal'] == 'SELL')
+            
+            # Calculate average volatility and volume from aggregated metrics
+            avg_volatility = (total_volatility / metrics_count) if metrics_count > 0 else 0.03
+            avg_volume_ratio = (total_volume_ratio / metrics_count) if metrics_count > 0 else 1.0
+            
+            context_analysis = market_context.analyze_market_context(
+                current_pairs_analyzed=scan_count,
+                bullish_signals=bullish_count,
+                bearish_signals=bearish_count,
+                avg_volatility=avg_volatility,
+                avg_volume_ratio=avg_volume_ratio
+            )
+            
+            self.scanning_logger.info(f"\n{'='*40}")
+            self.scanning_logger.info(f"MARKET CONTEXT ANALYSIS")
+            self.scanning_logger.info(f"{'='*40}")
+            self.scanning_logger.info(f"Market Sentiment: {context_analysis['sentiment']}")
+            self.scanning_logger.info(f"Sentiment Score: {context_analysis['sentiment_score']:.2f}")
+            self.scanning_logger.info(f"Market Activity: {context_analysis['activity']}")
+            self.scanning_logger.info(f"Volume Health: {context_analysis['volume_health']}")
+            self.scanning_logger.info(f"Volatility State: {context_analysis['volatility_state']}")
+            self.scanning_logger.info(f"Market Health Score: {context_analysis['market_health_score']:.2f}")
+            self.scanning_logger.info(f"Recommendation: {context_analysis['recommendation']}")
+            
+            # Store context for later use
+            with self._cache_lock:
+                self.last_market_context = context_analysis
+                
+        except Exception as e:
+            self.logger.debug(f"Market context analysis error: {e}")
         
         self.scanning_logger.info(f"{'='*80}\n")
         
