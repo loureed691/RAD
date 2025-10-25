@@ -324,8 +324,8 @@ Hard limits that cannot be overridden:
 
 ## 📖 Additional Resources
 
-- **PROFITABILITY_IMPROVEMENTS.md** - Previous profitability fixes
-- **SMARTER_BOT_ENHANCEMENTS.md** - Intelligence upgrade details
+- **2025_AI_ENHANCEMENTS.md** - Latest AI features and improvements
+- **ADVANCED_STRATEGY_ENHANCEMENTS.md** - Advanced strategy improvements
 - **ADVANCED_FEATURES.md** - Pattern recognition, exit strategies
 - **QUICKSTART.md** - Quick setup guide
 - **README.md** - Full documentation

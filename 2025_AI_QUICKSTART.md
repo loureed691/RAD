@@ -386,7 +386,7 @@ Questions? Issues?
 ## 🎓 Further Reading
 
 - **2025_AI_ENHANCEMENTS.md** - Complete technical documentation
-- **SMARTER_BOT_ENHANCEMENTS.md** - Previous ML improvements
+- **ADVANCED_STRATEGY_ENHANCEMENTS.md** - Advanced strategy improvements
 - **2026_ENHANCEMENTS.md** - Market regime & advanced features
 - **KELLY_CRITERION_GUIDE.md** - Position sizing fundamentals
 
