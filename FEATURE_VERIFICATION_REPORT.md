@@ -173,18 +173,22 @@ All 2025 AI enhancements and 2026 advanced features are properly integrated and 
 
 ## Expected Performance Improvements
 
-### From 2026 Features
+### From 2026 Features (Based on Documentation Targets)
 - Win Rate: 70-75% (+10-15%)
 - Annual Return: 65-85% (+44-89%)
 - Max Drawdown: 15-18% (-28-40%)
 - Sharpe Ratio: 2.0-2.5 (+67-108%)
 - Profit Factor: 2.5-3.0 (+39-67%)
 
-### From 2025 AI Enhancements
-- Signal Quality: +3-7% improvement
-- Execution Prices: 0.5-1.5% better
-- Slippage: 30-50% reduction
-- Risk-Adjusted Returns: +20-30% improvement
+*Note: These are target improvements from 2026_ENHANCEMENTS.md. Actual performance will vary based on market conditions and requires backtesting validation.*
+
+### From 2025 AI Enhancements (Based on Research Literature)
+- Signal Quality: +3-7% improvement (from attention-based feature selection research)
+- Execution Prices: 0.5-1.5% better (from VAMP/WDOP/OBI literature)
+- Slippage: 30-50% reduction (from enhanced order book analysis studies)
+- Risk-Adjusted Returns: +20-30% improvement (from Bayesian Kelly research)
+
+*Note: These are literature-based expectations from 2025_AI_ENHANCEMENTS.md. Real-world performance requires live testing and validation.*
 
 ---
 
