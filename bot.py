@@ -42,34 +42,34 @@ class TradingBot:
         self.logger.info("🤖 INITIALIZING ADVANCED KUCOIN FUTURES TRADING BOT")
         self.logger.info("=" * 60)
         
-        # Setup specialized loggers for detailed tracking
+        # Setup specialized loggers - now all write to the same unified log file
+        # with clear component tags for better visibility
         self.position_logger = Logger.setup_specialized_logger(
-            'PositionLogger', 
-            Config.POSITION_LOG_FILE, 
+            'TradingBot.Position', 
+            Config.LOG_FILE,  # All logs go to main log file now
             Config.DETAILED_LOG_LEVEL
         )
         self.scanning_logger = Logger.setup_specialized_logger(
-            'ScanningLogger', 
-            Config.SCANNING_LOG_FILE, 
+            'TradingBot.Scanning', 
+            Config.LOG_FILE,  # All logs go to main log file now
             Config.DETAILED_LOG_LEVEL
         )
         self.orders_logger = Logger.setup_specialized_logger(
-            'OrdersLogger',
-            Config.ORDERS_LOG_FILE,
+            'TradingBot.Order',
+            Config.LOG_FILE,  # All logs go to main log file now
             Config.DETAILED_LOG_LEVEL
         )
         self.strategy_logger = Logger.setup_specialized_logger(
-            'StrategyLogger',
-            Config.STRATEGY_LOG_FILE,
+            'TradingBot.Strategy',
+            Config.LOG_FILE,  # All logs go to main log file now
             Config.DETAILED_LOG_LEVEL
         )
         
-        self.logger.info(f"📝 Logging configuration:")
-        self.logger.info(f"   Main log: {Config.LOG_FILE} (level: {Config.LOG_LEVEL})")
-        self.logger.info(f"   Position tracking: {Config.POSITION_LOG_FILE} (level: {Config.DETAILED_LOG_LEVEL})")
-        self.logger.info(f"   Market scanning: {Config.SCANNING_LOG_FILE} (level: {Config.DETAILED_LOG_LEVEL})")
-        self.logger.info(f"   Order execution: {Config.ORDERS_LOG_FILE} (level: {Config.DETAILED_LOG_LEVEL})")
-        self.logger.info(f"   Strategy analysis: {Config.STRATEGY_LOG_FILE} (level: {Config.DETAILED_LOG_LEVEL})")
+        self.logger.info(f"📝 Unified logging configuration:")
+        self.logger.info(f"   Single log file: {Config.LOG_FILE}")
+        self.logger.info(f"   Log level: {Config.LOG_LEVEL} (main), {Config.DETAILED_LOG_LEVEL} (detailed)")
+        self.logger.info(f"   Component tags: [POSITION], [SCANNING], [ORDER], [STRATEGY]")
+        self.logger.info(f"   All logs consolidated for better visibility")
         
         # Initialize components
         self.client = KuCoinClient(

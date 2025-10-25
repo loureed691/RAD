@@ -6,6 +6,32 @@ import os
 import sys
 from datetime import datetime
 
+class ComponentFormatter(logging.Formatter):
+    """Custom formatter that adds component tags to log messages"""
+    
+    def format(self, record):
+        """Format log record with component tags"""
+        # Extract component tag from logger name (e.g., "TradingBot.Position" -> "[POSITION]")
+        component_tag = ''
+        if '.' in record.name:
+            component = record.name.split('.')[-1].upper()
+            component_tag = f"[{component}] "
+        
+        # Store the original format
+        original_format = self._style._fmt
+        
+        # Add component tag to the format if present
+        if component_tag:
+            self._style._fmt = original_format.replace('%(levelname)s', f'{component_tag}%(levelname)s')
+        
+        # Format the message
+        result = super().format(record)
+        
+        # Restore original format
+        self._style._fmt = original_format
+        
+        return result
+
 class ColoredFormatter(logging.Formatter):
     """Custom formatter with colors and icons for terminal output"""
     
@@ -72,16 +98,31 @@ class ColoredFormatter(logging.Formatter):
         icon = self.ICONS.get(levelname, '•')
         reset = self.COLORS['RESET']
         dim = self.COLORS['DIM']
+        bold = self.COLORS['BOLD']
+        
+        # Extract component tag from logger name (e.g., "TradingBot.Position" -> "[POSITION]")
+        component_tag = ''
+        if '.' in record.name:
+            component = record.name.split('.')[-1].upper()
+            # Add specific colors for different components
+            component_colors = {
+                'POSITION': '\033[95m',   # Bright magenta
+                'SCANNING': '\033[96m',   # Bright cyan
+                'ORDER': '\033[93m',      # Bright yellow
+                'STRATEGY': '\033[94m'    # Bright blue
+            }
+            component_color = component_colors.get(component, '\033[97m')  # Default to bright white
+            component_tag = f"{component_color}[{component}]{reset} "
         
         # Format with colors and icon
-        # Time in dim, icon and level in color, message in default
+        # Time in dim, component tag in color, icon and level in color, message in default
         parts = message.split(' - ', 2)
         if len(parts) >= 3:
             time_part = parts[0]
             level_part = parts[1]
             msg_part = parts[2]
             
-            formatted = f"{dim}{time_part}{reset} {color}{icon} {level_part}{reset} {msg_part}"
+            formatted = f"{dim}{time_part}{reset} {component_tag}{color}{icon} {level_part}{reset} {msg_part}"
             return formatted
         
         return message
@@ -108,8 +149,8 @@ class Logger:
         # Use UTF-8 encoding to properly handle Unicode characters in log files
         file_handler = logging.FileHandler(log_file, encoding='utf-8')
         file_handler.setLevel(getattr(logging, log_level))
-        file_formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        file_formatter = ComponentFormatter(
+            '%(asctime)s - %(levelname)s - %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
         file_handler.setFormatter(file_formatter)
@@ -144,42 +185,28 @@ class Logger:
     @staticmethod
     def setup_specialized_logger(name: str, log_file: str, log_level='DEBUG'):
         """
-        Set up a specialized logger for specific components (e.g., positions, scanning)
+        Set up a specialized logger that writes to the main log file with prefixes.
+        This consolidates all logs into a single unified view.
         
         Args:
             name: Logger name (e.g., 'PositionLogger', 'ScanningLogger')
-            log_file: Path to log file
+            log_file: Path to log file (will use main log file instead)
             log_level: Logging level for this logger
         
         Returns:
-            Configured logger instance
+            Configured logger instance that shares the main bot logger
         """
-        # Create logs directory if it doesn't exist
-        log_dir = os.path.dirname(log_file)
-        if log_dir and not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-        
-        # Configure specialized logger
+        # Get the main TradingBot logger - all specialized loggers now use the same logger
+        # but with different name prefixes for clarity
         logger = logging.getLogger(name)
         logger.setLevel(getattr(logging, log_level))
         
         # Clear existing handlers
         logger.handlers.clear()
         
-        # Prevent propagation to parent logger to avoid duplicate logs
-        logger.propagate = False
-        
-        # File handler (plain text, detailed)
-        file_handler = logging.FileHandler(log_file, encoding='utf-8')
-        file_handler.setLevel(getattr(logging, log_level))
-        file_formatter = logging.Formatter(
-            '%(asctime)s - %(levelname)s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-        file_handler.setFormatter(file_formatter)
-        
-        # Add only file handler (no console output for specialized loggers)
-        logger.addHandler(file_handler)
+        # Don't prevent propagation - let it bubble up to the main TradingBot logger
+        # This way all logs go to the same file
+        logger.propagate = True
         
         return logger
     
@@ -190,20 +217,20 @@ class Logger:
     
     @staticmethod
     def get_position_logger():
-        """Get the position tracking logger"""
-        return logging.getLogger('PositionLogger')
+        """Get the position tracking logger with [POSITION] prefix"""
+        return logging.getLogger('TradingBot.Position')
     
     @staticmethod
     def get_scanning_logger():
-        """Get the market scanning logger"""
-        return logging.getLogger('ScanningLogger')
+        """Get the market scanning logger with [SCANNING] prefix"""
+        return logging.getLogger('TradingBot.Scanning')
     
     @staticmethod
     def get_orders_logger():
-        """Get the orders logger"""
-        return logging.getLogger('OrdersLogger')
+        """Get the orders logger with [ORDER] prefix"""
+        return logging.getLogger('TradingBot.Order')
     
     @staticmethod
     def get_strategy_logger():
-        """Get the strategy logger"""
-        return logging.getLogger('StrategyLogger')
+        """Get the strategy logger with [STRATEGY] prefix"""
+        return logging.getLogger('TradingBot.Strategy')
