@@ -98,7 +98,6 @@ class ColoredFormatter(logging.Formatter):
         icon = self.ICONS.get(levelname, '•')
         reset = self.COLORS['RESET']
         dim = self.COLORS['DIM']
-        bold = self.COLORS['BOLD']
         
         # Extract component tag from logger name (e.g., "TradingBot.Position" -> "[POSITION]")
         component_tag = ''
