@@ -789,6 +789,11 @@ class PositionManager:
         # Note: This is mainly for safety, as the bot is typically single-threaded
         # but protects against future multi-threaded enhancements
         self._positions_lock = threading.Lock()
+        
+        # OPTIMIZATION: Cache OHLCV data to reduce API calls during position updates
+        self._ohlcv_cache = {}  # symbol -> (ohlcv_data, timestamp)
+        self._ohlcv_cache_duration = 30  # Cache for 30 seconds
+        self._ohlcv_cache_lock = threading.Lock()
     
     def sync_existing_positions(self):
         """Sync existing positions from the exchange and import them into management
@@ -1301,7 +1306,23 @@ class PositionManager:
                 
                 # Get market data for adaptive parameters with better error handling
                 try:
-                    ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
+                    # OPTIMIZATION: Check cache first
+                    ohlcv = None
+                    with self._ohlcv_cache_lock:
+                        if symbol in self._ohlcv_cache:
+                            cached_data, cache_time = self._ohlcv_cache[symbol]
+                            cache_age = time.time() - cache_time
+                            if cache_age < self._ohlcv_cache_duration:
+                                ohlcv = cached_data
+                                self.position_logger.debug(f"  Using cached OHLCV data (age: {cache_age:.1f}s)")
+                    
+                    # Fetch fresh data if not in cache
+                    if ohlcv is None:
+                        ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
+                        # Update cache
+                        if ohlcv:
+                            with self._ohlcv_cache_lock:
+                                self._ohlcv_cache[symbol] = (ohlcv, time.time())
                 except Exception as e:
                     self.logger.warning(f"API error getting OHLCV for {symbol}: {type(e).__name__}: {e}")
                     self.position_logger.debug(f"  Using simple trailing stop (OHLCV API error: {type(e).__name__})")
