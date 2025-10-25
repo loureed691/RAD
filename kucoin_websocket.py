@@ -50,7 +50,13 @@ class KuCoinWebSocket:
         
         # Subscriptions
         self._subscriptions = set()
-        self._max_subscriptions = 380  # KuCoin limit is 400, use 380 for safety margin
+        # KuCoin's documented maximum subscription limit per connection is 400.
+        # We set our internal limit to 380, leaving a safety margin of 20 subscriptions.
+        # This margin helps avoid unexpected disconnects or errors due to undocumented
+        # server-side constraints, network fluctuations, or future changes in KuCoin's limits.
+        # The value of 20 is chosen as a conservative buffer based on experience and to
+        # ensure stable operation. If KuCoin updates their limits, review and adjust accordingly.
+        self._max_subscriptions = 380
         
         # Rate limiting for subscriptions
         self._subscription_lock = threading.Lock()
