@@ -470,8 +470,8 @@ Run in parallel with existing system
 
 ## 📖 Additional Resources
 
-- **SMARTER_BOT_ENHANCEMENTS.md** - Previous intelligence upgrade
 - **2026_ENHANCEMENTS.md** - Market regime & advanced features
+- **ADVANCED_STRATEGY_ENHANCEMENTS.md** - Advanced strategy improvements
 - **KELLY_CRITERION_GUIDE.md** - Position sizing fundamentals
 - **MODERN_GRADIENT_BOOSTING.md** - Current ensemble methods
 - **README.md** - Complete bot documentation
