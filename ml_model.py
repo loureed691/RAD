@@ -233,7 +233,6 @@ class MLModel:
         except Exception as e:
             self.logger.error(f"Error making prediction: {e}")
             return 'HOLD', 0.0
-            return 'HOLD', 0.0
     
     def record_outcome(self, indicators: Dict, signal: str, profit_loss: float):
         """
