@@ -1459,29 +1459,41 @@ class PositionManager:
                 
                 # SMART ENHANCEMENT: Check smart exit optimizer for early exit signals
                 try:
-                    position_duration_minutes = (datetime.now() - position.entry_time).total_seconds() / 60
-                    volume_ratio = locals().get('indicators', {}).get('volume_ratio', 1.0) if 'indicators' in locals() else 1.0
+                    # Constants for readability
+                    SECONDS_PER_MINUTE = 60
+                    SMART_EXIT_CONFIDENCE_THRESHOLD = 0.7
                     
-                    # Detect trend weakening
+                    position_duration_minutes = (datetime.now() - position.entry_time).total_seconds() / SECONDS_PER_MINUTE
+                    
+                    # Extract market data with safe defaults
+                    market_volatility = market_data.get('volatility', 0.03)
+                    market_momentum = market_data.get('momentum', 0.0)
+                    market_rsi = market_data.get('rsi', 50.0)
+                    market_trend_strength = market_data.get('trend_strength', 0.5)
+                    
+                    # Get volume ratio from indicators if available
+                    volume_ratio = 1.0
+                    if 'indicators' in locals() and indicators:
+                        volume_ratio = indicators.get('volume_ratio', 1.0)
+                    
+                    # Detect trend weakening based on position direction
                     trend_weakening = False
-                    if 'trend_strength' in locals() and 'momentum' in locals():
-                        # Trend is weakening if momentum is opposite to position direction
-                        if position.side == 'long' and momentum < -0.01 and trend_strength < 0.4:
-                            trend_weakening = True
-                        elif position.side == 'short' and momentum > 0.01 and trend_strength < 0.4:
-                            trend_weakening = True
+                    if position.side == 'long' and market_momentum < -0.01 and market_trend_strength < 0.4:
+                        trend_weakening = True
+                    elif position.side == 'short' and market_momentum > 0.01 and market_trend_strength < 0.4:
+                        trend_weakening = True
                     
                     smart_exit_signal = self.smart_exit_optimizer.should_exit_early(
                         position_pnl=leveraged_pnl,
                         position_duration_minutes=position_duration_minutes,
-                        current_momentum=locals().get('momentum', 0.0),
-                        current_rsi=locals().get('rsi', 50.0),
-                        volatility=locals().get('volatility', 0.03),
+                        current_momentum=market_momentum,
+                        current_rsi=market_rsi,
+                        volatility=market_volatility,
                         volume_ratio=volume_ratio,
                         trend_weakening=trend_weakening
                     )
                     
-                    if smart_exit_signal['should_exit'] and smart_exit_signal['confidence'] > 0.7:
+                    if smart_exit_signal['should_exit'] and smart_exit_signal['confidence'] > SMART_EXIT_CONFIDENCE_THRESHOLD:
                         smart_exit_reason = f"Smart exit: {smart_exit_signal['reason_text']} (confidence: {smart_exit_signal['confidence']:.2f})"
                         self.position_logger.info(f"  🧠 {smart_exit_reason}")
                         pnl = self.close_position(symbol, smart_exit_reason)
