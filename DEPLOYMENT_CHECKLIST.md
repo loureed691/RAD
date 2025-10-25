@@ -89,7 +89,7 @@ cp position_manager.py.backup position_manager.py
 ## Contact
 
 If issues arise:
-1. Check logs: positions.log, bot.log, orders.log
+1. Check unified log: `logs/bot.log` (use grep to filter by component: [POSITION], [ORDER], etc.)
 2. Review closed positions in Position History.csv
 3. Run test suite: `python3 test_api_fallback_fix.py`
 4. Refer to BUG_FIX_REPORT.md for details

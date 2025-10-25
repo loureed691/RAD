@@ -1,103 +1,131 @@
-# Orders Logging Feature
+# Unified Logging Feature
 
 ## Overview
 
-All buy and sell orders executed through the KuCoin client are now automatically logged to a dedicated orders log file (`logs/orders.log`). This provides a complete audit trail of all trading activity.
+All bot operations are now logged to a **single unified log file** (`logs/bot.log`) with clear component tags for better visibility. This makes it much easier to understand what's happening across all bot components in chronological order.
+
+## What Changed
+
+**Before:** The bot created 5 separate log files:
+- `logs/bot.log` - Main bot operations
+- `logs/positions.log` - Position tracking
+- `logs/scanning.log` - Market scanning
+- `logs/orders.log` - Order execution  
+- `logs/strategy.log` - Strategy analysis
+
+**Now:** Everything goes to **one log file** with clear component tags:
+- `logs/bot.log` - **All bot operations with component tags**
 
 ## Configuration
 
-The orders log is configured in `.env` (optional):
+The unified log is configured in `.env` (optional):
 
 ```bash
-# Orders log file (default: logs/orders.log)
-ORDERS_LOG_FILE=logs/orders.log
+# Main log file (default: logs/bot.log)
+LOG_FILE=logs/bot.log
+
+# Log level for main operations (default: INFO)
+LOG_LEVEL=INFO
+
+# Log level for detailed component logs (default: DEBUG)
+DETAILED_LOG_LEVEL=DEBUG
 ```
 
-If not specified, the default `logs/orders.log` will be used.
+## Component Tags
+
+All log entries are now tagged by component for easy identification:
+
+- **[POSITION]** - Position lifecycle (open, update, close)
+- **[SCANNING]** - Market scanning and opportunity detection
+- **[ORDER]** - Order execution details (buy/sell/cancel)
+- **[STRATEGY]** - Strategy analysis and recommendations
+- **No tag** - General bot operations
 
 ## What is Logged
 
-The orders logger tracks all order lifecycle events:
+### 1. Position Events [POSITION]
+- Position opened/closed
+- Stop loss updates
+- Take profit triggers
+- Position size changes
+- P&L calculations
 
-### 1. Market Orders (Immediate Execution)
-- Order ID, symbol, side (BUY/SELL)
-- Contract amount and leverage
-- Reference price and actual fill price
-- Slippage percentage
-- Total cost and fill amount
-- Execution timestamp
+### 2. Market Scanning [SCANNING]
+- Markets being analyzed
+- Opportunity detection
+- Technical indicator values
+- Signal generation
 
-### 2. Limit Orders (Price-Specific)
-- Order ID, symbol, side (BUY/SELL)
-- Contract amount and limit price
-- Leverage setting
-- Post-only flag (maker-only orders)
-- Reduce-only flag (position closing only)
-- Order status and timestamp
+### 3. Order Execution [ORDER]
+- Market orders (immediate execution)
+- Limit orders (price-specific)
+- Stop-limit orders (conditional)
+- Order cancellations
+- Fill prices and slippage
+- Execution timestamps
 
-### 3. Stop-Limit Orders (Conditional)
-- Order ID, symbol, side (BUY/SELL)
-- Contract amount
-- Stop trigger price
-- Limit execution price
-- Leverage setting
-- Reduce-only flag
-- Order status and timestamp
-
-### 4. Order Cancellations
-- Order ID and symbol
-- Cancellation timestamp
+### 4. Strategy Analysis [STRATEGY]
+- Strategy recommendations
+- Confidence scores
+- Risk assessments
+- Entry/exit signals
 
 ## Log Format
 
-Each order entry is clearly formatted with separators for easy reading:
-
+### Console Output (with colors)
 ```
-================================================================================
-BUY ORDER EXECUTED: BTC/USDT:USDT
---------------------------------------------------------------------------------
-  Order ID: 123456789
-  Type: MARKET
-  Side: BUY
-  Symbol: BTC/USDT:USDT
-  Amount: 0.001 contracts
-  Leverage: 10x
-  Reference Price: 50000.00
-  Average Fill Price: 50050.00
-  Filled Amount: 0.001
-  Total Cost: 50.05
-  Status: closed
-  Timestamp: 1696608000000
-  Slippage: 0.1000%
-================================================================================
+14:53:03 [POSITION] ✓ INFO Position opened: BTC/USDT at $50,000
+14:53:03 [SCANNING] ✓ INFO Scanning 100 markets for opportunities
+14:53:03 [ORDER] ✓ INFO Market buy order executed: 0.001 BTC
+14:53:03 [STRATEGY] ✓ INFO Strategy recommendation: LONG
+```
 
+Component tags are color-coded in the console:
+- **[POSITION]** - Bright magenta
+- **[SCANNING]** - Bright cyan
+- **[ORDER]** - Bright yellow
+- **[STRATEGY]** - Bright blue
+
+### File Output (plain text)
+```
+2025-10-25 14:53:03 - [POSITION] INFO - Position opened: BTC/USDT at $50,000
+2025-10-25 14:53:03 - [SCANNING] INFO - Scanning 100 markets for opportunities
+2025-10-25 14:53:03 - [ORDER] INFO - Market buy order executed: 0.001 BTC
+2025-10-25 14:53:03 - [STRATEGY] INFO - Strategy recommendation: LONG
 ```
 
 ## Benefits
 
-1. **Complete Audit Trail**: Every order is logged, making it easy to review trading history
-2. **Performance Analysis**: Analyze slippage, execution quality, and order patterns
-3. **Debugging**: Quickly identify and debug order execution issues
-4. **Compliance**: Maintain records for tax reporting or regulatory requirements
-5. **Separated Logs**: Orders are logged separately from general bot operations for clarity
+1. **Single Source of Truth**: Everything in one chronological log
+2. **Better Context**: See how different components interact in real-time
+3. **Easier Debugging**: Follow the complete flow of events in one place
+4. **Clear Labels**: Component tags make it easy to filter and find specific types of events
+5. **Simplified Management**: Only one log file to monitor, rotate, and backup
 
 ## Accessing the Log
 
-The orders log is located at `logs/orders.log` by default. You can:
+The unified log is located at `logs/bot.log`. You can:
 
-- View it directly: `cat logs/orders.log`
-- Tail it in real-time: `tail -f logs/orders.log`
-- Filter by order type: `grep "MARKET" logs/orders.log`
-- Filter by symbol: `grep "BTC/USDT" logs/orders.log`
-- Filter by side: `grep "BUY ORDER" logs/orders.log`
+- **View it directly**: `cat logs/bot.log`
+- **Tail in real-time**: `tail -f logs/bot.log`
+- **Filter by component**: 
+  - `grep "\[POSITION\]" logs/bot.log` - Only position events
+  - `grep "\[SCANNING\]" logs/bot.log` - Only scanning events
+  - `grep "\[ORDER\]" logs/bot.log` - Only order events
+  - `grep "\[STRATEGY\]" logs/bot.log` - Only strategy events
+- **Filter by level**: 
+  - `grep "ERROR" logs/bot.log` - Only errors
+  - `grep "WARNING" logs/bot.log` - Only warnings
+- **Combine filters**: 
+  - `grep "\[ORDER\]" logs/bot.log | grep "ERROR"` - Only order errors
 
 ## Log Rotation
 
-For production environments, consider setting up log rotation to prevent the orders log from growing too large:
+For production environments, consider setting up log rotation:
 
 ```bash
 # Example logrotate configuration
-/path/to/logs/orders.log {
+/path/to/logs/bot.log {
     daily
     rotate 30
     compress
@@ -107,50 +135,53 @@ For production environments, consider setting up log rotation to prevent the ord
 }
 ```
 
-## Integration with Existing Logs
+## Example Log Sequence
 
-The orders log complements the existing logging system:
+Here's an example of how different components interact in the unified log:
 
-- **logs/bot.log** - General bot operations and high-level trading decisions
-- **logs/positions.log** - Position lifecycle (open, update, close)
-- **logs/scanning.log** - Market scanning and opportunity detection
-- **logs/orders.log** - Order execution details (NEW)
-
-Together, these logs provide comprehensive visibility into all aspects of the trading bot's operations.
+```
+2025-10-25 14:50:00 - INFO - Bot started, scanning markets...
+2025-10-25 14:50:05 - [SCANNING] INFO - Found opportunity: BTC/USDT (confidence: 85%)
+2025-10-25 14:50:06 - [STRATEGY] INFO - Strategy recommendation: LONG BTC/USDT
+2025-10-25 14:50:07 - [ORDER] INFO - Placing market buy order for BTC/USDT
+2025-10-25 14:50:08 - [ORDER] INFO - Order executed at $50,050 (slippage: 0.1%)
+2025-10-25 14:50:09 - [POSITION] INFO - Position opened: BTC/USDT, size: 0.001, leverage: 10x
+2025-10-25 14:51:00 - [POSITION] INFO - Updated stop loss: $49,500 -> $49,800
+2025-10-25 14:55:00 - [POSITION] INFO - Take profit triggered at $51,000
+2025-10-25 14:55:01 - [ORDER] INFO - Placing market sell order to close position
+2025-10-25 14:55:02 - [ORDER] INFO - Order executed at $50,980
+2025-10-25 14:55:03 - [POSITION] INFO - Position closed, P&L: +$93.00 (1.86%)
+```
 
 ## Testing
 
-To verify the orders logging is working correctly, run:
+To verify the unified logging is working correctly, run:
 
 ```bash
-python test_orders_logging.py
+python test_unified_logging.py
 ```
 
 This test will:
-- Verify the configuration is correct
-- Test all order types (market, limit, stop-limit, cancel)
+- Verify all components write to the same log file
+- Check that component tags are present and correct
 - Display sample log entries
-- Confirm the log file is created and written properly
+- Confirm the unified logging system is working
 
-## Example Usage in Code
+## Migration from Old System
 
-The orders logging is automatic - no changes needed to existing code. It works with all order creation methods:
+If you were using the old multi-file logging system:
 
-```python
-# Market order - automatically logged
-order = client.create_market_order('BTC/USDT:USDT', 'buy', 0.001, leverage=10)
+1. **Old log files are no longer created**: The bot won't create separate `positions.log`, `scanning.log`, `orders.log`, or `strategy.log` files
+2. **All logs are in bot.log**: Check `logs/bot.log` for everything
+3. **No configuration changes needed**: The bot automatically uses the new unified system
+4. **Component tags provide filtering**: Use `grep` to filter by component if you need specialized views
 
-# Limit order - automatically logged
-order = client.create_limit_order('ETH/USDT:USDT', 'sell', 0.1, 3000.0, 
-                                  leverage=5, post_only=True)
+## Benefits Summary
 
-# Stop-limit order - automatically logged
-order = client.create_stop_limit_order('BTC/USDT:USDT', 'buy', 0.01, 
-                                       stop_price=49000.0, 
-                                       limit_price=49500.0)
+✅ **One log file** instead of five separate files  
+✅ **Better visibility** - see the complete picture in chronological order  
+✅ **Clear component tags** - easily identify the source of each log entry  
+✅ **Color-coded console output** - visually distinguish components at a glance  
+✅ **Easier debugging** - follow the flow of events across all components  
+✅ **Simpler management** - only one file to monitor, rotate, and backup
 
-# Cancel order - automatically logged
-success = client.cancel_order('order_id', 'BTC/USDT:USDT')
-```
-
-All of these operations will be logged to `logs/orders.log` automatically.
