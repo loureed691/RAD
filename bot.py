@@ -606,7 +606,14 @@ class TradingBot:
                 # Get the strongest resistance level (first in list)
                 resistance_list = support_resistance['resistance']
                 if resistance_list and len(resistance_list) > 0:
-                    support_level = resistance_list[0]['price'] if isinstance(resistance_list[0], dict) else resistance_list[0]
+                    # If the first resistance is a dict, extract its price; otherwise, assume it's a numeric value.
+                    if isinstance(resistance_list[0], dict):
+                        support_level = resistance_list[0]['price']
+                    elif isinstance(resistance_list[0], (float, int)):
+                        support_level = resistance_list[0]
+                    else:
+                        self.logger.warning(f"Unexpected type for resistance_list[0]: {type(resistance_list[0])}. Expected dict or numeric. Setting support_level to None.")
+                        support_level = None
             
             dynamic_stop = self.advanced_risk_2026.calculate_dynamic_stop_loss(
                 entry_price, atr, support_level, market_regime,
