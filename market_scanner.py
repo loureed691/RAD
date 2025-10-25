@@ -4,7 +4,7 @@ Market scanner to find the best trading pairs
 import time
 import threading
 from typing import List, Dict, Tuple
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from datetime import datetime, timedelta
 from kucoin_client import KuCoinClient
 from indicators import Indicators
@@ -258,43 +258,50 @@ class MarketScanner:
         
         # Scan pairs in parallel with timeout handling
         scan_timeout = 10  # 10 seconds timeout per pair
+        overall_timeout = len(filtered_symbols) * 2  # 2 seconds per symbol max for entire scan
+        
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_symbol = {
                 executor.submit(self.scan_pair, symbol): symbol 
                 for symbol in filtered_symbols
             }
             
-            for future in as_completed(future_to_symbol, timeout=None):
-                try:
-                    # Get result with timeout
-                    symbol, score, signal, confidence, reasons = future.result(timeout=scan_timeout)
-                    scan_count += 1
-                    
-                    # Log all scanned pairs for debugging
-                    self.logger.debug(f"Scanned {symbol}: Signal={signal}, Confidence={confidence:.2f}, Score={score:.2f}")
-                    
-                    if signal != 'HOLD' and score > 0:
-                        results.append({
-                            'symbol': symbol,
-                            'score': score,
-                            'signal': signal,
-                            'confidence': confidence,
-                            'reasons': reasons
-                        })
-                        self.scanning_logger.info(f"✓ Found opportunity: {symbol} - {signal} (score: {score:.2f}, confidence: {confidence:.2%})")
-                    else:
-                        self.logger.debug(f"Skipped {symbol}: signal={signal}, score={score:.2f}")
-                        self.scanning_logger.debug(f"  Skipped {symbol}: {signal} (score: {score:.2f})")
-                except TimeoutError:
-                    timeout_count += 1
-                    symbol = future_to_symbol.get(future, 'unknown')
-                    self.logger.warning(f"⏱️ Scan timeout for {symbol} (>{scan_timeout}s)")
-                    self.scanning_logger.warning(f"  ⏱️ Timeout: {symbol}")
-                except Exception as e:
-                    error_count += 1
-                    symbol = future_to_symbol.get(future, 'unknown')
-                    self.logger.error(f"Error scanning {symbol}: {e}")
-                    self.scanning_logger.error(f"  ✗ Error scanning {symbol}: {e}")
+            try:
+                for future in as_completed(future_to_symbol, timeout=overall_timeout):
+                    try:
+                        # Get result with timeout
+                        symbol, score, signal, confidence, reasons = future.result(timeout=scan_timeout)
+                        scan_count += 1
+                        
+                        # Log all scanned pairs for debugging
+                        self.logger.debug(f"Scanned {symbol}: Signal={signal}, Confidence={confidence:.2f}, Score={score:.2f}")
+                        
+                        if signal != 'HOLD' and score > 0:
+                            results.append({
+                                'symbol': symbol,
+                                'score': score,
+                                'signal': signal,
+                                'confidence': confidence,
+                                'reasons': reasons
+                            })
+                            self.scanning_logger.info(f"✓ Found opportunity: {symbol} - {signal} (score: {score:.2f}, confidence: {confidence:.2%})")
+                        else:
+                            self.logger.debug(f"Skipped {symbol}: signal={signal}, score={score:.2f}")
+                            self.scanning_logger.debug(f"  Skipped {symbol}: {signal} (score: {score:.2f})")
+                    except TimeoutError:
+                        timeout_count += 1
+                        symbol = future_to_symbol.get(future, 'unknown')
+                        self.logger.warning(f"⏱️ Scan timeout for {symbol} (>{scan_timeout}s)")
+                        self.scanning_logger.warning(f"  ⏱️ Timeout: {symbol}")
+                    except Exception as e:
+                        error_count += 1
+                        symbol = future_to_symbol.get(future, 'unknown')
+                        self.logger.error(f"Error scanning {symbol}: {e}")
+                        self.scanning_logger.error(f"  ✗ Error scanning {symbol}: {e}")
+            except TimeoutError:
+                # Overall timeout for entire scan exceeded
+                self.logger.warning(f"⏱️ Overall scan timeout exceeded ({overall_timeout}s)")
+                self.scanning_logger.warning(f"⏱️ Overall scan timeout - some pairs may not have been scanned")
         
         # Sort by score descending
         results.sort(key=lambda x: x['score'], reverse=True)
