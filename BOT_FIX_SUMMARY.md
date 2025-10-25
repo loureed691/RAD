@@ -25,8 +25,7 @@
 
 **Solution:** 
 - Created `logs/` directory
-- Consolidated all logs to a single unified file with component tags:
-  - `bot.log` - All operations with [POSITION], [SCANNING], [ORDER], [STRATEGY] tags
+- Consolidated all logs to a single unified file: `bot.log` with component tags [POSITION], [SCANNING], [ORDER], [STRATEGY]
 
 **Benefit:** Clean repository structure, single unified log for better visibility, easier to follow all bot operations.
 

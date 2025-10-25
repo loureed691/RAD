@@ -89,7 +89,9 @@ cp position_manager.py.backup position_manager.py
 ## Contact
 
 If issues arise:
-1. Check unified log: `logs/bot.log` (use grep to filter by component: [POSITION], [ORDER], etc.)
+1. Check unified log: `logs/bot.log` 
+   - Filter by component: `grep '\[POSITION\]' logs/bot.log`
+   - See UNIFIED_LOGGING.md for more examples
 2. Review closed positions in Position History.csv
 3. Run test suite: `python3 test_api_fallback_fix.py`
 4. Refer to BUG_FIX_REPORT.md for details

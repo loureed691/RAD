@@ -75,9 +75,9 @@ All log entries are now tagged by component for easy identification:
 ### Console Output (with colors)
 ```
 14:53:03 [POSITION] ✓ INFO Position opened: BTC/USDT at $50,000
-14:53:03 [SCANNING] ✓ INFO Scanning 100 markets for opportunities
-14:53:03 [ORDER] ✓ INFO Market buy order executed: 0.001 BTC
-14:53:03 [STRATEGY] ✓ INFO Strategy recommendation: LONG
+14:53:04 [SCANNING] ✓ INFO Scanning 100 markets for opportunities
+14:53:05 [ORDER] ✓ INFO Market buy order executed: 0.001 BTC
+14:53:06 [STRATEGY] ✓ INFO Strategy recommendation: LONG
 ```
 
 Component tags are color-coded in the console:
@@ -89,9 +89,9 @@ Component tags are color-coded in the console:
 ### File Output (plain text)
 ```
 2025-10-25 14:53:03 - [POSITION] INFO - Position opened: BTC/USDT at $50,000
-2025-10-25 14:53:03 - [SCANNING] INFO - Scanning 100 markets for opportunities
-2025-10-25 14:53:03 - [ORDER] INFO - Market buy order executed: 0.001 BTC
-2025-10-25 14:53:03 - [STRATEGY] INFO - Strategy recommendation: LONG
+2025-10-25 14:53:04 - [SCANNING] INFO - Scanning 100 markets for opportunities
+2025-10-25 14:53:05 - [ORDER] INFO - Market buy order executed: 0.001 BTC
+2025-10-25 14:53:06 - [STRATEGY] INFO - Strategy recommendation: LONG
 ```
 
 ## Benefits
