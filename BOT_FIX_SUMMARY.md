@@ -25,14 +25,9 @@
 
 **Solution:** 
 - Created `logs/` directory
-- Moved all log files to `logs/`:
-  - `bot.log`
-  - `positions.log`
-  - `scanning.log`
-  - `orders.log`
-  - `strategy.log`
+- Consolidated all logs to a single unified file: `bot.log` with component tags [POSITION], [SCANNING], [ORDER], [STRATEGY]
 
-**Benefit:** Clean repository structure, logs properly organized and git-ignored.
+**Benefit:** Clean repository structure, single unified log for better visibility, easier to follow all bot operations.
 
 ---
 
@@ -70,12 +65,8 @@ Error recording 2026 metrics: 'Position' object has no attribute 'size'
 ```
 RAD/
 ├── .env                  # API credentials (git-ignored)
-├── logs/                 # All log files (git-ignored)
-│   ├── bot.log
-│   ├── positions.log
-│   ├── scanning.log
-│   ├── orders.log
-│   └── strategy.log
+├── logs/                 # Unified log file (git-ignored)
+│   └── bot.log          # All logs with component tags
 ├── data/                 # Data files (git-ignored)
 │   └── Position History.csv
 ├── bot.py               # Main bot file (FIXED)
@@ -151,14 +142,13 @@ python bot.py
 # Main bot activity
 tail -f logs/bot.log
 
-# Position tracking
-tail -f logs/positions.log
+# View unified log with all components
+tail -f logs/bot.log
 
-# Market scanning
-tail -f logs/scanning.log
-
-# Order execution
-tail -f logs/orders.log
+# Filter by component if needed
+grep "\[POSITION\]" logs/bot.log   # Position events only
+grep "\[SCANNING\]" logs/bot.log   # Scanning events only
+grep "\[ORDER\]" logs/bot.log      # Order events only
 ```
 
 ### 4. Stop the Bot

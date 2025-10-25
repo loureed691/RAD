@@ -214,14 +214,21 @@ python start.py
 
 ### Log Files
 
-The bot generates detailed logs:
+The bot uses a unified log file with component tags:
 
 ```
-logs/bot.log          # Main trading activity
-logs/positions.log    # Position tracking details
-logs/scanning.log     # Market scanning results
-logs/orders.log       # Order execution details
-logs/strategy.log     # Strategy decisions
+logs/bot.log          # All trading activity with component tags:
+                      # [POSITION] - Position tracking details
+                      # [SCANNING] - Market scanning results  
+                      # [ORDER] - Order execution details
+                      # [STRATEGY] - Strategy decisions
+```
+
+Filter by component:
+```bash
+tail -f logs/bot.log                    # View all logs
+grep "\[POSITION\]" logs/bot.log        # Only positions
+grep "\[ORDER\]" logs/bot.log | tail -20  # Last 20 orders
 ```
 
 ### Alerts to Set Up
