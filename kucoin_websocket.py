@@ -51,6 +51,16 @@ class KuCoinWebSocket:
         # Subscriptions
         self._subscriptions = set()
         
+        # Rate limiting for subscriptions
+        self._subscription_lock = threading.Lock()
+        self._last_subscription_time = 0
+        self._subscription_delay = 0.1  # 100ms between subscriptions to avoid rate limits
+        self._max_subscriptions_per_batch = 10  # Max subscriptions per batch
+        
+        # Reconnection state
+        self._reconnect_attempts = 0
+        self._max_reconnect_delay = 60  # Max delay between reconnection attempts
+        
         # Connection token (for authentication)
         self._token = None
         self._connect_id = None
@@ -125,39 +135,67 @@ class KuCoinWebSocket:
         """Handle WebSocket connection opened"""
         self.connected = True
         self._connect_id = str(int(time.time() * 1000))
+        self._reconnect_attempts = 0  # Reset reconnection counter on successful connection
         self.logger.info("✅ WebSocket connection opened")
         
         # Send ping to keep connection alive
         self._start_ping()
         
-        # Resubscribe to channels if any
+        # Resubscribe to channels if any - with rate limiting
         if self._subscriptions:
-            self.logger.info(f"Resubscribing to {len(self._subscriptions)} channels...")
-            for subscription in list(self._subscriptions):
-                if subscription.startswith('ticker:'):
-                    symbol = subscription.split(':', 1)[1]
-                    # Convert symbol format before passing to _subscribe_ticker
-                    kucoin_symbol = symbol.replace('/', '').replace(':', '')
-                    self._subscribe_ticker(kucoin_symbol)
-                elif subscription.startswith('candles:'):
-                    # Format is: candles:SYMBOL:TIMEFRAME where SYMBOL may contain ':'
-                    # e.g., candles:BTC/USDT:USDT:1h
-                    # Split on ':' and take last part as timeframe, rest as symbol
-                    parts = subscription.split(':')
-                    if len(parts) >= 3:
-                        # Last part is timeframe, everything between 'candles:' and timeframe is symbol
-                        timeframe = parts[-1]
-                        # Join all parts except first (candles) and last (timeframe) to get symbol
-                        symbol = ':'.join(parts[1:-1])
-                        # Convert symbol format before passing to _subscribe_candles
+            self.logger.info(f"Resubscribing to {len(self._subscriptions)} channels with rate limiting...")
+            # Start resubscription in a separate thread to avoid blocking
+            threading.Thread(target=self._resubscribe_all, daemon=True).start()
+    
+    def _resubscribe_all(self):
+        """Resubscribe to all channels with rate limiting to avoid 'exceed max permits' error"""
+        subscription_list = list(self._subscriptions)
+        total = len(subscription_list)
+        batch_size = self._max_subscriptions_per_batch
+        
+        for i in range(0, total, batch_size):
+            batch = subscription_list[i:i + batch_size]
+            batch_num = i // batch_size + 1
+            total_batches = (total + batch_size - 1) // batch_size
+            
+            self.logger.info(f"Resubscribing batch {batch_num}/{total_batches} ({len(batch)} subscriptions)...")
+            
+            for subscription in batch:
+                try:
+                    if subscription.startswith('ticker:'):
+                        symbol = subscription.split(':', 1)[1]
+                        # Convert symbol format before passing to _subscribe_ticker
                         kucoin_symbol = symbol.replace('/', '').replace(':', '')
-                        # Convert timeframe to KuCoin format
-                        tf_map = {
-                            '1m': '1min', '5m': '5min', '15m': '15min', '30m': '30min',
-                            '1h': '1hour', '4h': '4hour', '1d': '1day', '1w': '1week'
-                        }
-                        kucoin_tf = tf_map.get(timeframe, timeframe)
-                        self._subscribe_candles(kucoin_symbol, kucoin_tf)
+                        self._subscribe_ticker(kucoin_symbol, skip_rate_limit=True)
+                    elif subscription.startswith('candles:'):
+                        # Format is: candles:SYMBOL:TIMEFRAME where SYMBOL may contain ':'
+                        # e.g., candles:BTC/USDT:USDT:1h
+                        # Split on ':' and take last part as timeframe, rest as symbol
+                        parts = subscription.split(':')
+                        if len(parts) >= 3:
+                            # Last part is timeframe, everything between 'candles:' and timeframe is symbol
+                            timeframe = parts[-1]
+                            # Join all parts except first (candles) and last (timeframe) to get symbol
+                            symbol = ':'.join(parts[1:-1])
+                            # Convert symbol format before passing to _subscribe_candles
+                            kucoin_symbol = symbol.replace('/', '').replace(':', '')
+                            # Convert timeframe to KuCoin format
+                            tf_map = {
+                                '1m': '1min', '5m': '5min', '15m': '15min', '30m': '30min',
+                                '1h': '1hour', '4h': '4hour', '1d': '1day', '1w': '1week'
+                            }
+                            kucoin_tf = tf_map.get(timeframe, timeframe)
+                            self._subscribe_candles(kucoin_symbol, kucoin_tf, skip_rate_limit=True)
+                    
+                    # Small delay between each subscription
+                    time.sleep(self._subscription_delay)
+                except Exception as e:
+                    self.logger.error(f"Error resubscribing to {subscription}: {e}")
+            
+            # Longer delay between batches to avoid rate limits
+            if i + batch_size < total:
+                self.logger.info(f"Waiting 2 seconds before next batch...")
+                time.sleep(2)
     
     def _on_message(self, ws, message):
         """Handle incoming WebSocket message"""
@@ -187,8 +225,19 @@ class KuCoinWebSocket:
             self.logger.error(f"Error processing WebSocket message: {e}")
     
     def _on_error(self, ws, error):
-        """Handle WebSocket error"""
-        self.logger.error(f"WebSocket error: {error}")
+        """Handle WebSocket error with better categorization"""
+        error_str = str(error)
+        
+        # Categorize errors to reduce log noise
+        if 'SSL' in error_str or 'EOF occurred' in error_str or 'bad length' in error_str:
+            # SSL/connection errors are expected during high load - log at debug level
+            self.logger.debug(f"WebSocket connection error (will reconnect): {error_str}")
+        elif 'Connection to remote host was lost' in error_str:
+            # Normal disconnect - log at debug level
+            self.logger.debug(f"WebSocket connection lost (will reconnect)")
+        else:
+            # Unexpected errors - log at error level
+            self.logger.error(f"WebSocket error: {error}")
     
     def _on_close(self, ws, close_status_code, close_msg):
         """Handle WebSocket connection closed"""
@@ -197,8 +246,12 @@ class KuCoinWebSocket:
         
         # Attempt reconnection if enabled
         if self.should_reconnect:
-            self.logger.info("Attempting to reconnect WebSocket in 5 seconds...")
-            time.sleep(5)
+            # Calculate exponential backoff delay
+            self._reconnect_attempts += 1
+            delay = min(5 * (2 ** (self._reconnect_attempts - 1)), self._max_reconnect_delay)
+            
+            self.logger.info(f"Attempting to reconnect WebSocket in {delay} seconds... (attempt {self._reconnect_attempts})")
+            time.sleep(delay)
             try:
                 self.connect()
             except Exception as e:
@@ -330,9 +383,17 @@ class KuCoinWebSocket:
         self._subscriptions.add(f'ticker:{symbol}')
         return self._subscribe_ticker(kucoin_symbol)
     
-    def _subscribe_ticker(self, kucoin_symbol: str):
-        """Internal method to subscribe to ticker"""
+    def _subscribe_ticker(self, kucoin_symbol: str, skip_rate_limit: bool = False):
+        """Internal method to subscribe to ticker with optional rate limiting"""
         try:
+            # Apply rate limiting unless explicitly skipped
+            if not skip_rate_limit:
+                with self._subscription_lock:
+                    elapsed = time.time() - self._last_subscription_time
+                    if elapsed < self._subscription_delay:
+                        time.sleep(self._subscription_delay - elapsed)
+                    self._last_subscription_time = time.time()
+            
             sub_msg = {
                 "id": str(int(time.time() * 1000)),
                 "type": "subscribe",
@@ -343,8 +404,16 @@ class KuCoinWebSocket:
             self.ws.send(json.dumps(sub_msg))
             self.logger.info(f"📊 Subscribed to ticker: {kucoin_symbol}")
             return True
+        except (BrokenPipeError, ConnectionError, OSError) as e:
+            # Connection errors are expected during reconnection - log at debug level
+            self.logger.debug(f"Connection error subscribing to ticker {kucoin_symbol}: {e}")
+            return False
         except Exception as e:
-            self.logger.error(f"Error subscribing to ticker {kucoin_symbol}: {e}")
+            # SSL errors and other transient errors - log at debug level
+            if 'SSL' in str(e) or 'EOF' in str(e):
+                self.logger.debug(f"Transient error subscribing to ticker {kucoin_symbol}: {e}")
+            else:
+                self.logger.error(f"Error subscribing to ticker {kucoin_symbol}: {e}")
             return False
     
     def subscribe_candles(self, symbol: str, timeframe: str = '1h'):
@@ -372,9 +441,17 @@ class KuCoinWebSocket:
         self._subscriptions.add(f'candles:{symbol}:{timeframe}')
         return self._subscribe_candles(kucoin_symbol, kucoin_tf)
     
-    def _subscribe_candles(self, kucoin_symbol: str, kucoin_tf: str):
-        """Internal method to subscribe to candles"""
+    def _subscribe_candles(self, kucoin_symbol: str, kucoin_tf: str, skip_rate_limit: bool = False):
+        """Internal method to subscribe to candles with optional rate limiting"""
         try:
+            # Apply rate limiting unless explicitly skipped
+            if not skip_rate_limit:
+                with self._subscription_lock:
+                    elapsed = time.time() - self._last_subscription_time
+                    if elapsed < self._subscription_delay:
+                        time.sleep(self._subscription_delay - elapsed)
+                    self._last_subscription_time = time.time()
+            
             sub_msg = {
                 "id": str(int(time.time() * 1000)),
                 "type": "subscribe",
@@ -385,8 +462,16 @@ class KuCoinWebSocket:
             self.ws.send(json.dumps(sub_msg))
             self.logger.info(f"📈 Subscribed to candles: {kucoin_symbol} {kucoin_tf}")
             return True
+        except (BrokenPipeError, ConnectionError, OSError) as e:
+            # Connection errors are expected during reconnection - log at debug level
+            self.logger.debug(f"Connection error subscribing to candles {kucoin_symbol}: {e}")
+            return False
         except Exception as e:
-            self.logger.error(f"Error subscribing to candles {kucoin_symbol}: {e}")
+            # SSL errors and other transient errors - log at debug level
+            if 'SSL' in str(e) or 'EOF' in str(e):
+                self.logger.debug(f"Transient error subscribing to candles {kucoin_symbol}: {e}")
+            else:
+                self.logger.error(f"Error subscribing to candles {kucoin_symbol}: {e}")
             return False
     
     def get_ticker(self, symbol: str) -> Optional[Dict]:
