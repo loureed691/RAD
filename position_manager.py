@@ -10,6 +10,7 @@ from kucoin_client import KuCoinClient
 from logger import Logger
 from advanced_exit_strategy import AdvancedExitStrategy
 from volume_profile import VolumeProfile
+from smart_trading_enhancements import SmartExitOptimizer
 
 def format_price(price: float) -> str:
     """
@@ -784,6 +785,7 @@ class PositionManager:
         self.logger = Logger.get_logger()
         self.position_logger = Logger.get_position_logger()
         self.advanced_exit_strategy = AdvancedExitStrategy()
+        self.smart_exit_optimizer = SmartExitOptimizer()  # Smart exit enhancement
         
         # Thread lock for positions dictionary to prevent race conditions
         # Note: This is mainly for safety, as the bot is typically single-threaded
@@ -1454,6 +1456,44 @@ class PositionManager:
                     if pnl is not None:
                         yield symbol, pnl, position
                     continue
+                
+                # SMART ENHANCEMENT: Check smart exit optimizer for early exit signals
+                try:
+                    position_duration_minutes = (datetime.now() - position.entry_time).total_seconds() / 60
+                    volume_ratio = locals().get('indicators', {}).get('volume_ratio', 1.0) if 'indicators' in locals() else 1.0
+                    
+                    # Detect trend weakening
+                    trend_weakening = False
+                    if 'trend_strength' in locals() and 'momentum' in locals():
+                        # Trend is weakening if momentum is opposite to position direction
+                        if position.side == 'long' and momentum < -0.01 and trend_strength < 0.4:
+                            trend_weakening = True
+                        elif position.side == 'short' and momentum > 0.01 and trend_strength < 0.4:
+                            trend_weakening = True
+                    
+                    smart_exit_signal = self.smart_exit_optimizer.should_exit_early(
+                        position_pnl=leveraged_pnl,
+                        position_duration_minutes=position_duration_minutes,
+                        current_momentum=locals().get('momentum', 0.0),
+                        current_rsi=locals().get('rsi', 50.0),
+                        volatility=locals().get('volatility', 0.03),
+                        volume_ratio=volume_ratio,
+                        trend_weakening=trend_weakening
+                    )
+                    
+                    if smart_exit_signal['should_exit'] and smart_exit_signal['confidence'] > 0.7:
+                        smart_exit_reason = f"Smart exit: {smart_exit_signal['reason_text']} (confidence: {smart_exit_signal['confidence']:.2f})"
+                        self.position_logger.info(f"  🧠 {smart_exit_reason}")
+                        pnl = self.close_position(symbol, smart_exit_reason)
+                        if pnl is not None:
+                            yield symbol, pnl, position
+                        continue
+                    elif smart_exit_signal['score'] > 30:
+                        # Signal is building but not strong enough yet
+                        self.position_logger.debug(f"  🧠 Smart exit score: {smart_exit_signal['score']} (watching: {smart_exit_signal['reason_text']})")
+                        
+                except Exception as e:
+                    self.logger.debug(f"Smart exit optimizer error for {symbol}: {e}")
                 
                 # Check standard stop loss and take profit conditions
                 should_close, reason = position.should_close(current_price)
