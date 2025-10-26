@@ -521,28 +521,33 @@ class KuCoinClient:
         
         # Try WebSocket first if enabled and connected
         if self.websocket and self.websocket.is_connected():
-            ticker = self.websocket.get_ticker(symbol)
-            if ticker:
-                self.logger.debug(f"Retrieved ticker for {symbol} from WebSocket")
-                return ticker
+            # Check if we're approaching subscription limit and cleanup if needed
+            if self.websocket.get_subscription_count() >= 350:  # Leave buffer of 30
+                self.logger.debug(f"WebSocket subscription count high ({self.websocket.get_subscription_count()}), using REST API directly")
+                # Fall through to REST API instead of subscribing
             else:
-                # Subscribe to ticker if not already subscribed
-                if not self.websocket.has_ticker(symbol):
-                    self.logger.debug(f"Subscribing to ticker: {symbol}")
-                    self.websocket.subscribe_ticker(symbol)
-                    # Wait up to 500ms for ticker data, polling every 50ms
-                    timeout = 0.5
-                    interval = 0.05
-                    waited = 0.0
-                    ticker = None
-                    while waited < timeout:
-                        ticker = self.websocket.get_ticker(symbol)
-                        if ticker:
-                            return ticker
-                        time.sleep(interval)
-                        waited += interval
-                # Fall through to REST API if no WebSocket data
-                self.logger.debug(f"No WebSocket data for {symbol}, using REST API")
+                ticker = self.websocket.get_ticker(symbol)
+                if ticker:
+                    self.logger.debug(f"Retrieved ticker for {symbol} from WebSocket")
+                    return ticker
+                else:
+                    # Subscribe to ticker if not already subscribed
+                    if not self.websocket.has_ticker(symbol):
+                        self.logger.debug(f"Subscribing to ticker: {symbol}")
+                        self.websocket.subscribe_ticker(symbol)
+                        # Wait up to 500ms for ticker data, polling every 50ms
+                        timeout = 0.5
+                        interval = 0.05
+                        waited = 0.0
+                        ticker = None
+                        while waited < timeout:
+                            ticker = self.websocket.get_ticker(symbol)
+                            if ticker:
+                                return ticker
+                            time.sleep(interval)
+                            waited += interval
+                    # Fall through to REST API if no WebSocket data
+                    self.logger.debug(f"No WebSocket data for {symbol}, using REST API")
         
         # Fallback to REST API
         def _fetch():
@@ -584,25 +589,30 @@ class KuCoinClient:
         
         # Try WebSocket first if enabled and connected
         if self.websocket and self.websocket.is_connected():
-            ohlcv = self.websocket.get_ohlcv(symbol, timeframe, limit)
-            if ohlcv and len(ohlcv) >= min(50, limit):  # Ensure we have enough data
-                self.logger.debug(f"Retrieved {len(ohlcv)} candles for {symbol} {timeframe} from WebSocket")
-                return ohlcv
+            # Use helper to check if we should use REST API due to subscription limit
+            if self._should_use_rest_api():
+                # Fall through to REST API instead of subscribing
+                pass
             else:
-                # Subscribe to candles if not already subscribed
-                if not self.websocket.has_candles(symbol, timeframe):
-                    self.logger.debug(f"Subscribing to candles: {symbol} {timeframe}")
-                    self.websocket.subscribe_candles(symbol, timeframe)
-                    # Give it a moment to receive data
-                    time.sleep(0.5)
-                    ohlcv = self.websocket.get_ohlcv(symbol, timeframe, limit)
-                    if ohlcv and len(ohlcv) >= min(50, limit):
-                        return ohlcv
-                # Fall through to REST API if insufficient WebSocket data
-                if ohlcv:
-                    self.logger.debug(f"Insufficient WebSocket data for {symbol} (got {len(ohlcv)}, need {min(50, limit)}), using REST API")
+                ohlcv = self.websocket.get_ohlcv(symbol, timeframe, limit)
+                if ohlcv and len(ohlcv) >= min(50, limit):  # Ensure we have enough data
+                    self.logger.debug(f"Retrieved {len(ohlcv)} candles for {symbol} {timeframe} from WebSocket")
+                    return ohlcv
                 else:
-                    self.logger.debug(f"No WebSocket data for {symbol} {timeframe}, using REST API")
+                    # Subscribe to candles if not already subscribed
+                    if not self.websocket.has_candles(symbol, timeframe):
+                        self.logger.debug(f"Subscribing to candles: {symbol} {timeframe}")
+                        self.websocket.subscribe_candles(symbol, timeframe)
+                        # Give it a moment to receive data
+                        time.sleep(0.5)
+                        ohlcv = self.websocket.get_ohlcv(symbol, timeframe, limit)
+                        if ohlcv and len(ohlcv) >= min(50, limit):
+                            return ohlcv
+                    # Fall through to REST API if insufficient WebSocket data
+                    if ohlcv:
+                        self.logger.debug(f"Insufficient WebSocket data for {symbol} (got {len(ohlcv)}, need {min(50, limit)}), using REST API")
+                    else:
+                        self.logger.debug(f"No WebSocket data for {symbol} {timeframe}, using REST API")
         
         # Fallback to REST API
         def _fetch():
