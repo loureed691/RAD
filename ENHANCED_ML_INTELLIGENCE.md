@@ -578,7 +578,7 @@ rl.min_epsilon = 0.10      # Higher minimum
 - [ ] Online learning for deep model
 - [ ] Ensemble of multiple deep models
 - [ ] Attention mechanism for feature importance
-- [ ] Policy gradient methods (Proximal Policy Optimization and Asynchronous Advantage Actor-Critic)
+- [ ] Policy gradient methods (Proximal Policy Optimization (PPO) and Asynchronous Advantage Actor-Critic (A3C))
 - [ ] Multi-agent RL (portfolio-level)
 
 ### Experimental
