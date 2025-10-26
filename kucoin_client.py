@@ -1208,7 +1208,8 @@ class KuCoinClient:
                             'timestamp': filled_order.get('timestamp', order.get('timestamp'))
                         })
                 except Exception as e:
-                    self.logger.warning(f"Could not fetch order status immediately: {e}")
+                    # This is expected for very new orders - log at DEBUG level
+                    self.logger.debug(f"Could not fetch order status immediately (order may be too new): {e}")
             
             # Log order details to main logger
             avg_price = order.get('average') or order.get('price') or reference_price
