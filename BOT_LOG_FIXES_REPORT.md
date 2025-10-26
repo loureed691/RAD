@@ -51,7 +51,7 @@ CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '60'))
 # After:
 CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '90'))  # Increased from 60 to reduce API rate limiting
 ```
-- **Impact**: 50% longer time between scans
+- **Impact**: 50% longer time between scans (33.3% reduction in scan frequency)
 
 #### API_CALL_DELAY Addition
 ```python
@@ -133,8 +133,8 @@ if api_call_delay > 0:
 
 ### Request Rate Reduction
 - **Worker Reduction**: 50% (from 20 to 10)
-- **Frequency Reduction**: 50% (from 60s to 90s intervals)
-- **Overall Request Rate**: ~66.7% reduction (from 0.33 to 0.11 req/s)
+- **Frequency Reduction**: 33.3% (from 60s to 90s intervals = 1.5x longer)
+- **Overall Request Rate**: ~66.7% reduction (0.5 × 0.667 = 0.333x of original rate)
 
 ### Rate Limit Error Reduction
 - **Expected**: 70-80% reduction in rate limit errors
