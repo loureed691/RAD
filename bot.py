@@ -724,9 +724,12 @@ class TradingBot:
                     symbol, position_size, existing_positions
                 )
                 
-                if position_size != original_size:
+                # SAFETY: Guard against division by zero
+                if position_size != original_size and original_size > 0:
                     reduction_pct = (1 - position_size / original_size) * 100
                     self.logger.info(f"🔗 Position size adjusted for correlation: {original_size:.4f} → {position_size:.4f} ({reduction_pct:.1f}% reduction)")
+                elif position_size != original_size:
+                    self.logger.info(f"🔗 Position size adjusted for correlation: {original_size:.4f} → {position_size:.4f}")
                     
         except Exception as e:
             self.logger.debug(f"Correlation analysis error: {e}, using unadjusted size")
