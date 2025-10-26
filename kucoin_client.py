@@ -157,6 +157,24 @@ class KuCoinClient:
                 else:
                     self._pending_critical_calls = max(0, self._pending_critical_calls - 1)
     
+    def _should_use_rest_api(self) -> bool:
+        """
+        Check if we should use REST API instead of WebSocket due to subscription limits.
+        
+        Returns:
+            True if we should use REST API, False if we can use WebSocket
+        """
+        if not self.websocket or not self.websocket.is_connected():
+            return True
+        
+        # Check if we're approaching subscription limit (leave buffer of 30)
+        subscription_count = self.websocket.get_subscription_count()
+        if subscription_count >= 350:
+            self.logger.debug(f"WebSocket subscription count high ({subscription_count}), using REST API")
+            return True
+        
+        return False
+    
     def _check_circuit_breaker(self) -> bool:
         """
         Check if circuit breaker is active and should block API calls.
@@ -522,9 +540,9 @@ class KuCoinClient:
         # Try WebSocket first if enabled and connected
         if self.websocket and self.websocket.is_connected():
             # Check if we're approaching subscription limit and cleanup if needed
-            if self.websocket.get_subscription_count() >= 350:  # Leave buffer of 30
-                self.logger.debug(f"WebSocket subscription count high ({self.websocket.get_subscription_count()}), using REST API directly")
+            if self._should_use_rest_api():
                 # Fall through to REST API instead of subscribing
+                pass
             else:
                 ticker = self.websocket.get_ticker(symbol)
                 if ticker:
