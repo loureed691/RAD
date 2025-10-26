@@ -35,7 +35,7 @@ The RAD KuCoin Futures Trading Bot has been successfully upgraded to production-
 - API performance (threshold: 2s average)
 
 #### 2. Error Recovery System
-**New File**: `error_recovery.py** (460 lines)
+**New File**: `error_recovery.py` (460 lines)
 
 **Features**:
 - Centralized error management with categorization
