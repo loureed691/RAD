@@ -387,7 +387,8 @@ class PositionCorrelationManager:
                 category_values[pos_category] = category_values.get(pos_category, 0) + pos_value
             
             # Check single category limit
-            if new_category in category_values:
+            # Skip concentration check for 'unknown' category as it contains diverse, unrelated assets
+            if new_category in category_values and new_category != 'unknown':
                 category_pct = category_values[new_category] / portfolio_value
                 if category_pct > self.category_limits['single_category']:
                     return False, f"Category '{new_category}' already at {category_pct:.1%} (limit: {self.category_limits['single_category']:.1%})"
