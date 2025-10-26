@@ -128,6 +128,5 @@ class TestConcentrationLimitFix(unittest.TestCase):
         )
         self.assertTrue(is_allowed, f"Should allow BTC asset at 20%: {reason}")
 
-
 if __name__ == '__main__':
     unittest.main()
