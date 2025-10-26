@@ -101,8 +101,17 @@ class MarketScanner:
             
             self.scanning_logger.debug(f"  1h data: {len(ohlcv_1h)} candles")
             
+            # Add small delay to prevent rate limiting on subsequent API calls
+            api_call_delay = getattr(Config, 'API_CALL_DELAY', 0.1)
+            if api_call_delay > 0:
+                time.sleep(api_call_delay)
+            
             # Get higher timeframe data for confirmation
             ohlcv_4h = self.client.get_ohlcv(symbol, timeframe='4h', limit=50)
+            
+            if api_call_delay > 0:
+                time.sleep(api_call_delay)
+            
             ohlcv_1d = self.client.get_ohlcv(symbol, timeframe='1d', limit=30)
             
             self.scanning_logger.debug(f"  4h data: {len(ohlcv_4h) if ohlcv_4h else 0} candles")
@@ -277,10 +286,15 @@ class MarketScanner:
         metrics_count = 0
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_symbol = {
-                executor.submit(self.scan_pair, symbol): symbol 
-                for symbol in filtered_symbols
-            }
+            future_to_symbol = {}
+            # Add delay between submitting tasks to prevent rate limiting
+            api_call_delay = getattr(Config, 'API_CALL_DELAY', 0.1)
+            for i, symbol in enumerate(filtered_symbols):
+                future = executor.submit(self.scan_pair, symbol)
+                future_to_symbol[future] = symbol
+                # Add small delay every N submissions to prevent burst requests
+                if (i + 1) % max_workers == 0 and api_call_delay > 0:
+                    time.sleep(api_call_delay * max_workers)  # Scale delay with worker count
             
             try:
                 for future in as_completed(future_to_symbol, timeout=overall_timeout):

@@ -54,14 +54,15 @@ class Config:
     _MIN_PROFIT_THRESHOLD_OVERRIDE = os.getenv('MIN_PROFIT_THRESHOLD')
     
     # Bot Parameters
-    CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '60'))
+    CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '90'))  # Increased from 60 to reduce API rate limiting
     POSITION_UPDATE_INTERVAL = int(float(os.getenv('POSITION_UPDATE_INTERVAL', '1.0')))  # Minimum time between position API calls (seconds) - faster for responsive trailing stops
     LIVE_LOOP_INTERVAL = float(os.getenv('LIVE_LOOP_INTERVAL', '0.05'))  # Main loop sleep interval for live monitoring (seconds) - reduced for faster response
     TRAILING_STOP_PERCENTAGE = float(os.getenv('TRAILING_STOP_PERCENTAGE', '0.02'))
     MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))
-    MAX_WORKERS = int(os.getenv('MAX_WORKERS', '20'))  # Number of parallel workers for market scanning
+    MAX_WORKERS = int(os.getenv('MAX_WORKERS', '10'))  # Reduced from 20 to 10 to prevent rate limiting
     CACHE_DURATION = int(os.getenv('CACHE_DURATION', '300'))  # Cache duration in seconds (default: 5 minutes)
     STALE_DATA_MULTIPLIER = int(os.getenv('STALE_DATA_MULTIPLIER', '2'))  # Multiplier for CHECK_INTERVAL to determine max age for opportunity data
+    API_CALL_DELAY = float(os.getenv('API_CALL_DELAY', '0.1'))  # Delay between parallel API calls to prevent rate limiting (seconds)
     
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')

@@ -68,7 +68,7 @@ class KuCoinClient:
         self._max_consecutive_failures = 5  # Threshold for circuit breaker
         self._circuit_breaker_active = False
         self._circuit_breaker_reset_time = None
-        self._circuit_breaker_timeout = 60  # Seconds before retry
+        self._circuit_breaker_timeout = 120  # Increased from 60 to 120 seconds before retry
         
         # PRIORITY 1 SAFETY: Symbol metadata cache for exchange invariant validation
         self._symbol_metadata_cache = {}  # Cache symbol specs (min qty, price step, etc.)
@@ -270,15 +270,11 @@ class KuCoinClient:
                 
             except ccxt.RateLimitExceeded as e:
                 last_exception = e
-                # Calculate backoff delay
-                base_delay = 1  # Base delay in seconds
+                # Calculate backoff delay - be more conservative with rate limits
                 if exponential_backoff:
-                    delay = (2 ** attempt) * base_delay  # 1s, 2s, 4s, 8s...
+                    delay = min((3 ** attempt), 60)  # 3s, 9s, 27s, 60s
                 else:
-                    delay = base_delay  # Fixed 1s delay
-                
-                # Cap maximum delay at 30 seconds
-                delay = min(delay, 30)
+                    delay = 5  # Increased from 1s to 5s for better rate limit handling
                 
                 if attempt < effective_retries - 1:
                     self.logger.warning(
@@ -290,8 +286,10 @@ class KuCoinClient:
                 else:
                     self.logger.error(
                         f"Rate limit exceeded for {operation_name} after {effective_retries} attempts. "
-                        f"Error: {str(e)}"
+                        f"Backing off for 30s... Error: {str(e)}"
                     )
+                    # Add a cooldown period after exhausting retries
+                    time.sleep(30)
                     
             except ccxt.InsufficientFunds as e:
                 # Don't retry - this is a permanent error until balance changes
@@ -368,11 +366,11 @@ class KuCoinClient:
                     
                 # 429 errors - rate limit (should be caught above, but just in case)
                 elif '429' in error_str or 'too many' in error_str:
+                    # Use longer delays for rate limiting - be more conservative
                     if exponential_backoff:
-                        delay = (2 ** attempt)
+                        delay = min((3 ** attempt), 60)  # 3, 9, 27, 60 seconds
                     else:
-                        delay = 2
-                    delay = min(delay, 30)
+                        delay = 5  # Increased from 2 to 5 seconds
                     
                     if attempt < effective_retries - 1:
                         self.logger.warning(
@@ -384,8 +382,10 @@ class KuCoinClient:
                     else:
                         self.logger.error(
                             f"Rate limit error for {operation_name} after {effective_retries} attempts. "
-                            f"Error: {str(e)}"
+                            f"Backing off for 30s... Error: {str(e)}"
                         )
+                        # Add a cooldown period after exhausting retries
+                        time.sleep(30)
                         
                 # 500 errors - server error (transient, retry)
                 elif '500' in error_str or '502' in error_str or '503' in error_str or '504' in error_str:
