@@ -688,6 +688,46 @@ class TradingBot:
         # Check drawdown and adjust risk
         risk_adjustment = self.risk_manager.update_drawdown(available_balance)
         
+        # ENHANCEMENT: Apply time-of-day and market condition risk adjustments
+        try:
+            base_risk = Config.RISK_PER_TRADE if Config.RISK_PER_TRADE else 0.02
+            adjusted_risk = self.risk_manager.adjust_risk_for_conditions(
+                base_risk=base_risk,
+                market_volatility=volatility,
+                win_rate=self.risk_manager.get_win_rate(),
+                time_of_day_adj=True  # Enable time-of-day adjustments
+            )
+            
+            if adjusted_risk != base_risk:
+                self.logger.info(f"📊 Risk adjusted for conditions: {base_risk:.2%} → {adjusted_risk:.2%}")
+            
+            # Apply to Kelly fraction if available
+            if kelly_fraction is not None:
+                kelly_fraction = min(kelly_fraction, adjusted_risk)
+        except Exception as e:
+            self.logger.debug(f"Risk adjustment error: {e}")
+        
+        # ENHANCEMENT: Estimate slippage for the trade
+        try:
+            position_value_estimate = position_size * entry_price if position_size else 0
+            volume_24h = ticker.get('vol', 0) * entry_price if ticker else None
+            
+            estimated_slippage = self.risk_manager.estimate_slippage(
+                position_value=position_value_estimate,
+                orderbook=orderbook if 'orderbook' in locals() else None,
+                volatility=volatility,
+                volume_24h=volume_24h
+            )
+            
+            if estimated_slippage > 0.005:  # >0.5% slippage
+                self.logger.warning(f"⚠️  High estimated slippage: {estimated_slippage:.2%}")
+            else:
+                self.logger.info(f"💹 Estimated slippage: {estimated_slippage:.2%}")
+                
+        except Exception as e:
+            self.logger.debug(f"Slippage estimation error: {e}")
+            estimated_slippage = 0.001  # Default 0.1% slippage
+        
         # Calculate position size with Kelly Criterion if available
         position_size = self.risk_manager.calculate_position_size(
             available_balance, entry_price, stop_loss_price, leverage, 

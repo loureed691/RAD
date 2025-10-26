@@ -137,6 +137,33 @@ class MarketScanner:
             self.scanning_logger.debug(f"  Generating trading signal...")
             signal, confidence, reasons = self.signal_generator.generate_signal(df_1h, df_4h, df_1d)
             
+            # ENHANCEMENT: Apply adaptive confidence threshold
+            try:
+                indicators = Indicators.get_latest_indicators(df_1h)
+                if indicators:
+                    volatility = indicators.get('bb_width', 0.03)
+                    volume_ratio = indicators.get('volume_ratio', 1.0)
+                    
+                    # Get adaptive threshold
+                    adaptive_threshold = self.signal_generator.get_adaptive_confidence_threshold(
+                        volatility=volatility,
+                        volume_ratio=volume_ratio
+                    )
+                    
+                    # Check if signal meets adaptive threshold
+                    if confidence < adaptive_threshold and signal != 'HOLD':
+                        self.scanning_logger.debug(f"  Signal filtered: confidence {confidence:.2%} < threshold {adaptive_threshold:.2%}")
+                        signal = 'HOLD'
+                        confidence = 0.0
+                    
+                    # ENHANCEMENT: Add momentum analysis
+                    momentum_data = Indicators.calculate_momentum_strength(df_1h)
+                    if momentum_data and momentum_data['strength'] > 0.05:
+                        self.scanning_logger.debug(f"  Momentum: {momentum_data['direction']} (strength: {momentum_data['strength']:.2f})")
+                        reasons['momentum'] = f"{momentum_data['direction']}_{momentum_data['strength']:.2f}"
+            except Exception as e:
+                self.scanning_logger.debug(f"  Adaptive threshold error: {e}")
+            
             # Calculate score
             score = self.signal_generator.calculate_score(df_1h)
             
