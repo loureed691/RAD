@@ -578,7 +578,7 @@ class KuCoinWebSocket:
             unsub_msg = {
                 "id": str(int(time.time() * 1000)),
                 "type": "unsubscribe",
-                "topic": f"/contractMarket/level2:{kucoin_symbol}",
+                "topic": f"/contractMarket/candle:{kucoin_symbol}_{kucoin_tf}",
                 "privateChannel": False,
                 "response": True
             }
