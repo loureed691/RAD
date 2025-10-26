@@ -31,6 +31,8 @@ class RiskManager:
         self.peak_balance = 0.0
         self.current_drawdown = 0.0
         self.drawdown_threshold = 0.15  # Reduce risk at 15% drawdown
+        self.last_drawdown_warning_level = 0.0  # Track when we last warned about drawdown
+        self.drawdown_warning_threshold = 0.10  # Only warn when drawdown increases by 10%
         
         # PROFITABILITY FIX: Daily loss limit to prevent catastrophic losses
         self.daily_loss_limit = 0.10  # Stop trading if lose 10% in a day
@@ -1033,6 +1035,18 @@ class RiskManager:
             self.logger.error(f"Error in regime-based sizing: {e}")
             return base_size
     
+    def _should_log_drawdown_warning(self, current_drawdown: float) -> bool:
+        """
+        Check if drawdown warning should be logged based on threshold
+        
+        Args:
+            current_drawdown: Current drawdown percentage
+            
+        Returns:
+            True if warning should be logged
+        """
+        return abs(current_drawdown - self.last_drawdown_warning_level) >= self.drawdown_warning_threshold
+    
     def update_drawdown(self, current_balance: float) -> float:
         """
         Update drawdown tracking and return risk adjustment factor
@@ -1056,12 +1070,21 @@ class RiskManager:
         # Adjust risk based on drawdown
         if self.current_drawdown > 0.20:  # >20% drawdown - aggressive protection
             risk_adjustment = 0.5
-            self.logger.warning(f"⚠️  High drawdown detected: {self.current_drawdown:.1%} - Reducing risk to 50%")
+            # Only warn if drawdown increased significantly since last warning
+            if self._should_log_drawdown_warning(self.current_drawdown):
+                self.logger.warning(f"⚠️  High drawdown detected: {self.current_drawdown:.1%} - Reducing risk to 50%")
+                self.last_drawdown_warning_level = self.current_drawdown
         elif self.current_drawdown > self.drawdown_threshold:  # >15% drawdown
             risk_adjustment = 0.75
-            self.logger.info(f"📉 Moderate drawdown: {self.current_drawdown:.1%} - Reducing risk to 75%")
+            # Only log at INFO level for moderate drawdown if it changed significantly
+            if self._should_log_drawdown_warning(self.current_drawdown):
+                self.logger.info(f"📉 Moderate drawdown: {self.current_drawdown:.1%} - Reducing risk to 75%")
+                self.last_drawdown_warning_level = self.current_drawdown
         else:
             risk_adjustment = 1.0
+            # Reset warning tracker when drawdown recovers
+            if self.last_drawdown_warning_level > 0:
+                self.last_drawdown_warning_level = 0.0
         
         return risk_adjustment
     

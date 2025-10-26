@@ -700,18 +700,25 @@ class TradingBot:
             self.position_correlation.update_price_history(symbol, entry_price)
             
             # Get existing positions for correlation analysis
-            existing_positions = [
-                {
+            existing_positions = []
+            for pos_symbol, pos in self.position_manager.positions.items():
+                amount = getattr(pos, 'amount', 0)
+                entry_price = getattr(pos, 'entry_price', entry_price)
+                value = amount * entry_price
+                existing_positions.append({
                     'symbol': pos_symbol,
-                    'value': getattr(pos, 'amount', 0) * entry_price  # Approximate value
-                }
-                for pos_symbol, pos in self.position_manager.positions.items()
-            ]
+                    'value': value
+                })
             
             if existing_positions:
+                # CRITICAL FIX: Calculate total portfolio value (existing positions + available balance)
+                # This prevents absurdly high concentration percentages when balance is low
+                total_position_value = sum(pos['value'] for pos in existing_positions)
+                total_portfolio_value = total_position_value + available_balance
+                
                 # Check category concentration limits
                 is_allowed, concentration_reason = self.position_correlation.check_category_concentration(
-                    symbol, existing_positions, available_balance
+                    symbol, existing_positions, total_portfolio_value
                 )
                 
                 if not is_allowed:
@@ -759,6 +766,21 @@ class TradingBot:
             
         except Exception as e:
             self.logger.warning(f"Smart position sizing error: {e}, using base size")
+        
+        # CRITICAL FIX: Cap position size to exchange maximum limit
+        try:
+            metadata = self.client.get_cached_symbol_metadata(symbol)
+            if metadata:
+                max_amount = metadata.get('max_amount')
+                if max_amount and position_size > max_amount:
+                    original_size = position_size
+                    position_size = max_amount
+                    self.logger.warning(
+                        f"⚠️ Position size capped to exchange maximum: "
+                        f"{original_size:.4f} → {position_size:.4f} contracts (max: {max_amount})"
+                    )
+        except Exception as e:
+            self.logger.debug(f"Could not check position size limit: {e}")
         
         # Open position
         success = self.position_manager.open_position(

@@ -81,8 +81,9 @@ class MarketScanner:
             
             # Check if we have enough data
             if len(ohlcv_1h) < 50:
-                self.logger.warning(f"Insufficient OHLCV data for {symbol}: only {len(ohlcv_1h)} candles (need 50+), checking cache...")
-                self.scanning_logger.warning(f"  ⚠ Insufficient data: {len(ohlcv_1h)} candles (need 50+), checking cache...")
+                # This is expected for newly listed pairs - log at DEBUG level
+                self.logger.debug(f"Insufficient OHLCV data for {symbol}: only {len(ohlcv_1h)} candles (need 50+), checking cache...")
+                self.scanning_logger.debug(f"  ⚠ Insufficient data: {len(ohlcv_1h)} candles (need 50+), checking cache...")
                 # Try to use cached data as fallback
                 with self._cache_lock:
                     if cache_key in self.cache:
