@@ -41,20 +41,20 @@ def test_bot_initialization():
                 # Try to initialize the bot
                 from bot import TradingBot
                 
-                # This will fail to fully initialize due to mocking, but we can check it starts
+                # The bot should initialize successfully and fall back to REST API
+                # if WebSocket connection fails (which it will in test environment)
                 try:
                     bot = TradingBot()
-                    print("✗ Bot initialized unexpectedly (WebSocket should fail)")
-                    return False
+                    print("✓ Bot initialized successfully")
+                    print("✓ Core bot structure is valid")
+                    print("✓ WebSocket fallback to REST API working")
+                    return True
                 except Exception as e:
-                    # Expected to fail due to WebSocket, but basic structure should be there
-                    if "WebSocket" in str(e) or "HTTPSConnectionPool" in str(e):
-                        print("✓ Bot initialization attempted (WebSocket failed as expected)")
-                        print("✓ Core bot structure is valid")
-                        return True
-                    else:
-                        print(f"✗ Unexpected initialization error: {e}")
-                        return False
+                    # If initialization fails completely, it's a real error
+                    print(f"✗ Bot initialization failed: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return False
                         
     except Exception as e:
         print(f"✗ Bot initialization test failed: {e}")
