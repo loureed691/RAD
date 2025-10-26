@@ -18,6 +18,7 @@ from indicators import Indicators
 from advanced_analytics import AdvancedAnalytics
 from performance_monitor import get_monitor
 from profit_tracker import ProfitTracker
+from adaptive_confidence import AdaptiveConfidenceManager
 # 2026 Advanced Features
 from advanced_risk_2026 import AdvancedRiskManager2026
 from market_microstructure_2026 import MarketMicrostructure2026
@@ -135,10 +136,14 @@ class TradingBot:
         # Enhanced profit tracking
         self.profit_tracker = ProfitTracker()
         
+        # Adaptive confidence threshold manager
+        self.adaptive_confidence = AdaptiveConfidenceManager(base_threshold=0.60)
+        
         # Performance monitoring
         self.perf_monitor = get_monitor()
         self.logger.info("✅ Performance Monitor: ENABLED")
         self.logger.info("✅ Profit Tracker: ENABLED")
+        self.logger.info("✅ Adaptive Confidence Manager: ENABLED")
         
         # 2026 Advanced Features
         self.advanced_risk_2026 = AdvancedRiskManager2026()
@@ -357,6 +362,16 @@ class TradingBot:
             return False
         
         self.logger.debug(f"✅ Guardrails passed: {block_reason}")
+        
+        # Adaptive confidence threshold check
+        adaptive_threshold = self.adaptive_confidence.get_adaptive_threshold()
+        if not self.adaptive_confidence.should_trade(confidence):
+            self.logger.info(
+                f"❌ Confidence below adaptive threshold: {confidence:.2f} < {adaptive_threshold:.2f}"
+            )
+            return False
+        
+        self.logger.debug(f"✅ Adaptive confidence check passed: {confidence:.2f} >= {adaptive_threshold:.2f}")
         
         # Validate trade
         is_valid, reason = self.risk_manager.validate_trade(
@@ -902,6 +917,9 @@ class TradingBot:
                 self.position_manager.positions[symbol].rl_strategy = rl_selected_strategy
                 self.position_manager.positions[symbol].market_regime = market_regime
                 self.position_manager.positions[symbol].entry_volatility = volatility
+                # Store entry confidence for adaptive learning
+                self.position_manager.positions[symbol].entry_confidence = confidence
+                self.position_manager.positions[symbol].entry_volatility = volatility
             except AttributeError:
                 # Position object doesn't support strategy attribute, which is fine
                 self.logger.debug(f"Position for {symbol} doesn't support strategy attribute")
@@ -947,6 +965,16 @@ class TradingBot:
                         )
                     except Exception as e:
                         self.logger.error(f"Error recording to profit tracker: {e}")
+                    
+                    # Record for adaptive confidence learning
+                    try:
+                        # Get the original entry confidence from position if available
+                        entry_confidence = getattr(position, 'entry_confidence', 0.65)
+                        # Consider profitable if net P&L (after fees) > 0.1%
+                        was_profitable = pnl > 0.001
+                        self.adaptive_confidence.record_trade_outcome(entry_confidence, was_profitable)
+                    except Exception as e:
+                        self.logger.error(f"Error recording to adaptive confidence: {e}")
                     
                     self.analytics.record_trade({
                         'symbol': symbol,
@@ -1223,6 +1251,22 @@ class TradingBot:
                 self.profit_tracker.print_report(days=7)
             except Exception as e:
                 self.logger.error(f"Error printing profit report: {e}")
+            
+            # Adaptive confidence statistics
+            try:
+                conf_stats = self.adaptive_confidence.get_statistics()
+                self.logger.info("=" * 60)
+                self.logger.info("🎯 ADAPTIVE CONFIDENCE STATISTICS")
+                self.logger.info("=" * 60)
+                self.logger.info(f"Current Threshold: {conf_stats['current_threshold']:.1%}")
+                self.logger.info(f"Base Threshold: {conf_stats['base_threshold']:.1%}")
+                self.logger.info(f"Recent Trades: {conf_stats['recent_trades']}")
+                if conf_stats['recent_trades'] > 0:
+                    self.logger.info(f"Win Rate: {conf_stats['win_rate']:.1%}")
+                    self.logger.info(f"Avg Confidence: {conf_stats['avg_confidence']:.1%}")
+                self.logger.info("=" * 60)
+            except Exception as e:
+                self.logger.error(f"Error printing confidence stats: {e}")
             
             # 2026 FEATURE: Log comprehensive performance metrics
             try:
