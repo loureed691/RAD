@@ -35,6 +35,11 @@ from smart_trading_enhancements import (
     SmartTradeFilter, SmartPositionSizer, SmartExitOptimizer,
     MarketContextAnalyzer, VolatilityAdaptiveParameters
 )
+# Enhanced ML Intelligence (2025+ Advanced AI)
+from enhanced_ml_intelligence import (
+    DeepLearningSignalPredictor, MultiTimeframeSignalFusion,
+    AdaptiveExitStrategy, ReinforcementLearningStrategy
+)
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -162,6 +167,14 @@ class TradingBot:
         self.market_context_analyzer = MarketContextAnalyzer()
         self.volatility_adaptive_params = VolatilityAdaptiveParameters()
         
+        # Enhanced ML Intelligence (Advanced AI)
+        self.deep_learning_predictor = DeepLearningSignalPredictor(n_features=31)
+        self.multi_tf_fusion = MultiTimeframeSignalFusion()
+        self.adaptive_exit = AdaptiveExitStrategy()
+        self.rl_strategy = ReinforcementLearningStrategy()
+        # Load saved Q-table if available
+        self.rl_strategy.load_q_table()
+        
         self.logger.info("🚀 2026 Advanced Features Activated:")
         self.logger.info("   ✅ Advanced Risk Manager (Regime-aware Kelly)")
         self.logger.info("   ✅ Market Microstructure (Order flow analysis)")
@@ -184,6 +197,12 @@ class TradingBot:
         self.logger.info("   ✅ Smart Exit Optimizer (ML-based timing)")
         self.logger.info("   ✅ Market Context Analyzer (Sentiment analysis)")
         self.logger.info("   ✅ Volatility-Adaptive Parameters")
+        
+        self.logger.info("🚀 ENHANCED ML INTELLIGENCE Activated:")
+        self.logger.info("   ✅ Deep Learning Signal Predictor (LSTM + Dense)")
+        self.logger.info("   ✅ Multi-Timeframe Signal Fusion (Weighted voting)")
+        self.logger.info("   ✅ Adaptive Exit Strategy (Dynamic targets)")
+        self.logger.info("   ✅ Reinforcement Learning Strategy Selector (Q-learning)")
         
         # State
         self.running = False
@@ -512,9 +531,72 @@ class TradingBot:
         except Exception as e:
             self.logger.debug(f"Using fallback regime detection: {e}")
         
-        # 2026 FEATURE: Adaptive strategy selection
+        # ENHANCED ML: Multi-Timeframe Signal Fusion
         try:
-            # Prepare confidence scores for strategies
+            # Get signals from different timeframes
+            signal_1h = (signal, confidence)
+            
+            # Get 4h indicators and signal
+            indicators_4h = Indicators.get_latest_indicators(df_4h) if df_4h is not None else indicators
+            ml_signal_4h, ml_conf_4h = self.ml_model.predict(indicators_4h)
+            signal_4h = (ml_signal_4h if ml_conf_4h > 0.5 else 'HOLD', ml_conf_4h)
+            
+            # Get 1d indicators and signal
+            indicators_1d = Indicators.get_latest_indicators(df_1d) if df_1d is not None else indicators
+            ml_signal_1d, ml_conf_1d = self.ml_model.predict(indicators_1d)
+            signal_1d = (ml_signal_1d if ml_conf_1d > 0.5 else 'HOLD', ml_conf_1d)
+            
+            # Fuse signals using sophisticated voting
+            fused_signal, fused_confidence, fusion_details = self.multi_tf_fusion.fuse_signals(
+                signal_1h, signal_4h, signal_1d
+            )
+            
+            self.logger.info(f"🔮 Multi-Timeframe Signal Fusion:")
+            self.logger.info(f"   1h: {signal_1h[0]} ({signal_1h[1]:.2f})")
+            self.logger.info(f"   4h: {signal_4h[0]} ({signal_4h[1]:.2f})")
+            self.logger.info(f"   1d: {signal_1d[0]} ({signal_1d[1]:.2f})")
+            self.logger.info(f"   Fused: {fused_signal} ({fused_confidence:.2f})")
+            self.logger.info(f"   Agreement: {fusion_details.get('agreement_score', 0):.2f}")
+            self.logger.info(f"   Consistency: {fusion_details.get('consistency_score', 0):.2f}")
+            
+            # Use fused signal if it disagrees with original
+            if fused_signal != signal and fused_confidence > 0.7:
+                self.logger.info(f"   ✅ Using fused signal: {signal} -> {fused_signal}")
+                signal = fused_signal
+                confidence = fused_confidence
+            elif fused_confidence > confidence:
+                # Boost confidence if fusion agrees
+                confidence = (confidence + fused_confidence) / 2
+                self.logger.info(f"   ✅ Boosted confidence to {confidence:.2f}")
+                
+        except Exception as e:
+            self.logger.debug(f"Multi-timeframe fusion error: {e}, using single timeframe signal")
+        
+        # ENHANCED ML: Deep Learning Signal Prediction
+        try:
+            features = self.ml_model.prepare_features(indicators).flatten()
+            dl_signal, dl_confidence = self.deep_learning_predictor.predict(features)
+            
+            self.logger.info(f"🧠 Deep Learning Prediction: {dl_signal} ({dl_confidence:.2f})")
+            
+            # If deep learning strongly disagrees, be cautious
+            if dl_signal != signal and dl_confidence > 0.8:
+                self.logger.warning(f"   ⚠️ Deep learning disagrees with signal")
+                confidence *= 0.85  # Reduce confidence
+            elif dl_signal == signal and dl_confidence > 0.7:
+                # Deep learning agrees - boost confidence
+                confidence = (confidence * 0.7 + dl_confidence * 0.3)
+                self.logger.info(f"   ✅ Deep learning confirms signal, confidence boosted to {confidence:.2f}")
+                
+        except Exception as e:
+            self.logger.debug(f"Deep learning prediction error: {e}")
+        
+        # ENHANCED ML: Reinforcement Learning Strategy Selection
+        try:
+            # Use RL to select best strategy for current conditions
+            rl_selected_strategy = self.rl_strategy.select_strategy(market_regime, volatility)
+            
+            # Prepare confidence scores for traditional selector
             confidence_scores = {
                 'trend_following': confidence if market_regime in ['bull', 'bear'] else confidence * 0.8,
                 'mean_reversion': confidence if market_regime in ['neutral', 'low_vol'] else confidence * 0.7,
@@ -522,9 +604,18 @@ class TradingBot:
                 'momentum': confidence if abs(momentum) > 0.02 else confidence * 0.6
             }
             
+            # Use traditional selector but weighted by RL recommendation
             selected_strategy = self.strategy_selector_2026.select_strategy(
                 market_regime, volatility, trend_strength, confidence_scores
             )
+            
+            # If RL strongly recommends a different strategy, consider it
+            if rl_selected_strategy != selected_strategy:
+                self.logger.info(f"🎰 RL recommends: {rl_selected_strategy} (selected: {selected_strategy})")
+                # For now, log the difference but use traditional selector
+                # In the future, could blend or use RL more aggressively
+            else:
+                self.logger.info(f"🎯 RL agrees with strategy: {selected_strategy}")
             
             # Apply strategy-specific filters
             signal, confidence = self.strategy_selector_2026.apply_strategy_filters(
@@ -539,6 +630,7 @@ class TradingBot:
         except Exception as e:
             self.logger.debug(f"Strategy selection error: {e}, using default")
             selected_strategy = 'trend_following'
+            rl_selected_strategy = 'trend_following'
         
         # 2026 FEATURE: Advanced risk check with regime awareness
         try:
@@ -801,6 +893,10 @@ class TradingBot:
         if success and symbol in self.position_manager.positions:
             try:
                 self.position_manager.positions[symbol].strategy = selected_strategy
+                # Store RL strategy for learning
+                self.position_manager.positions[symbol].rl_strategy = rl_selected_strategy
+                self.position_manager.positions[symbol].market_regime = market_regime
+                self.position_manager.positions[symbol].entry_volatility = volatility
             except AttributeError:
                 # Position object doesn't support strategy attribute, which is fine
                 self.logger.debug(f"Position for {symbol} doesn't support strategy attribute")
@@ -887,6 +983,31 @@ class TradingBot:
                         self.bayesian_kelly.update_trade_outcome(is_win, pnl)
                     except Exception as e:
                         self.logger.debug(f"Error recording Bayesian Kelly trade: {e}")
+                    
+                    # ENHANCED ML: Update Reinforcement Learning Q-values
+                    try:
+                        if hasattr(position, 'rl_strategy') and hasattr(position, 'market_regime') and hasattr(position, 'entry_volatility'):
+                            # Calculate reward (normalized profit)
+                            reward = pnl / 0.05  # Normalize by 5% as target
+                            reward = max(-1.0, min(reward, 2.0))  # Cap between -1 and 2
+                            
+                            self.rl_strategy.update_q_value(
+                                position.market_regime,
+                                position.entry_volatility,
+                                position.rl_strategy,
+                                reward
+                            )
+                            self.logger.debug(f"Updated RL Q-value for {position.rl_strategy} in {position.market_regime}")
+                    except Exception as e:
+                        self.logger.debug(f"Error updating RL Q-value: {e}")
+                    
+                    # ENHANCED ML: Update deep learning model with trade outcome
+                    try:
+                        features = self.ml_model.prepare_features(indicators).flatten()
+                        label = 1 if (signal == 'BUY' and pnl > 0.005) or (signal == 'SELL' and pnl > 0.005) else 0
+                        self.deep_learning_predictor.update(features, label)
+                    except Exception as e:
+                        self.logger.debug(f"Error updating deep learning model: {e}")
                 
                 except Exception as e:
                     self.logger.error(f"Error recording closed position {symbol}: {e}", exc_info=True)
@@ -1294,6 +1415,19 @@ class TradingBot:
             self.logger.info("💾 ML model saved successfully")
         except Exception as e:
             self.logger.error(f"Error saving ML model during shutdown: {e}")
+        
+        # ENHANCED ML: Save deep learning and RL models
+        try:
+            self.deep_learning_predictor.save()
+            self.logger.info("💾 Deep learning model saved successfully")
+        except Exception as e:
+            self.logger.error(f"Error saving deep learning model: {e}")
+        
+        try:
+            self.rl_strategy.save_q_table()
+            self.logger.info("💾 Reinforcement learning Q-table saved successfully")
+        except Exception as e:
+            self.logger.error(f"Error saving RL Q-table: {e}")
         
         # Close WebSocket and API connections
         try:
