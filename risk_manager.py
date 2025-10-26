@@ -738,10 +738,11 @@ class RiskManager:
         # Maximum concentration depends on group type
         # 'other' group gets higher limit (70%) since assets are uncorrelated
         # Correlated groups get 40% limit
+        # Use total_positions (actual positions) not max_open_positions (theoretical max)
         if new_group == 'other':
-            max_group_concentration = max(2, int(self.max_open_positions * 0.7))
+            max_group_concentration = max(2, int(total_positions * 0.7))
         else:
-            max_group_concentration = max(2, int(self.max_open_positions * 0.4))
+            max_group_concentration = max(2, int(total_positions * 0.4))
         
         if current_count >= max_group_concentration:
             return False, f"Too many positions in {new_group} group ({current_count}/{max_group_concentration})"
