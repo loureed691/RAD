@@ -523,7 +523,7 @@ class TradingBot:
             }
             
             selected_strategy = self.strategy_selector_2026.select_strategy(
-                market_regime, volatility, momentum, confidence_scores
+                market_regime, volatility, trend_strength, confidence_scores
             )
             
             # Apply strategy-specific filters

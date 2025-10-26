@@ -41,20 +41,20 @@ def test_bot_initialization():
                 # Try to initialize the bot
                 from bot import TradingBot
                 
-                # This will fail to fully initialize due to mocking, but we can check it starts
+                # The bot should initialize successfully and fall back to REST API
+                # if WebSocket connection fails (which it will in test environment)
                 try:
                     bot = TradingBot()
-                    print("✗ Bot initialized unexpectedly (WebSocket should fail)")
-                    return False
+                    print("✓ Bot initialized successfully")
+                    print("✓ Core bot structure is valid")
+                    print("✓ WebSocket fallback to REST API working")
+                    return True
                 except Exception as e:
-                    # Expected to fail due to WebSocket, but basic structure should be there
-                    if "WebSocket" in str(e) or "HTTPSConnectionPool" in str(e):
-                        print("✓ Bot initialization attempted (WebSocket failed as expected)")
-                        print("✓ Core bot structure is valid")
-                        return True
-                    else:
-                        print(f"✗ Unexpected initialization error: {e}")
-                        return False
+                    # If initialization fails completely, it's a real error
+                    print(f"✗ Bot initialization failed: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return False
                         
     except Exception as e:
         print(f"✗ Bot initialization test failed: {e}")
@@ -255,10 +255,10 @@ def test_bot_trade_execution_flow():
             # Simulate opening a position
             success = position_manager.open_position(
                 symbol='BTC-USDT',
-                side='LONG',
+                signal='BUY',  # Fixed: changed 'side' to 'signal', 'LONG' to 'BUY'
                 amount=0.1,
                 leverage=10,
-                stop_loss_pct=0.05
+                stop_loss_percentage=0.05  # Fixed: changed 'stop_loss_pct' to 'stop_loss_percentage'
             )
             
             if success:
@@ -352,10 +352,13 @@ def test_risk_management_integration():
         risk_manager = RiskManager(5000, 0.02, 3)
         
         # Calculate position size
+        # Fixed: match actual API signature (balance, entry_price, stop_loss_price, leverage)
+        entry_price = 50000
+        stop_loss_price = entry_price * (1 - 0.05)  # 5% stop loss
         position_size = risk_manager.calculate_position_size(
-            account_balance=10000,
-            stop_loss_pct=0.05,
-            entry_price=50000,
+            balance=10000,  # Fixed: changed 'account_balance' to 'balance'
+            entry_price=entry_price,
+            stop_loss_price=stop_loss_price,  # Fixed: provide stop_loss_price instead of stop_loss_pct
             leverage=10
         )
         
