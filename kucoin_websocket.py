@@ -503,6 +503,96 @@ class KuCoinWebSocket:
                 self.logger.error(f"Error subscribing to candles {kucoin_symbol}: {e}")
             return False
     
+    def unsubscribe_ticker(self, symbol: str):
+        """
+        Unsubscribe from ticker updates for a symbol
+        
+        Args:
+            symbol: Trading pair symbol (e.g., 'BTC/USDT:USDT')
+        """
+        if not self.connected:
+            return False
+        
+        # Convert symbol format (BTC/USDT:USDT -> BTCUSDT)
+        kucoin_symbol = symbol.replace('/', '').replace(':', '')
+        
+        subscription_key = f'ticker:{symbol}'
+        if subscription_key in self._subscriptions:
+            self._subscriptions.remove(subscription_key)
+        
+        return self._unsubscribe_ticker(kucoin_symbol)
+    
+    def _unsubscribe_ticker(self, kucoin_symbol: str):
+        """Internal method to unsubscribe from ticker"""
+        try:
+            if not self.connected or self.ws is None:
+                return False
+            
+            unsub_msg = {
+                "id": str(int(time.time() * 1000)),
+                "type": "unsubscribe",
+                "topic": f"/contractMarket/ticker:{kucoin_symbol}",
+                "privateChannel": False,
+                "response": True
+            }
+            self.ws.send(json.dumps(unsub_msg))
+            self.logger.debug(f"📊 Unsubscribed from ticker: {kucoin_symbol}")
+            return True
+        except Exception as e:
+            self.logger.debug(f"Error unsubscribing from ticker {kucoin_symbol}: {e}")
+            return False
+    
+    def unsubscribe_candles(self, symbol: str, timeframe: str = '1h'):
+        """
+        Unsubscribe from candlestick updates for a symbol
+        
+        Args:
+            symbol: Trading pair symbol (e.g., 'BTC/USDT:USDT')
+            timeframe: Timeframe (1min, 5min, 15min, 30min, 1hour, 4hour, 1day, 1week)
+        """
+        if not self.connected:
+            return False
+        
+        # Convert symbol format
+        kucoin_symbol = symbol.replace('/', '').replace(':', '')
+        
+        # Convert timeframe to KuCoin format
+        tf_map = {
+            '1m': '1min', '5m': '5min', '15m': '15min', '30m': '30min',
+            '1h': '1hour', '4h': '4hour', '1d': '1day', '1w': '1week'
+        }
+        kucoin_tf = tf_map.get(timeframe, timeframe)
+        
+        subscription_key = f'candles:{symbol}:{timeframe}'
+        if subscription_key in self._subscriptions:
+            self._subscriptions.remove(subscription_key)
+        
+        return self._unsubscribe_candles(kucoin_symbol, kucoin_tf)
+    
+    def _unsubscribe_candles(self, kucoin_symbol: str, kucoin_tf: str):
+        """Internal method to unsubscribe from candles"""
+        try:
+            if not self.connected or self.ws is None:
+                return False
+            
+            unsub_msg = {
+                "id": str(int(time.time() * 1000)),
+                "type": "unsubscribe",
+                "topic": f"/contractMarket/level2:{kucoin_symbol}",
+                "privateChannel": False,
+                "response": True
+            }
+            self.ws.send(json.dumps(unsub_msg))
+            self.logger.debug(f"📈 Unsubscribed from candles: {kucoin_symbol} {kucoin_tf}")
+            return True
+        except Exception as e:
+            self.logger.debug(f"Error unsubscribing from candles {kucoin_symbol}: {e}")
+            return False
+    
+    def get_subscription_count(self) -> int:
+        """Get current number of active subscriptions"""
+        return len(self._subscriptions)
+    
     def get_ticker(self, symbol: str) -> Optional[Dict]:
         """
         Get cached ticker data from WebSocket stream
