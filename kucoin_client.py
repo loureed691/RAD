@@ -175,9 +175,13 @@ class KuCoinClient:
         
         return False
     
-    def _check_circuit_breaker(self) -> bool:
+    def _check_circuit_breaker(self, is_critical: bool = False) -> bool:
         """
         Check if circuit breaker is active and should block API calls.
+        
+        Args:
+            is_critical: If True, allows the call even during circuit breaker cooldown
+                        (for critical operations like position updates, stop loss checks)
         
         Returns:
             True if call should proceed, False if blocked by circuit breaker
@@ -191,7 +195,12 @@ class KuCoinClient:
                     self._consecutive_failures = 0
                     return True
                 else:
-                    # Still in timeout period
+                    # Critical operations can bypass circuit breaker
+                    if is_critical:
+                        remaining = int(self._circuit_breaker_reset_time - time.time())
+                        self.logger.debug(f"⚠️ Circuit breaker active but allowing critical operation (retry in {remaining}s)")
+                        return True
+                    # Still in timeout period for non-critical operations
                     remaining = int(self._circuit_breaker_reset_time - time.time())
                     self.logger.warning(f"⛔ Circuit breaker active, retry in {remaining}s")
                     return False
@@ -251,7 +260,8 @@ class KuCoinClient:
         for attempt in range(effective_retries):
             try:
                 # RELIABILITY: Check circuit breaker before API call
-                if not self._check_circuit_breaker():
+                # Critical operations can bypass circuit breaker during cooldown
+                if not self._check_circuit_breaker(is_critical=is_critical):
                     self.logger.warning(f"⛔ {operation_name} blocked by circuit breaker")
                     return None
                 
@@ -574,11 +584,14 @@ class KuCoinClient:
                 return ticker
             
             # Use error handling with retries
+            # Mark HIGH/CRITICAL priority calls as critical for circuit breaker bypass
+            is_critical = priority <= APICallPriority.HIGH
             result = self._handle_api_error(
                 _fetch_ticker,
                 max_retries=3,
                 exponential_backoff=True,
-                operation_name=f"get_ticker({symbol})"
+                operation_name=f"get_ticker({symbol})",
+                is_critical=is_critical
             )
             
             return result
@@ -664,11 +677,13 @@ class KuCoinClient:
                 return balance
             
             # Use error handling with retries
+            # Balance checks are critical for risk management
             result = self._handle_api_error(
                 _fetch_balance,
                 max_retries=3,
                 exponential_backoff=True,
-                operation_name="get_balance"
+                operation_name="get_balance",
+                is_critical=True
             )
             
             return result if result is not None else {}

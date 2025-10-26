@@ -59,7 +59,7 @@ class Config:
     LIVE_LOOP_INTERVAL = float(os.getenv('LIVE_LOOP_INTERVAL', '0.05'))  # Main loop sleep interval for live monitoring (seconds) - reduced for faster response
     TRAILING_STOP_PERCENTAGE = float(os.getenv('TRAILING_STOP_PERCENTAGE', '0.02'))
     MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))
-    MAX_WORKERS = int(os.getenv('MAX_WORKERS', '20'))  # Number of parallel workers for market scanning
+    MAX_WORKERS = int(os.getenv('MAX_WORKERS', '8'))  # Number of parallel workers for market scanning (reduced to prevent rate limiting)
     CACHE_DURATION = int(os.getenv('CACHE_DURATION', '300'))  # Cache duration in seconds (default: 5 minutes)
     STALE_DATA_MULTIPLIER = int(os.getenv('STALE_DATA_MULTIPLIER', '2'))  # Multiplier for CHECK_INTERVAL to determine max age for opportunity data
     
