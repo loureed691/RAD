@@ -224,7 +224,9 @@ Trailing stop tightens as profit increases:
 Q(state, action) = expected_reward
 
 Update Rule:
-Q_new = Q_old + α × (reward + γ × max(Q_future) - Q_old)
+Q_new = Q_old + α × (TD_error)
+TD_error = reward + γ × max(Q_future) - Q_old
+# TD_error represents the difference between expected and actual future rewards
 
 Where:
 α = learning rate (0.1)
@@ -306,7 +308,7 @@ bull_medium: {
 
 After 100 trades:
 bull_medium: {
-    'trend_following': 0.85,  ← Best for bullish
+    'trend_following': 0.85,  # Best for bullish conditions
     'mean_reversion': 0.12,
     'breakout': 0.45,
     'momentum': 0.68
@@ -355,7 +357,7 @@ self.rl_strategy.load_q_table()  # Load previous learning
 
 ```python
 # 1. Get signals from all timeframes
-signal_1h = (signal, confidence)
+signal_1h = (current_signal, confidence)  # Current 1h signal
 signal_4h = get_4h_signal()  
 signal_1d = get_1d_signal()
 
@@ -576,7 +578,7 @@ rl.min_epsilon = 0.10      # Higher minimum
 - [ ] Online learning for deep model
 - [ ] Ensemble of multiple deep models
 - [ ] Attention mechanism for feature importance
-- [ ] Policy gradient methods (PPO/A3C)
+- [ ] Policy gradient methods (Proximal Policy Optimization and Asynchronous Advantage Actor-Critic)
 - [ ] Multi-agent RL (portfolio-level)
 
 ### Experimental
@@ -596,7 +598,7 @@ rl.min_epsilon = 0.10      # Higher minimum
 
 ### Reinforcement Learning
 - "Q-Learning" (Watkins & Dayan, 1992)
-- "Human-level control through deep RL" (Mnih et al., 2015)
+- "Human-level control through deep reinforcement learning" (Mnih et al., 2015)
 
 ### Trading Applications
 - "Machine Learning for Algorithmic Trading" (Jansen, 2020)
