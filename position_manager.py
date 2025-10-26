@@ -111,11 +111,16 @@ class Position:
         if self.breakeven_moved:
             return False
         
-        current_pnl = self.get_pnl(current_price)
+        # MONEY LOSS FIX: Use leveraged P&L with fees to determine true breakeven
+        # Without fees, "breakeven" still loses money due to trading costs
+        current_pnl = self.get_leveraged_pnl(current_price, include_fees=True)
         
-        # PROFITABILITY FIX: Move to breakeven earlier at 1.5% profit (was 2%)
-        if current_pnl > 0.015:  # Changed from 0.02
+        # PROFITABILITY FIX: Move to breakeven when we have positive profit AFTER fees
+        # This ensures we're actually break even (fees covered) before locking in
+        # Require at least 0.5% profit after fees before moving to breakeven
+        if current_pnl > 0.005:  # Changed to use fees and require positive profit
             if self.side == 'long':
+                # Move stop to entry price + buffer to protect the gain
                 new_stop = self.entry_price * (1 + buffer)
                 if new_stop > self.stop_loss:
                     self.stop_loss = new_stop
@@ -602,7 +607,9 @@ class Position:
         # Calculate current P/L percentage
         # CRITICAL FIX: Use leveraged P&L to check ROI-based thresholds (20% profit = 20% ROI, not 20% price movement)
         # This ensures positions close at the correct profit/loss levels the user expects
-        current_pnl = self.get_leveraged_pnl(current_price)
+        # MONEY LOSS FIX: Always use P&L with fees for decision making
+        # Without fees, bot thinks it's profitable when it's actually losing money after fees
+        current_pnl = self.get_leveraged_pnl(current_price, include_fees=True)
         
         # CRITICAL SAFETY: Tiered emergency stop loss based on ROI to prevent catastrophic losses
         # These are absolute maximum loss caps that override all other logic
@@ -631,9 +638,18 @@ class Position:
         if current_pnl > self.max_favorable_excursion:
             self.max_favorable_excursion = current_pnl
         
+        # MONEY LOSS FIX: Don't take profit below minimum threshold
+        # This ensures we only close profitable trades that cover fees + minimum profit
+        # Import here to avoid circular dependency
+        from config import Config
+        min_profit_threshold = getattr(Config, 'MIN_PROFIT_THRESHOLD', None)
+        if min_profit_threshold is None:
+            min_profit_threshold = 0.0062  # Default 0.62% (covers 0.12% fees + 0.5% profit)
+        
         # Intelligent profit taking - take profits at key ROI levels when TP is far away
         # This prevents scenarios where TP gets extended too far and price retraces
-        if current_pnl > 0 and self.take_profit:
+        # ONLY take profit if above minimum threshold (unless emergency stops)
+        if current_pnl > min_profit_threshold and self.take_profit:
             # Calculate distance to take profit
             if self.side == 'long':
                 distance_to_tp = (self.take_profit - current_price) / current_price

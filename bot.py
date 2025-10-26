@@ -17,6 +17,7 @@ from ml_model import MLModel
 from indicators import Indicators
 from advanced_analytics import AdvancedAnalytics
 from performance_monitor import get_monitor
+from profit_tracker import ProfitTracker
 # 2026 Advanced Features
 from advanced_risk_2026 import AdvancedRiskManager2026
 from market_microstructure_2026 import MarketMicrostructure2026
@@ -131,9 +132,13 @@ class TradingBot:
         # Advanced analytics module
         self.analytics = AdvancedAnalytics()
         
+        # Enhanced profit tracking
+        self.profit_tracker = ProfitTracker()
+        
         # Performance monitoring
         self.perf_monitor = get_monitor()
         self.logger.info("✅ Performance Monitor: ENABLED")
+        self.logger.info("✅ Profit Tracker: ENABLED")
         
         # 2026 Advanced Features
         self.advanced_risk_2026 = AdvancedRiskManager2026()
@@ -924,11 +929,30 @@ class TradingBot:
                     # DEFENSIVE: Ensure leverage is not zero (should never happen, but be safe)
                     leverage = position.leverage if position.leverage > 0 else 1
                     
+                    # Calculate exit price
+                    exit_price = position.entry_price * (1 + pnl / leverage) if position.side == 'long' else position.entry_price * (1 - pnl / leverage)
+                    
+                    # Record in enhanced profit tracker (includes fee analysis)
+                    try:
+                        self.profit_tracker.record_trade(
+                            symbol=symbol,
+                            side=position.side,
+                            entry_price=position.entry_price,
+                            exit_price=exit_price,
+                            amount=position.amount,
+                            leverage=position.leverage,
+                            entry_time=position.entry_time,
+                            exit_time=datetime.now(),
+                            reason=getattr(position, 'close_reason', 'unknown')
+                        )
+                    except Exception as e:
+                        self.logger.error(f"Error recording to profit tracker: {e}")
+                    
                     self.analytics.record_trade({
                         'symbol': symbol,
                         'side': position.side,
                         'entry_price': position.entry_price,
-                        'exit_price': position.entry_price * (1 + pnl / leverage) if position.side == 'long' else position.entry_price * (1 - pnl / leverage),
+                        'exit_price': exit_price,
                         'pnl': pnl,
                         'pnl_pct': pnl,
                         'duration': trade_duration,
@@ -1193,6 +1217,12 @@ class TradingBot:
         time_since_report = (datetime.now() - self.last_analytics_report).total_seconds()
         if time_since_report > 3600:  # 1 hour
             self.logger.info(self.analytics.get_performance_summary())
+            
+            # Enhanced profit tracking report
+            try:
+                self.profit_tracker.print_report(days=7)
+            except Exception as e:
+                self.logger.error(f"Error printing profit report: {e}")
             
             # 2026 FEATURE: Log comprehensive performance metrics
             try:
