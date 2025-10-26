@@ -1312,6 +1312,11 @@ class PositionManager:
                     # Check if position should be closed
                     should_close, reason = position.should_close(current_price)
                     if should_close:
+                        # Thread-safe check: verify position still exists before closing
+                        with self._positions_lock:
+                            if symbol not in self.positions:
+                                self.position_logger.debug(f"  ℹ Position {symbol} already closed, skipping")
+                                continue
                         self.position_logger.info(f"  ✓ Closing position: {reason}")
                         pnl = self.close_position(symbol, reason)
                         if pnl is not None:
@@ -1451,6 +1456,11 @@ class PositionManager:
                 
                 # If advanced strategy says exit (full exit), do it
                 if should_exit_advanced:
+                    # Thread-safe check: verify position still exists before closing
+                    with self._positions_lock:
+                        if symbol not in self.positions:
+                            self.position_logger.debug(f"  ℹ Position {symbol} already closed, skipping")
+                            continue
                     self.position_logger.info(f"  ✓ Closing position: {exit_reason}")
                     pnl = self.close_position(symbol, exit_reason)
                     if pnl is not None:
@@ -1493,6 +1503,11 @@ class PositionManager:
                     
                     if smart_exit_signal['should_exit'] and smart_exit_signal['confidence'] > SMART_EXIT_CONFIDENCE_THRESHOLD:
                         smart_exit_reason = f"Smart exit: {smart_exit_signal['reason_text']} (confidence: {smart_exit_signal['confidence']:.2f})"
+                        # Thread-safe check: verify position still exists before closing
+                        with self._positions_lock:
+                            if symbol not in self.positions:
+                                self.position_logger.debug(f"  ℹ Position {symbol} already closed, skipping")
+                                continue
                         self.position_logger.info(f"  🧠 {smart_exit_reason}")
                         pnl = self.close_position(symbol, smart_exit_reason)
                         if pnl is not None:
@@ -1508,6 +1523,11 @@ class PositionManager:
                 # Check standard stop loss and take profit conditions
                 should_close, reason = position.should_close(current_price)
                 if should_close:
+                    # Thread-safe check: verify position still exists before closing
+                    with self._positions_lock:
+                        if symbol not in self.positions:
+                            self.position_logger.debug(f"  ℹ Position {symbol} already closed, skipping")
+                            continue
                     self.position_logger.info(f"  ✓ Closing position: {reason}")
                     pnl = self.close_position(symbol, reason)
                     if pnl is not None:
