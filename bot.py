@@ -88,25 +88,46 @@ class TradingBot:
         )
         
         # Get balance and auto-configure trading parameters if not set in .env
+        self.logger.info("=" * 60)
+        self.logger.info("🎯 AUTOMATED CONFIGURATION - Based on Your Account")
+        self.logger.info("=" * 60)
+        
         balance = self.client.get_balance()
         
         # Check if balance fetch was successful by checking for expected structure
         if balance and 'free' in balance:
             available_balance = float(balance.get('free', {}).get('USDT', 0))
-            self.logger.info(f"💰 Available balance: ${available_balance:.2f} USDT")
+            self.logger.info(f"💰 Account Balance: ${available_balance:.2f} USDT")
             Config.auto_configure_from_balance(available_balance)
         else:
-            self.logger.warning("⚠️  Could not fetch balance, using default configuration")
+            self.logger.warning("⚠️  Could not fetch balance, using conservative defaults")
             # Set defaults if balance fetch fails
             if Config.LEVERAGE is None:
                 Config.LEVERAGE = 10
+                self.logger.info(f"🤖 Default LEVERAGE: {Config.LEVERAGE}x")
             if Config.MAX_POSITION_SIZE is None:
                 Config.MAX_POSITION_SIZE = 1000
+                self.logger.info(f"🤖 Default MAX_POSITION_SIZE: ${Config.MAX_POSITION_SIZE:.2f}")
             if Config.RISK_PER_TRADE is None:
                 Config.RISK_PER_TRADE = 0.02
+                self.logger.info(f"🤖 Default RISK_PER_TRADE: {Config.RISK_PER_TRADE:.2%}")
             if Config.MIN_PROFIT_THRESHOLD is None:
                 # Include trading fee buffer: 0.12% fees + 0.5% profit = 0.62%
                 Config.MIN_PROFIT_THRESHOLD = 0.0062
+                self.logger.info(f"🤖 Default MIN_PROFIT_THRESHOLD: {Config.MIN_PROFIT_THRESHOLD:.2%}")
+        
+        self.logger.info("=" * 60)
+        self.logger.info("📊 ACTIVE TRADING CONFIGURATION")
+        self.logger.info("=" * 60)
+        self.logger.info(f"   Leverage: {Config.LEVERAGE}x")
+        self.logger.info(f"   Max Position Size: ${Config.MAX_POSITION_SIZE:.2f}")
+        self.logger.info(f"   Risk Per Trade: {Config.RISK_PER_TRADE:.2%}")
+        self.logger.info(f"   Min Profit Target: {Config.MIN_PROFIT_THRESHOLD:.2%}")
+        self.logger.info(f"   Max Open Positions: {Config.MAX_OPEN_POSITIONS}")
+        self.logger.info(f"   Trailing Stop: {Config.TRAILING_STOP_PERCENTAGE:.2%}")
+        self.logger.info(f"   WebSocket Enabled: {Config.ENABLE_WEBSOCKET}")
+        self.logger.info(f"   Scan Interval: {Config.CHECK_INTERVAL}s")
+        self.logger.info("=" * 60)
         
         self.scanner = MarketScanner(self.client)
         

@@ -1,24 +1,48 @@
 # RAD - KuCoin Futures Trading Bot
 
-**Last Updated:** October 14, 2025  
-**Version:** 3.1 (2025 AI Edition)
+**Last Updated:** October 26, 2025  
+**Version:** 3.2 (2025 AI Edition - Fully Automated)
 
-A production-grade, fully automated, self-learning KuCoin Futures trading bot with **cutting-edge 2025 AI features** for maximum profitability. Features institutional-grade risk management, market microstructure analysis, adaptive strategy selection, advanced performance metrics, and research-backed AI enhancements.
+A production-grade, **FULLY AUTOMATED**, self-learning KuCoin Futures trading bot with **cutting-edge 2025 AI features** for maximum profitability. Features institutional-grade risk management, market microstructure analysis, adaptive strategy selection, advanced performance metrics, and research-backed AI enhancements.
 
-## 🚀 Quick Start
+## 🚀 Quick Start (2 Minutes Setup!)
 
-1. **Setup**: Configure API keys in `.env` - see [QUICKSTART.md](QUICKSTART.md)
-2. **Run**: `python bot.py` - Auto-configures based on your balance
-3. **Monitor**: Check logs for real-time trading activity
+**The bot is FULLY AUTOMATED - just add your API credentials!**
 
-👉 **See [2025_AI_ENHANCEMENTS.md](2025_AI_ENHANCEMENTS.md) for latest AI features** 🆕  
-👉 **See [2025_AI_QUICKSTART.md](2025_AI_QUICKSTART.md) for quick integration guide** 🆕  
-👉 **See [2026_ENHANCEMENTS.md](2026_ENHANCEMENTS.md) for advanced features guide**  
-👉 **See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions**
+1. **Install**: `pip install -r requirements.txt`
+2. **Configure**: Copy `.env.example` to `.env` and add your KuCoin API credentials
+3. **Run**: `python start.py` or `python bot.py`
+
+**That's it!** The bot automatically configures leverage, position sizing, risk management, and all trading parameters based on your account balance.
+
+```env
+# Your .env file only needs:
+KUCOIN_API_KEY=your_api_key
+KUCOIN_API_SECRET=your_api_secret
+KUCOIN_API_PASSPHRASE=your_passphrase
+LOG_LEVEL=INFO  # Optional, defaults to INFO
+```
+
+### What Gets Auto-Configured?
+- ✅ **Leverage** (4-12x based on your balance size)
+- ✅ **Position Sizing** (30-60% of balance)
+- ✅ **Risk Per Trade** (1-3% based on account size)
+- ✅ **Profit Targets** (covers fees + safe margins)
+- ✅ **WebSocket** (real-time market data)
+- ✅ **Trailing Stops** (protect profits)
+- ✅ **Portfolio Diversification**
+
+👉 **See [QUICKSTART.md](QUICKSTART.md) for detailed setup and configuration details**
 
 ---
 
-## 🆕 What's New in 2025 AI Edition
+## 🆕 What's New in Version 3.2
+
+### **🤖 Fully Automated Configuration** (October 2025)
+- **Zero Manual Configuration** - Bot auto-configures based on your account balance
+- **Balance-Aware Risk Management** - Smaller accounts get conservative settings, larger accounts get optimized settings
+- **Smart Defaults** - All parameters have sensible defaults that work for 95% of users
+- **One-Command Setup** - Just add API credentials and start trading
 
 ### **🤖 Latest AI Enhancements** (October 2025)
 - **Bayesian Adaptive Kelly Criterion** - Dynamic position sizing with Bayesian win rate estimation
