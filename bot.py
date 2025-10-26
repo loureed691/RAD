@@ -700,13 +700,15 @@ class TradingBot:
             self.position_correlation.update_price_history(symbol, entry_price)
             
             # Get existing positions for correlation analysis
-            existing_positions = [
-                {
+            existing_positions = []
+            for pos_symbol, pos in self.position_manager.positions.items():
+                amount = getattr(pos, 'amount', 0)
+                entry_price = getattr(pos, 'entry_price', entry_price)
+                value = amount * entry_price
+                existing_positions.append({
                     'symbol': pos_symbol,
-                    'value': getattr(pos, 'amount', 0) * getattr(pos, 'entry_price', entry_price)
-                }
-                for pos_symbol, pos in self.position_manager.positions.items()
-            ]
+                    'value': value
+                })
             
             if existing_positions:
                 # CRITICAL FIX: Calculate total portfolio value (existing positions + available balance)

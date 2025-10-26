@@ -118,6 +118,12 @@ class TestOrderValidation:
     def test_order_validation_rejects_oversized_amount(self):
         """validate_order_locally should reject orders exceeding max_amount"""
         from kucoin_client import KuCoinClient as KC
+        import os
+        
+        # Use environment variables for credentials (even test ones)
+        api_key = os.getenv('TEST_API_KEY', 'test_key')
+        api_secret = os.getenv('TEST_API_SECRET', 'test_secret')
+        api_passphrase = os.getenv('TEST_API_PASSPHRASE', 'test_passphrase')
         
         mock_client = Mock(spec=KC)
         mock_client.get_cached_symbol_metadata = Mock(return_value={
@@ -129,7 +135,7 @@ class TestOrderValidation:
         
         # Create a real KuCoinClient instance for validation logic
         # (we just need the validation method, not real API access)
-        client = KC(api_key='test', api_secret='test', api_passphrase='test')
+        client = KC(api_key=api_key, api_secret=api_secret, api_passphrase=api_passphrase)
         
         # Mock the metadata method
         client.get_cached_symbol_metadata = mock_client.get_cached_symbol_metadata
@@ -152,8 +158,14 @@ class TestOrderStatusQueryHandling:
         # The actual test would require running the bot, but we can verify
         # the change was made
         
+        import os
+        
+        # Get the current file's directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        kucoin_client_path = os.path.join(current_dir, 'kucoin_client.py')
+        
         # Read the kucoin_client.py file and check for the change
-        with open('/home/runner/work/RAD/RAD/kucoin_client.py', 'r') as f:
+        with open(kucoin_client_path, 'r') as f:
             content = f.read()
         
         # Check that we're using DEBUG level for this error
