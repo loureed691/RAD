@@ -19,6 +19,68 @@ class SignalGenerator:
         self.adaptive_threshold = 0.62  # INCREASED from 0.55 for better quality trades
         self.pattern_recognizer = PatternRecognition()
         self.volume_profile_analyzer = VolumeProfile()
+        
+        # Track recent signal performance for adaptive thresholds
+        self.recent_signals = []  # Store last 20 signals
+        self.max_recent_signals = 20
+    
+    def get_adaptive_confidence_threshold(self, volatility: float = 0.03, 
+                                         volume_ratio: float = 1.0) -> float:
+        """
+        Calculate adaptive confidence threshold based on market conditions
+        
+        Args:
+            volatility: Current market volatility (ATR or BB width)
+            volume_ratio: Current volume vs average volume ratio
+        
+        Returns:
+            Adjusted confidence threshold
+        """
+        threshold = self.adaptive_threshold
+        
+        # Adjust for volatility (higher volatility = higher threshold)
+        if volatility > 0.06:
+            threshold += 0.05  # Very high volatility, increase threshold
+        elif volatility > 0.04:
+            threshold += 0.03  # High volatility
+        elif volatility < 0.02:
+            threshold -= 0.02  # Low volatility, can lower threshold
+        
+        # Adjust for volume (low volume = higher threshold)
+        if volume_ratio < 0.7:
+            threshold += 0.05  # Low volume, be more selective
+        elif volume_ratio < 0.9:
+            threshold += 0.02  # Below average volume
+        elif volume_ratio > 1.5:
+            threshold -= 0.02  # High volume, can lower threshold
+        
+        # Adjust for recent signal performance
+        if len(self.recent_signals) >= 10:
+            recent_win_rate = sum(1 for s in self.recent_signals if s.get('profitable', False)) / len(self.recent_signals)
+            if recent_win_rate < 0.4:
+                threshold += 0.05  # Poor recent performance, be more selective
+            elif recent_win_rate > 0.7:
+                threshold -= 0.02  # Good recent performance, can be slightly more aggressive
+        
+        # Keep threshold within reasonable bounds (0.50 to 0.75)
+        return max(0.50, min(threshold, 0.75))
+    
+    def record_signal_outcome(self, profitable: bool, pnl: float):
+        """
+        Record the outcome of a signal for adaptive learning
+        
+        Args:
+            profitable: Whether the trade was profitable
+            pnl: Profit/loss percentage
+        """
+        self.recent_signals.append({
+            'profitable': profitable,
+            'pnl': pnl
+        })
+        
+        # Keep only recent signals
+        if len(self.recent_signals) > self.max_recent_signals:
+            self.recent_signals = self.recent_signals[-self.max_recent_signals:]
     
     def detect_support_resistance(self, df: pd.DataFrame, current_price: float) -> Dict:
         """

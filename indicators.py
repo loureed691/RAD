@@ -234,3 +234,70 @@ class Indicators:
             'roc': latest['roc'],
             'vwap': latest['vwap'] if 'vwap' in latest else latest['close']
         }
+    
+    @staticmethod
+    def calculate_momentum_strength(df: pd.DataFrame, lookback: int = 14) -> Dict:
+        """
+        Calculate comprehensive momentum strength indicators
+        
+        Args:
+            df: DataFrame with OHLCV data and indicators
+            lookback: Number of periods to analyze
+        
+        Returns:
+            Dict with momentum analysis
+        """
+        if df.empty or len(df) < lookback:
+            return {'strength': 0.0, 'direction': 'neutral', 'acceleration': 0.0}
+        
+        try:
+            recent_df = df.tail(lookback)
+            
+            # Price momentum (rate of change)
+            price_change = (recent_df['close'].iloc[-1] - recent_df['close'].iloc[0]) / recent_df['close'].iloc[0]
+            
+            # RSI momentum (trending vs reverting)
+            rsi_current = recent_df['rsi'].iloc[-1]
+            rsi_avg = recent_df['rsi'].mean()
+            rsi_momentum = (rsi_current - rsi_avg) / 50.0  # Normalize
+            
+            # MACD momentum
+            macd_current = recent_df['macd'].iloc[-1]
+            macd_signal = recent_df['macd_signal'].iloc[-1]
+            macd_momentum = (macd_current - macd_signal) / abs(macd_signal) if macd_signal != 0 else 0
+            
+            # Volume momentum
+            volume_trend = recent_df['volume'].rolling(window=5).mean().iloc[-1] / recent_df['volume'].rolling(window=10).mean().iloc[-1] if len(recent_df) >= 10 else 1.0
+            
+            # Calculate composite momentum strength
+            momentum_score = (
+                price_change * 0.4 +
+                rsi_momentum * 0.3 +
+                macd_momentum * 0.2 +
+                (volume_trend - 1.0) * 0.1
+            )
+            
+            # Calculate momentum acceleration (second derivative)
+            if len(recent_df) >= 7:
+                recent_momentum = recent_df['momentum'].tail(7)
+                acceleration = (recent_momentum.iloc[-1] - recent_momentum.iloc[0]) / 6
+            else:
+                acceleration = 0.0
+            
+            # Determine direction
+            if momentum_score > 0.02:
+                direction = 'bullish'
+            elif momentum_score < -0.02:
+                direction = 'bearish'
+            else:
+                direction = 'neutral'
+            
+            return {
+                'strength': abs(momentum_score),
+                'direction': direction,
+                'acceleration': acceleration,
+                'score': momentum_score
+            }
+            
+        except Exception as e:
+            return {'strength': 0.0, 'direction': 'neutral', 'acceleration': 0.0}

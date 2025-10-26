@@ -273,7 +273,7 @@ class RiskManager:
         return True, "ok"
     
     def adjust_risk_for_conditions(self, base_risk: float, market_volatility: float = 0.03,
-                                   win_rate: float = 0.5) -> float:
+                                   win_rate: float = 0.5, time_of_day_adj: bool = True) -> float:
         """
         Dynamically adjust risk based on market conditions and performance
         
@@ -281,13 +281,32 @@ class RiskManager:
             base_risk: Base risk percentage (e.g., 0.02 for 2%)
             market_volatility: Current market volatility (e.g., ATR or BB width)
             win_rate: Recent win rate (0 to 1)
+            time_of_day_adj: Apply time-of-day risk adjustments
         
         Returns:
             Adjusted risk percentage
         """
         adjusted_risk = base_risk
         
-        # 1. Adjust for win/loss streaks
+        # 1. Time-of-day adjustment (crypto markets have different volatility patterns)
+        if time_of_day_adj:
+            from datetime import datetime
+            hour = datetime.now().hour
+            
+            # Asian session (00:00-08:00 UTC): Lower volatility, reduce risk slightly
+            if 0 <= hour < 8:
+                adjusted_risk *= 0.95
+                self.logger.debug(f"Time-of-day adjustment: -5% (Asian session)")
+            # European session (08:00-16:00 UTC): Moderate activity
+            elif 8 <= hour < 16:
+                adjusted_risk *= 1.0
+                self.logger.debug(f"Time-of-day adjustment: 0% (European session)")
+            # US session (16:00-24:00 UTC): Higher volatility and volume
+            else:
+                adjusted_risk *= 1.05
+                self.logger.debug(f"Time-of-day adjustment: +5% (US session)")
+        
+        # 2. Adjust for win/loss streaks
         if self.win_streak >= 3:
             # On a hot streak - increase risk slightly
             adjusted_risk *= 1.2
@@ -1167,3 +1186,51 @@ class RiskManager:
         
         # All checks passed
         return True, "guardrails_passed"
+    
+    def estimate_slippage(self, position_value: float, orderbook: Dict = None, 
+                         volatility: float = 0.03, volume_24h: float = None) -> float:
+        """
+        Estimate expected slippage for a trade
+        
+        Args:
+            position_value: Total value of position in USDT
+            orderbook: Optional orderbook data with 'bids'/'asks'
+            volatility: Market volatility (ATR or BB width)
+            volume_24h: 24-hour trading volume in USDT
+        
+        Returns:
+            Expected slippage as percentage (e.g., 0.001 = 0.1%)
+        """
+        base_slippage = 0.0005  # 0.05% base slippage
+        
+        # 1. Adjust for position size relative to volume
+        if volume_24h and volume_24h > 0:
+            # Market impact increases with position size relative to daily volume
+            volume_ratio = position_value / volume_24h
+            if volume_ratio > 0.001:  # Position > 0.1% of daily volume
+                volume_slippage = volume_ratio * 0.5  # 50% slippage per % of volume
+                base_slippage += min(volume_slippage, 0.01)  # Cap at 1%
+        
+        # 2. Adjust for market volatility
+        if volatility > 0.05:
+            # High volatility increases slippage
+            volatility_slippage = (volatility - 0.05) * 2.0
+            base_slippage += min(volatility_slippage, 0.005)
+        
+        # 3. Adjust based on orderbook depth if available
+        if orderbook and 'bids' in orderbook and 'asks' in orderbook:
+            bids = orderbook['bids']
+            asks = orderbook['asks']
+            
+            if bids and asks:
+                # Calculate spread as slippage indicator
+                best_bid = bids[0][0] if len(bids[0]) > 0 else 0
+                best_ask = asks[0][0] if len(asks[0]) > 0 else 0
+                
+                if best_bid > 0 and best_ask > best_bid:
+                    spread = (best_ask - best_bid) / best_bid
+                    # Half spread as minimum slippage
+                    base_slippage = max(base_slippage, spread / 2)
+        
+        # Cap total slippage at 2%
+        return min(base_slippage, 0.02)
