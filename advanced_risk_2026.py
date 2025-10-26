@@ -337,8 +337,9 @@ class AdvancedRiskManager2026:
         if portfolio_heat > self.max_portfolio_heat:
             return False, f"Portfolio heat too high: {portfolio_heat:.1f} > {self.max_portfolio_heat:.1f}"
         
-        # Check liquidity
-        if liquidity_score < 0.5:
+        # Check liquidity - adjusted to 0.25 to allow trading on mid-cap pairs
+        # Previous threshold of 0.5 was too strict and rejected all opportunities
+        if liquidity_score < 0.25:
             return False, f"Insufficient liquidity: {liquidity_score:.2f}"
         
         # High volatility regime - extra caution

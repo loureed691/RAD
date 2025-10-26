@@ -127,13 +127,16 @@ class MarketMicrostructure2026:
             score_components = []
             
             # Component 1: Volume (0-0.3)
-            # Good liquidity: > $10M daily volume
-            if volume_24h > 10_000_000:
+            # Adjusted thresholds to be realistic for mid-cap pairs
+            # Good liquidity: > $1M daily volume (was $10M)
+            if volume_24h > 1_000_000:
                 volume_score = 0.3
-            elif volume_24h > 1_000_000:
-                volume_score = 0.2
+            elif volume_24h > 500_000:
+                volume_score = 0.25
             elif volume_24h > 100_000:
-                volume_score = 0.1
+                volume_score = 0.2
+            elif volume_24h > 50_000:
+                volume_score = 0.15
             else:
                 volume_score = 0.05
             score_components.append(volume_score)
@@ -164,12 +167,13 @@ class MarketMicrostructure2026:
                 ask_volume = sum(float(ask[1]) for ask in asks[:10])
                 total_depth = bid_volume + ask_volume
                 
-                # Good depth: > $100k in top 10 levels
-                if total_depth > 100_000:
+                # Adjusted depth thresholds to be more realistic
+                # Good depth: > $10k in top 10 levels (was $100k)
+                if total_depth > 10_000:
                     depth_score = 0.2
-                elif total_depth > 50_000:
+                elif total_depth > 5_000:
                     depth_score = 0.15
-                elif total_depth > 10_000:
+                elif total_depth > 1_000:
                     depth_score = 0.1
                 else:
                     depth_score = 0.05
