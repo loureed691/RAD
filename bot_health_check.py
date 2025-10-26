@@ -85,7 +85,22 @@ class PerformanceMonitor:
 
 
 class BotHealthCheck:
-    """Comprehensive bot health monitoring and diagnostics"""
+    """
+    Comprehensive bot health monitoring and diagnostics
+    
+    This class provides health checks for all bot components including:
+    - Scan performance monitoring
+    - Memory usage tracking
+    - Error rate analysis
+    - API performance monitoring
+    
+    Attributes:
+        performance_monitor: PerformanceMonitor instance for metric tracking
+        health_history: Deque of historical health reports (max 100 entries)
+        max_scan_time: Maximum acceptable scan time in seconds (default: 30.0)
+        max_memory_mb: Maximum acceptable memory usage in MB (default: 1024)
+        max_error_rate: Maximum acceptable error rate as decimal (default: 0.05)
+    """
     
     def __init__(self):
         self.logger = Logger.get_logger()
@@ -236,8 +251,10 @@ class BotHealthCheck:
                 'api_performance': self.check_api_performance(metrics)
             }
             
-            # Determine overall health status
+            # Determine overall health status based on component statuses
             statuses = [check[0] for check in checks.values()]
+            
+            # Priority: CRITICAL > WARNING > HEALTHY
             if HealthStatus.CRITICAL in statuses:
                 overall_status = HealthStatus.CRITICAL
             elif HealthStatus.WARNING in statuses:

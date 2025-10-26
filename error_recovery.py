@@ -45,7 +45,23 @@ class ErrorRecord:
 
 
 class ErrorRecoveryManager:
-    """Manages error detection, logging, and recovery"""
+    """
+    Manages error detection, logging, and recovery
+    
+    This class provides centralized error management with intelligent recovery
+    strategies, circuit breaker functionality, and comprehensive error tracking.
+    
+    Args:
+        max_retries: Maximum number of retry attempts for recovery actions (default: 3)
+        backoff_base: Base for exponential backoff calculations (default: 2.0)
+    
+    Attributes:
+        error_history: Deque of recent errors (max 1000 entries)
+        error_counts: Dict mapping error types to occurrence counts
+        last_errors: Dict mapping error types to last occurrence timestamp
+        recovery_strategies: Dict of registered recovery strategies
+        circuit_breakers: Dict tracking open circuit breakers by component
+    """
     
     def __init__(self, max_retries: int = 3, backoff_base: float = 2.0):
         self.logger = Logger.get_logger()
@@ -261,9 +277,15 @@ class ErrorRecoveryManager:
         return True
     
     def _handle_shutdown(self, error: ErrorRecord, params: Dict) -> bool:
-        """Handle shutdown recovery action"""
+        """
+        Handle shutdown recovery action
+        
+        Note: This marks the need for shutdown but doesn't actually shut down.
+        The caller should check error.recovery_successful and initiate shutdown.
+        """
         self.logger.critical(f"SHUTDOWN TRIGGERED: {error.error_type} - {error.message}")
-        # Graceful shutdown logic would go here
+        self.logger.critical("Graceful shutdown should be initiated by the calling code")
+        # Could send notifications here (email, Slack, etc.)
         error.recovery_successful = True
         return True
     

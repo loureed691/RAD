@@ -40,6 +40,9 @@ from enhanced_ml_intelligence import (
     DeepLearningSignalPredictor, MultiTimeframeSignalFusion,
     AdaptiveExitStrategy, ReinforcementLearningStrategy
 )
+# Production-Grade Improvements
+from bot_health_check import get_health_check
+from error_recovery import get_error_manager, ErrorSeverity
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
