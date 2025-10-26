@@ -30,6 +30,9 @@ psycopg2-binary>=2.9.9
 flask>=3.1.0
 plotly>=5.24.0
 
+# System Monitoring (Production-Grade)
+psutil>=6.0.0
+
 # Development and Quality (optional but recommended)
 # Uncomment to enable:
 # flake8>=7.0.0

@@ -135,6 +135,11 @@ class TradingBot:
         self.perf_monitor = get_monitor()
         self.logger.info("✅ Performance Monitor: ENABLED")
         
+        # Production-grade health monitoring
+        self.health_check = get_health_check()
+        self.error_manager = get_error_manager()
+        self.logger.info("✅ Health Check & Error Recovery: ENABLED")
+        
         # 2026 Advanced Features
         self.advanced_risk_2026 = AdvancedRiskManager2026()
         self.market_micro_2026 = MarketMicrostructure2026()
@@ -1037,6 +1042,9 @@ class TradingBot:
                 scan_duration = time.time() - scan_start
                 self.perf_monitor.record_scan_time(scan_duration)
                 
+                # PRODUCTION: Record scan performance for health monitoring
+                self.health_check.performance_monitor.record_scan_time(scan_duration)
+                
                 # Update shared opportunities list in a thread-safe manner
                 with self._scan_lock:
                     self._latest_opportunities = opportunities
@@ -1056,6 +1064,14 @@ class TradingBot:
                     is_healthy, reason = self.perf_monitor.check_health()
                     if not is_healthy:
                         self.logger.warning(f"⚠️  PERFORMANCE WARNING: {reason}")
+                        self.error_manager.record_error(
+                            "performance_degradation",
+                            reason,
+                            ErrorSeverity.MEDIUM
+                        )
+                    
+                    # PRODUCTION: Log comprehensive health status
+                    self.health_check.log_health_status()
                 
                 # Sleep for the configured scan interval before next scan
                 # Check periodically if we should stop - yield control more frequently
@@ -1066,6 +1082,14 @@ class TradingBot:
                     
             except Exception as e:
                 self.logger.error(f"❌ Error in background scanner: {e}", exc_info=True)
+                # PRODUCTION: Record error for analysis
+                self.error_manager.record_error(
+                    "background_scanner_error",
+                    str(e),
+                    ErrorSeverity.HIGH,
+                    {'exception_type': type(e).__name__}
+                )
+                self.health_check.performance_monitor.record_error()
                 # Sleep briefly and continue
                 time.sleep(10)
         
@@ -1095,6 +1119,14 @@ class TradingBot:
                 
             except Exception as e:
                 self.logger.error(f"❌ Error in position monitor: {e}", exc_info=True)
+                # PRODUCTION: Record error for analysis
+                self.error_manager.record_error(
+                    "position_monitor_error",
+                    str(e),
+                    ErrorSeverity.CRITICAL,  # Position monitoring is critical
+                    {'exception_type': type(e).__name__}
+                )
+                self.health_check.performance_monitor.record_error()
                 time.sleep(1)
         
         self.logger.info("👁️ Position monitor thread stopped")
