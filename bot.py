@@ -977,18 +977,22 @@ class TradingBot:
                     except Exception as e:
                         self.logger.error(f"Error recording to profit tracker: {e}")
                     
-                    # Record for adaptive confidence learning
+                    # Record for adaptive confidence learning and circuit breaker
                     try:
                         # Get the original entry confidence from position if available
                         entry_confidence = getattr(position, 'entry_confidence', 0.65)
                         # Consider profitable if net P&L (after fees) > 0.1%
                         was_profitable = pnl > 0.001
                         self.adaptive_confidence.record_trade_outcome(entry_confidence, was_profitable)
-                        
+                    except Exception as e:
+                        self.logger.error(f"Error recording to adaptive confidence: {e}")
+                    
+                    try:
                         # Record for circuit breaker
+                        was_profitable = pnl > 0.001
                         self.circuit_breaker.record_trade_outcome(was_profitable, pnl)
                     except Exception as e:
-                        self.logger.error(f"Error recording to adaptive systems: {e}")
+                        self.logger.error(f"Error recording to circuit breaker: {e}")
                     
                     self.analytics.record_trade({
                         'symbol': symbol,

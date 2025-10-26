@@ -2,7 +2,7 @@
 Circuit breaker system for preventing catastrophic losses
 Automatically halts trading during losing streaks to protect capital
 """
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 from logger import Logger
 
@@ -10,19 +10,41 @@ from logger import Logger
 class CircuitBreaker:
     """Circuit breaker system to prevent catastrophic losses during losing streaks"""
     
-    def __init__(self):
-        """Initialize circuit breaker"""
+    def __init__(self, 
+                 max_consecutive_losses: int = 5,
+                 cooldown_minutes: int = 60,
+                 quick_loss_window_minutes: int = 30,
+                 max_losses_in_window: int = 3,
+                 max_drawdown_threshold: float = 0.15,
+                 wins_to_reset: int = 2):
+        """Initialize circuit breaker
+        
+        Args:
+            max_consecutive_losses: Number of consecutive losses before tripping (default: 5)
+            cooldown_minutes: Default cooldown period in minutes (default: 60)
+            quick_loss_window_minutes: Time window for quick loss detection (default: 30)
+            max_losses_in_window: Max losses allowed in quick loss window (default: 3)
+            max_drawdown_threshold: Cumulative loss threshold in recent trades (default: 0.15 = -15%)
+            wins_to_reset: Consecutive wins needed to reset after trip (default: 2)
+        """
         self.logger = Logger.get_logger()
+        
+        # Configurable thresholds
+        self.max_consecutive_losses = max_consecutive_losses
+        self.cooldown_minutes = cooldown_minutes
+        self.quick_loss_window_minutes = quick_loss_window_minutes
+        self.max_losses_in_window = max_losses_in_window
+        self.max_drawdown_threshold = max_drawdown_threshold
+        self.wins_to_reset = wins_to_reset
         
         # Circuit breaker state
         self.is_tripped = False
         self.trip_reason = ""
         self.trip_time: Optional[datetime] = None
-        self.cooldown_minutes = 60  # Default 1 hour cooldown
+        self.current_cooldown_minutes = cooldown_minutes  # May vary based on severity
         
         # Loss streak tracking
         self.consecutive_losses = 0
-        self.max_consecutive_losses = 5  # Trip at 5 consecutive losses
         
         # Drawdown tracking
         self.recent_trades: List[Dict] = []
@@ -30,12 +52,9 @@ class CircuitBreaker:
         
         # Quick loss tracking (multiple losses in short time)
         self.recent_loss_timestamps: List[datetime] = []
-        self.quick_loss_window_minutes = 30  # 30 minute window
-        self.max_losses_in_window = 3  # Max 3 losses in 30 minutes
         
         # Win streak recovery
         self.consecutive_wins = 0
-        self.wins_to_reset = 2  # 2 consecutive wins resets circuit breaker
         
     def record_trade_outcome(self, was_profitable: bool, pnl_pct: float):
         """Record a trade outcome for circuit breaker logic
@@ -102,9 +121,9 @@ class CircuitBreaker:
         # Check 3: Severe recent drawdown
         if len(self.recent_trades) >= 10:
             recent_pnl = sum(t['pnl_pct'] for t in self.recent_trades[-10:])
-            if recent_pnl < -0.15:  # -15% cumulative loss in last 10 trades
+            if recent_pnl < -self.max_drawdown_threshold:  # Configurable threshold
                 self._trip_circuit_breaker(
-                    f"Severe drawdown: {recent_pnl:.1%} in last 10 trades",
+                    f"Severe drawdown: {recent_pnl:.1%} in last 10 trades (threshold: {-self.max_drawdown_threshold:.1%})",
                     cooldown_minutes=120  # 2 hour cooldown for severe losses
                 )
                 return
@@ -119,7 +138,7 @@ class CircuitBreaker:
         self.is_tripped = True
         self.trip_reason = reason
         self.trip_time = datetime.now()
-        self.cooldown_minutes = cooldown_minutes
+        self.current_cooldown_minutes = cooldown_minutes  # Store actual cooldown used
         
         cooldown_until = self.trip_time + timedelta(minutes=cooldown_minutes)
         
@@ -149,7 +168,7 @@ class CircuitBreaker:
         self.trip_time = None
         self.consecutive_losses = 0
     
-    def can_trade(self) -> tuple[bool, str]:
+    def can_trade(self) -> Tuple[bool, str]:
         """Check if trading is allowed
         
         Returns:
@@ -160,7 +179,7 @@ class CircuitBreaker:
         
         # Check if cooldown has expired
         if self.trip_time:
-            cooldown_end = self.trip_time + timedelta(minutes=self.cooldown_minutes)
+            cooldown_end = self.trip_time + timedelta(minutes=self.current_cooldown_minutes)
             if datetime.now() >= cooldown_end:
                 self._reset_circuit_breaker()
                 return True, "Circuit breaker: Cooldown expired, trading resumed"
@@ -168,7 +187,7 @@ class CircuitBreaker:
         # Still tripped
         time_remaining = ""
         if self.trip_time:
-            cooldown_end = self.trip_time + timedelta(minutes=self.cooldown_minutes)
+            cooldown_end = self.trip_time + timedelta(minutes=self.current_cooldown_minutes)
             minutes_remaining = (cooldown_end - datetime.now()).total_seconds() / 60
             time_remaining = f" ({int(minutes_remaining)} minutes remaining)"
         
@@ -192,7 +211,7 @@ class CircuitBreaker:
         }
         
         if self.is_tripped and self.trip_time:
-            cooldown_end = self.trip_time + timedelta(minutes=self.cooldown_minutes)
+            cooldown_end = self.trip_time + timedelta(minutes=self.current_cooldown_minutes)
             status['tripped_at'] = self.trip_time.isoformat()
             status['cooldown_until'] = cooldown_end.isoformat()
             status['trip_reason'] = self.trip_reason
