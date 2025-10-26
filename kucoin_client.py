@@ -589,10 +589,10 @@ class KuCoinClient:
         
         # Try WebSocket first if enabled and connected
         if self.websocket and self.websocket.is_connected():
-            # Check if we're approaching subscription limit and skip WebSocket if needed
-            if self.websocket.get_subscription_count() >= 350:  # Leave buffer of 30
-                self.logger.debug(f"WebSocket subscription count high ({self.websocket.get_subscription_count()}), using REST API directly")
+            # Use helper to check if we should use REST API due to subscription limit
+            if self._should_use_rest_api():
                 # Fall through to REST API instead of subscribing
+                pass
             else:
                 ohlcv = self.websocket.get_ohlcv(symbol, timeframe, limit)
                 if ohlcv and len(ohlcv) >= min(50, limit):  # Ensure we have enough data
