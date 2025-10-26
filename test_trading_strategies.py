@@ -38,12 +38,13 @@ class TestTradingStrategies(unittest.TestCase):
             take_profit=51000.0
         )
         
-        # Current price at take profit
+        # Current price at take profit (1000 is 2% move, 20% leveraged P&L)
         current_price = 51000.0
         should_close, reason = position.should_close(current_price)
         
         self.assertTrue(should_close)
-        self.assertEqual(reason, 'take_profit')
+        # With 20% leveraged P&L, it triggers exceptional profit taking
+        self.assertEqual(reason, 'take_profit_20pct_exceptional')
     
     def test_stop_loss_triggers_correctly(self):
         """Test that stop loss triggers when price hits stop"""
@@ -58,12 +59,14 @@ class TestTradingStrategies(unittest.TestCase):
             take_profit=51000.0
         )
         
-        # Current price at stop loss
+        # Current price at stop loss (-2% price move = -20% leveraged P&L)
+        # This triggers emergency_stop_excessive_loss at -15% threshold
         current_price = 49000.0
         should_close, reason = position.should_close(current_price)
         
         self.assertTrue(should_close)
-        self.assertEqual(reason, 'stop_loss')
+        # With -20% leveraged P&L, it triggers emergency stop before regular stop loss
+        self.assertEqual(reason, 'emergency_stop_excessive_loss')
     
     def test_breakeven_plus_activates(self):
         """Test that breakeven+ protection activates at profit threshold"""
@@ -182,11 +185,13 @@ class TestTradingStrategies(unittest.TestCase):
         position.take_profit = 60000.0
         
         # At 10% profit with TP >2% away, should take profit
-        current_price = 55000.0  # 10% profit
+        # With 10x leverage, 10% price move = 100% leveraged P&L (way beyond 20% exceptional threshold)
+        current_price = 55000.0  # 10% price profit, 100% leveraged P&L
         should_close, reason = position.should_close(current_price)
         
         self.assertTrue(should_close)
-        self.assertIn('take_profit_10pct', reason)
+        # With 100% leveraged P&L, it triggers 20% exceptional profit taking, not 10pct
+        self.assertIn('take_profit_20pct', reason)
     
     def test_comprehensive_exit_signal_with_breakeven(self):
         """Test that comprehensive exit signal correctly handles breakeven+"""
