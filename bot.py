@@ -19,6 +19,7 @@ from advanced_analytics import AdvancedAnalytics
 from performance_monitor import get_monitor
 from profit_tracker import ProfitTracker
 from adaptive_confidence import AdaptiveConfidenceManager
+from circuit_breaker import CircuitBreaker
 # 2026 Advanced Features
 from advanced_risk_2026 import AdvancedRiskManager2026
 from market_microstructure_2026 import MarketMicrostructure2026
@@ -139,11 +140,15 @@ class TradingBot:
         # Adaptive confidence threshold manager
         self.adaptive_confidence = AdaptiveConfidenceManager(base_threshold=0.60)
         
+        # Circuit breaker for loss protection
+        self.circuit_breaker = CircuitBreaker()
+        
         # Performance monitoring
         self.perf_monitor = get_monitor()
         self.logger.info("✅ Performance Monitor: ENABLED")
         self.logger.info("✅ Profit Tracker: ENABLED")
         self.logger.info("✅ Adaptive Confidence Manager: ENABLED")
+        self.logger.info("✅ Circuit Breaker: ENABLED")
         
         # 2026 Advanced Features
         self.advanced_risk_2026 = AdvancedRiskManager2026()
@@ -362,6 +367,12 @@ class TradingBot:
             return False
         
         self.logger.debug(f"✅ Guardrails passed: {block_reason}")
+        
+        # Circuit breaker check - prevent trading during losing streaks
+        can_trade, cb_reason = self.circuit_breaker.can_trade()
+        if not can_trade:
+            self.logger.warning(f"🚨 {cb_reason}")
+            return False
         
         # Adaptive confidence threshold check
         adaptive_threshold = self.adaptive_confidence.get_adaptive_threshold()
@@ -973,8 +984,11 @@ class TradingBot:
                         # Consider profitable if net P&L (after fees) > 0.1%
                         was_profitable = pnl > 0.001
                         self.adaptive_confidence.record_trade_outcome(entry_confidence, was_profitable)
+                        
+                        # Record for circuit breaker
+                        self.circuit_breaker.record_trade_outcome(was_profitable, pnl)
                     except Exception as e:
-                        self.logger.error(f"Error recording to adaptive confidence: {e}")
+                        self.logger.error(f"Error recording to adaptive systems: {e}")
                     
                     self.analytics.record_trade({
                         'symbol': symbol,
@@ -1267,6 +1281,27 @@ class TradingBot:
                 self.logger.info("=" * 60)
             except Exception as e:
                 self.logger.error(f"Error printing confidence stats: {e}")
+            
+            # Circuit breaker status
+            try:
+                cb_status = self.circuit_breaker.get_status()
+                self.logger.info("=" * 60)
+                self.logger.info("🚨 CIRCUIT BREAKER STATUS")
+                self.logger.info("=" * 60)
+                self.logger.info(f"Status: {'TRIPPED ⚠️' if cb_status['is_tripped'] else 'ACTIVE ✅'}")
+                self.logger.info(f"Can Trade: {'NO' if not cb_status['can_trade'] else 'YES'}")
+                self.logger.info(f"Consecutive Losses: {cb_status['consecutive_losses']}")
+                self.logger.info(f"Consecutive Wins: {cb_status['consecutive_wins']}")
+                if 'recent_win_rate' in cb_status:
+                    self.logger.info(f"Recent Win Rate: {cb_status['recent_win_rate']:.1%}")
+                    self.logger.info(f"Recent P&L: {cb_status['recent_pnl']:.2%}")
+                if cb_status['is_tripped']:
+                    self.logger.info(f"Trip Reason: {cb_status.get('trip_reason', 'unknown')}")
+                    if 'cooldown_until' in cb_status:
+                        self.logger.info(f"Cooldown Until: {cb_status['cooldown_until']}")
+                self.logger.info("=" * 60)
+            except Exception as e:
+                self.logger.error(f"Error printing circuit breaker status: {e}")
             
             # 2026 FEATURE: Log comprehensive performance metrics
             try:
