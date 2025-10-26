@@ -3,6 +3,7 @@ Test suite for bot enhancements - Phase 1
 Tests new risk management, signal generation, and indicator enhancements
 """
 import unittest
+import time
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -218,9 +219,10 @@ class TestIndicatorEnhancements(unittest.TestCase):
         for i in range(n_candles):
             price_change = np.random.randn() * 100
             close = base_price + price_change
-            high = close + abs(np.random.randn() * 50)
-            low = close - abs(np.random.randn() * 50)
+            # Ensure valid OHLC: high >= max(open, close), low <= min(open, close)
             open_price = close + np.random.randn() * 20
+            high = max(open_price, close) + abs(np.random.randn() * 50)
+            low = min(open_price, close) - abs(np.random.randn() * 50)
             volume = abs(np.random.randn() * 1000000)
             
             data.append([
@@ -290,14 +292,14 @@ class TestIndicatorEnhancements(unittest.TestCase):
 
 def run_tests():
     """Run all tests and return results"""
-    suite = unittest.TestLoader().loadTestsFromModule(__import__(__name__))
+    import sys
+    suite = unittest.TestLoader().loadTestsFromModule(sys.modules[__name__])
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
     return result.wasSuccessful()
 
 
 if __name__ == '__main__':
-    import time
     print("=" * 70)
     print("ENHANCEMENT TESTS - PHASE 1")
     print("=" * 70)
