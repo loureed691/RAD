@@ -81,7 +81,7 @@ def analyze_log_state():
     """Analyze current bot.log state"""
     print("\n5. Analyzing bot.log state...")
     
-    with open('bot.log', 'r') as f:
+    with open('bot.log', 'r', encoding='utf-8') as f:
         lines = f.readlines()
     
     total_lines = len(lines)
