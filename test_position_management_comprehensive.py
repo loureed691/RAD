@@ -28,6 +28,7 @@ class MockKuCoinClient:
         self.current_prices = {
             'BTC/USDT:USDT': 50000.0,
             'ETH/USDT:USDT': 3000.0,
+            'SOL/USDT:USDT': 100.0,
         }
     
     def get_ticker(self, symbol: str) -> Optional[Dict]:
