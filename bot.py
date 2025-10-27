@@ -1636,7 +1636,17 @@ class TradingBot:
         Called every 5 minutes during runtime
         """
         try:
-            self.logger.debug("💾 Periodic state save...")
+            # Increment the state save counter
+            if not hasattr(self, "_state_save_counter"):
+                self._state_save_counter = 1
+            else:
+                self._state_save_counter += 1
+
+            # Log info every 6th save (i.e., every 30 minutes if called every 5 minutes)
+            if self._state_save_counter % 6 == 0:
+                self.logger.info(f"💾 Periodic state save (#{self._state_save_counter}) - feature working as expected.")
+            else:
+                self.logger.debug("💾 Periodic state save...")
             
             # Save ML model
             try:
