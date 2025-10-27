@@ -40,6 +40,8 @@ from enhanced_ml_intelligence import (
     DeepLearningSignalPredictor, MultiTimeframeSignalFusion,
     AdaptiveExitStrategy, ReinforcementLearningStrategy
 )
+# Dashboard
+from dashboard import TradingDashboard, FLASK_AVAILABLE
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -224,6 +226,33 @@ class TradingBot:
         self._position_monitor_lock = threading.Lock()  # Lock for position monitor timing
         self._last_position_check = datetime.now()
         
+        # Dashboard state
+        self.dashboard = None
+        self._dashboard_thread = None
+        self._dashboard_update_thread = None
+        self._dashboard_running = False
+        self._last_dashboard_update = datetime.now()
+        
+        # Initialize dashboard if enabled
+        if Config.ENABLE_DASHBOARD:
+            if FLASK_AVAILABLE:
+                try:
+                    self.dashboard = TradingDashboard(port=Config.DASHBOARD_PORT)
+                    self.logger.info("=" * 60)
+                    self.logger.info("📊 DASHBOARD INITIALIZED")
+                    self.logger.info(f"   Port: {Config.DASHBOARD_PORT}")
+                    self.logger.info(f"   Host: {Config.DASHBOARD_HOST}")
+                    self.logger.info(f"   URL: http://{Config.DASHBOARD_HOST}:{Config.DASHBOARD_PORT}")
+                    self.logger.info("   Status: Ready to start")
+                    self.logger.info("=" * 60)
+                except Exception as e:
+                    self.logger.error(f"Failed to initialize dashboard: {e}")
+                    self.dashboard = None
+            else:
+                self.logger.warning("Dashboard is enabled but Flask is not available. Install flask and plotly to use the dashboard.")
+        else:
+            self.logger.info("📊 Dashboard: DISABLED (set ENABLE_DASHBOARD=true in .env to enable)")
+        
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
@@ -243,12 +272,15 @@ class TradingBot:
         self.logger.info("   - Stopping trading cycle")
         self.logger.info("   - Stopping background scanning thread")
         self.logger.info("   - Stopping position monitoring thread")
+        if self.dashboard:
+            self.logger.info("   - Stopping dashboard threads")
         self.logger.info("   - Will complete current operations")
         self.logger.info("   - Then proceed to shutdown")
         self.logger.info("=" * 60)
         self.running = False
         self._scan_thread_running = False
         self._position_monitor_running = False
+        self._dashboard_running = False
     
     def execute_trade(self, opportunity: dict) -> bool:
         """
@@ -1008,6 +1040,26 @@ class TradingBot:
                         self.deep_learning_predictor.update(features, label)
                     except Exception as e:
                         self.logger.debug(f"Error updating deep learning model: {e}")
+                    
+                    # Update dashboard with closed trade
+                    if self.dashboard:
+                        try:
+                            exit_price = position.entry_price * (1 + pnl / leverage) if position.side == 'long' else position.entry_price * (1 - pnl / leverage)
+                            hours = int(trade_duration // 60)
+                            minutes = int(trade_duration % 60)
+                            self.dashboard.add_trade({
+                                'symbol': symbol,
+                                'side': position.side,
+                                'entry_price': position.entry_price,
+                                'exit_price': exit_price,
+                                'amount': position.amount,
+                                'pnl': pnl * (position.amount * position.entry_price),  # Dollar amount
+                                'pnl_pct': pnl,
+                                'duration': f"{hours}h {minutes}m",
+                                'timestamp': datetime.now()
+                            })
+                        except Exception as e:
+                            self.logger.debug(f"Error updating dashboard with trade: {e}")
                 
                 except Exception as e:
                     self.logger.error(f"Error recording closed position {symbol}: {e}", exc_info=True)
@@ -1244,6 +1296,175 @@ class TradingBot:
         
         self.last_scan_time = datetime.now()
     
+    def _update_dashboard_data(self):
+        """Update dashboard with current bot data"""
+        if not self.dashboard:
+            return
+        
+        try:
+            # Get current balance
+            balance = self.client.get_balance()
+            current_balance = 0
+            if balance and 'free' in balance:
+                current_balance = float(balance.get('free', {}).get('USDT', 0))
+            
+            # Get performance metrics
+            metrics = self.ml_model.get_performance_metrics()
+            
+            # Calculate total P&L from analytics
+            total_pnl = 0
+            initial_balance = 10000  # Default, will be updated if available
+            if hasattr(self.analytics, 'equity_history') and len(self.analytics.equity_history) > 0:
+                initial_balance = self.analytics.equity_history[0][1] if self.analytics.equity_history[0][1] > 0 else 10000
+                total_pnl = current_balance - initial_balance
+            
+            # Update performance stats
+            self.dashboard.update_stats({
+                'balance': current_balance,
+                'initial_balance': initial_balance,
+                'total_pnl': total_pnl,
+                'win_rate': metrics.get('win_rate', 0),
+                'winning_trades': metrics.get('winning_trades', 0),
+                'total_trades': metrics.get('total_trades', 0),
+                'active_positions': self.position_manager.get_open_positions_count(),
+                'total_exposure': sum(
+                    getattr(pos, 'amount', 0) * getattr(pos, 'entry_price', 0)
+                    for pos in self.position_manager.positions.values()
+                ),
+                'sharpe_ratio': getattr(self.performance_2026, 'get_sharpe_ratio', lambda: 0)(),
+                'sortino_ratio': getattr(self.performance_2026, 'get_sortino_ratio', lambda: 0)(),
+                'calmar_ratio': getattr(self.performance_2026, 'get_calmar_ratio', lambda: 0)(),
+                'profit_factor': metrics.get('profit_factor', 0)
+            })
+            
+            # Update open positions
+            positions_data = []
+            for symbol, pos in self.position_manager.positions.items():
+                # Get current price
+                ticker = self.client.get_ticker(symbol)
+                current_price = ticker.get('last', getattr(pos, 'entry_price', 0)) if ticker else getattr(pos, 'entry_price', 0)
+                
+                # Calculate unrealized P&L
+                entry_price = getattr(pos, 'entry_price', 0)
+                amount = getattr(pos, 'amount', 0)
+                leverage = getattr(pos, 'leverage', 1)
+                side = getattr(pos, 'side', 'long')
+                
+                if side == 'long':
+                    pnl_percent = ((current_price - entry_price) / entry_price) * leverage if entry_price > 0 else 0
+                else:
+                    pnl_percent = ((entry_price - current_price) / entry_price) * leverage if entry_price > 0 else 0
+                
+                unrealized_pnl = pnl_percent * (amount * entry_price)
+                
+                # Calculate duration
+                entry_time = getattr(pos, 'entry_time', datetime.now())
+                duration_delta = datetime.now() - entry_time
+                hours = int(duration_delta.total_seconds() // 3600)
+                minutes = int((duration_delta.total_seconds() % 3600) // 60)
+                duration_str = f"{hours}h {minutes}m"
+                
+                positions_data.append({
+                    'symbol': symbol,
+                    'side': side,
+                    'entry_price': entry_price,
+                    'current_price': current_price,
+                    'amount': amount,
+                    'leverage': leverage,
+                    'unrealized_pnl': unrealized_pnl,
+                    'pnl_percent': pnl_percent * 100,
+                    'stop_loss': getattr(pos, 'stop_loss', 0),
+                    'take_profit': getattr(pos, 'take_profit', None),
+                    'duration': duration_str
+                })
+            
+            self.dashboard.update_positions(positions_data)
+            
+            # Update risk metrics
+            max_dd = getattr(self.performance_2026, 'get_max_drawdown', lambda: 0)()
+            current_dd = getattr(self.risk_manager, 'current_drawdown', 0)
+            
+            # Calculate portfolio heat
+            open_positions = list(self.position_manager.positions.values())
+            correlations = self.advanced_risk_2026.calculate_position_correlations(open_positions) if open_positions else {}
+            portfolio_heat = self.advanced_risk_2026.calculate_portfolio_heat(open_positions, correlations)
+            
+            self.dashboard.update_risk_metrics({
+                'max_drawdown': max_dd * 100 if max_dd < 1 else max_dd,
+                'current_drawdown': abs(current_dd) * 100 if abs(current_dd) < 1 else abs(current_dd),
+                'portfolio_heat': portfolio_heat,
+                'total_exposure': sum(
+                    getattr(pos, 'amount', 0) * getattr(pos, 'entry_price', 0)
+                    for pos in self.position_manager.positions.values()
+                ),
+                'available_capital': current_balance,
+                'daily_pnl': metrics.get('total_profit', 0),  # Approximation
+                'avg_volatility': 3.0  # Default value
+            })
+            
+            # Update strategy info
+            strategy_stats = self.strategy_selector_2026.get_strategy_statistics()
+            self.dashboard.update_strategy_info({
+                'active_strategy': strategy_stats.get('current_strategy', 'Unknown'),
+                'performance': metrics.get('avg_profit', 0) * 100
+            })
+            
+            # Update market info
+            regime_stats = self.advanced_risk_2026.get_regime_statistics()
+            self.dashboard.update_market_info({
+                'regime': regime_stats.get('current_regime', 'neutral'),
+                'signal_strength': 0.5,  # Default value
+                'volatility': 'normal',
+                'trend': 'neutral',
+                'last_signal': 'N/A'
+            })
+            
+            # Update system status
+            self.dashboard.update_system_status({
+                'bot_active': self.running,
+                'api_connected': True,  # Assume connected if we got here
+                'websocket_active': Config.ENABLE_WEBSOCKET,
+                'last_trade_time': self.last_scan_time.strftime('%Y-%m-%d %H:%M:%S') if self.last_scan_time else 'N/A',
+                'uptime': 'Running',
+                'error_count': 0  # Would need error tracking
+            })
+            
+            # Add equity point
+            self.dashboard.add_equity_point(current_balance)
+            
+            # Add drawdown point
+            self.dashboard.add_drawdown_point(-abs(current_dd) * 100 if abs(current_dd) < 1 else -abs(current_dd))
+            
+        except Exception as e:
+            self.logger.debug(f"Error updating dashboard data: {e}")
+    
+    def _dashboard_updater(self):
+        """Background thread that continuously updates dashboard data"""
+        self.logger.info("📊 Dashboard updater thread started")
+        
+        while self._dashboard_running and self.dashboard:
+            try:
+                # Update dashboard data every 5 seconds
+                self._update_dashboard_data()
+                time.sleep(5)
+            except Exception as e:
+                self.logger.error(f"Error in dashboard updater: {e}", exc_info=True)
+                time.sleep(5)
+        
+        self.logger.info("📊 Dashboard updater thread stopped")
+    
+    def _run_dashboard_server(self):
+        """Run the dashboard Flask server in a separate thread"""
+        try:
+            self.logger.info(f"🌐 Starting dashboard server on http://{Config.DASHBOARD_HOST}:{Config.DASHBOARD_PORT}")
+            # Run dashboard with logging disabled to avoid clutter
+            import logging
+            log = logging.getLogger('werkzeug')
+            log.setLevel(logging.ERROR)
+            self.dashboard.run(debug=False, host=Config.DASHBOARD_HOST)
+        except Exception as e:
+            self.logger.error(f"Dashboard server error: {e}")
+    
     def run(self):
         """Main bot loop with truly live continuous monitoring"""
         self.running = True
@@ -1260,7 +1481,36 @@ class TradingBot:
         self.logger.info("🚨 THREAD START PRIORITY:")
         self.logger.info("   1️⃣  Position Monitor (CRITICAL - starts first)")
         self.logger.info("   2️⃣  Background Scanner (starts after with delay)")
+        if self.dashboard:
+            self.logger.info("   3️⃣  Dashboard Server (web interface)")
+            self.logger.info("   4️⃣  Dashboard Updater (data refresh)")
         self.logger.info("=" * 60)
+        
+        # Start dashboard server if enabled
+        if self.dashboard:
+            self.logger.info("🌐 Starting dashboard server thread...")
+            self._dashboard_running = True
+            self._dashboard_thread = threading.Thread(
+                target=self._run_dashboard_server, 
+                daemon=True, 
+                name="DashboardServer"
+            )
+            self._dashboard_thread.start()
+            
+            # Start dashboard updater thread
+            self.logger.info("📊 Starting dashboard updater thread...")
+            self._dashboard_update_thread = threading.Thread(
+                target=self._dashboard_updater,
+                daemon=True,
+                name="DashboardUpdater"
+            )
+            self._dashboard_update_thread.start()
+            
+            self.logger.info("=" * 60)
+            self.logger.info("✅ DASHBOARD STARTED SUCCESSFULLY!")
+            self.logger.info(f"   🌐 Access dashboard at: http://localhost:{Config.DASHBOARD_PORT}")
+            self.logger.info(f"   🌐 Or from network: http://{Config.DASHBOARD_HOST}:{Config.DASHBOARD_PORT}")
+            self.logger.info("=" * 60)
         
         # CRITICAL: Start position monitor thread FIRST to ensure priority access to API
         # This prevents API call collisions and ensures critical position monitoring
@@ -1374,6 +1624,22 @@ class TradingBot:
         self.logger.info("=" * 60)
         self.logger.info("🛑 SHUTTING DOWN BOT...")
         self.logger.info("=" * 60)
+        
+        # Stop dashboard threads first
+        if self.dashboard:
+            self._dashboard_running = False
+            if self._dashboard_update_thread and self._dashboard_update_thread.is_alive():
+                self.logger.info("⏳ Stopping dashboard updater thread...")
+                self._dashboard_update_thread.join(timeout=3)
+                if self._dashboard_update_thread.is_alive():
+                    self.logger.warning("⚠️  Dashboard updater thread did not stop gracefully")
+                else:
+                    self.logger.info("✅ Dashboard updater thread stopped")
+            
+            # Note: Flask server thread will stop when daemon thread exits
+            # We don't need to explicitly join it
+            if self._dashboard_thread and self._dashboard_thread.is_alive():
+                self.logger.info("✅ Dashboard server thread will stop on exit")
         
         # IMPORTANT: Stop scanner first (less critical), then position monitor (critical)
         # This ensures position monitor can complete any critical operations

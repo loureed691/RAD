@@ -41,6 +41,11 @@ class Config:
     # WebSocket Configuration
     ENABLE_WEBSOCKET = os.getenv('ENABLE_WEBSOCKET', 'true').lower() in ('true', '1', 'yes')
     
+    # Dashboard Configuration
+    ENABLE_DASHBOARD = os.getenv('ENABLE_DASHBOARD', 'true').lower() in ('true', '1', 'yes')
+    DASHBOARD_PORT = int(os.getenv('DASHBOARD_PORT', '5000'))
+    DASHBOARD_HOST = os.getenv('DASHBOARD_HOST', '0.0.0.0')
+    
     # Trading Configuration - will be auto-configured if not set in .env
     LEVERAGE = None  # Will be set by auto_configure_from_balance()
     MAX_POSITION_SIZE = None  # Will be set by auto_configure_from_balance()
