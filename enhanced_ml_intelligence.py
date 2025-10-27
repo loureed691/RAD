@@ -552,6 +552,45 @@ class ReinforcementLearningStrategy:
             f"{current_q:.3f} -> {new_q:.3f} (reward: {reward:.3f})"
         )
     
+    def has_sufficient_data(self) -> bool:
+        """
+        Check if RL has sufficient training data to make good decisions
+        
+        Returns:
+            True if RL has learned enough to be reliable
+        """
+        # Check if any Q-values are significantly non-zero (indicating learning has occurred)
+        total_abs_q = sum(abs(q) for state_q in self.q_table.values() for q in state_q.values())
+        return total_abs_q > 1.0  # At least some learning has occurred
+    
+    def get_strategy_confidence(self, market_regime: str, volatility: float, strategy: str) -> float:
+        """
+        Get confidence score for a strategy in current conditions
+        
+        Args:
+            market_regime: Current market regime
+            volatility: Current volatility
+            strategy: Strategy to evaluate
+            
+        Returns:
+            Confidence score 0-1
+        """
+        state = self.get_state(market_regime, volatility)
+        q_values = self.q_table[state]
+        
+        # Normalize Q-values to 0-1 range
+        max_q = max(q_values.values())
+        min_q = min(q_values.values())
+        
+        if max_q == min_q:
+            return 0.5  # No clear preference
+        
+        # Scale to 0-1
+        strategy_q = q_values[strategy]
+        confidence = (strategy_q - min_q) / (max_q - min_q)
+        
+        return confidence
+    
     def save_q_table(self, path: str = 'models/q_table.pkl'):
         """Save Q-table to disk"""
         try:

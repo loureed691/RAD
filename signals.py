@@ -16,7 +16,7 @@ class SignalGenerator:
         self.logger = Logger.get_logger()
         self.strategy_logger = Logger.get_strategy_logger()
         self.market_regime = 'neutral'  # 'trending', 'ranging', 'neutral'
-        self.adaptive_threshold = 0.62  # INCREASED from 0.55 for better quality trades
+        self.adaptive_threshold = 0.70  # INCREASED from 0.62 for smarter self-learning strategies
         self.pattern_recognizer = PatternRecognition()
         self.volume_profile_analyzer = VolumeProfile()
     
@@ -473,11 +473,11 @@ class SignalGenerator:
             confidence = 0.0
             reasons['equal_signals'] = 'buy and sell signals balanced'
         
-        # Adaptive threshold based on market regime - MORE CONSERVATIVE
+        # Adaptive threshold based on market regime - STRICT FOR SMART STRATEGIES
         if self.market_regime == 'trending':
-            min_confidence = 0.58  # INCREASED from 0.52 for better quality
+            min_confidence = 0.65  # INCREASED from 0.58 for smarter strategies
         elif self.market_regime == 'ranging':
-            min_confidence = 0.65  # INCREASED from 0.58 - ranging markets are riskier
+            min_confidence = 0.72  # INCREASED from 0.65 - ranging markets require higher confidence
         else:
             min_confidence = self.adaptive_threshold
         

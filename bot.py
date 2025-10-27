@@ -611,8 +611,21 @@ class TradingBot:
             
             self.logger.info(f"🧠 Deep Learning Prediction: {dl_signal} ({dl_confidence:.2f})")
             
-            # If deep learning strongly disagrees, be cautious
-            if dl_signal != signal and dl_confidence > 0.8:
+            # SMART STRATEGY ENFORCEMENT: Prioritize deep learning if configured
+            if Config.PRIORITIZE_DEEP_LEARNING and dl_confidence > 0.7:
+                if dl_signal != signal:
+                    self.logger.warning(f"   ⚠️ Deep learning strongly disagrees with signal: {signal} -> {dl_signal}")
+                    # Override with deep learning prediction if it's confident
+                    if dl_confidence > 0.75:
+                        self.logger.info(f"   🔄 Overriding signal with deep learning prediction")
+                        signal = dl_signal
+                        confidence = dl_confidence
+                else:
+                    # Deep learning agrees - boost confidence significantly
+                    confidence = (confidence * 0.6 + dl_confidence * 0.4)
+                    self.logger.info(f"   ✅ Deep learning confirms signal, confidence boosted to {confidence:.2f}")
+            elif dl_signal != signal and dl_confidence > 0.8:
+                # Not prioritizing DL but it strongly disagrees
                 self.logger.warning(f"   ⚠️ Deep learning disagrees with signal")
                 confidence *= 0.85  # Reduce confidence
             elif dl_signal == signal and dl_confidence > 0.7:
@@ -636,18 +649,27 @@ class TradingBot:
                 'momentum': confidence if abs(momentum) > 0.02 else confidence * 0.6
             }
             
-            # Use traditional selector but weighted by RL recommendation
-            selected_strategy = self.strategy_selector_2026.select_strategy(
-                market_regime, volatility, trend_strength, confidence_scores
-            )
-            
-            # If RL strongly recommends a different strategy, consider it
-            if rl_selected_strategy != selected_strategy:
-                self.logger.info(f"🎰 RL recommends: {rl_selected_strategy} (selected: {selected_strategy})")
-                # For now, log the difference but use traditional selector
-                # In the future, could blend or use RL more aggressively
+            # SMART STRATEGY ENFORCEMENT: Prioritize RL strategy if configured
+            if Config.PRIORITIZE_RL_STRATEGY and self.rl_strategy.has_sufficient_data():
+                selected_strategy = rl_selected_strategy
+                self.logger.info(f"🎯 Using RL-selected strategy: {selected_strategy}")
+                # Boost confidence if RL has learned this is a good situation
+                if hasattr(self.rl_strategy, 'get_strategy_confidence'):
+                    rl_confidence_boost = self.rl_strategy.get_strategy_confidence(market_regime, volatility, rl_selected_strategy)
+                    if rl_confidence_boost > 0.7:
+                        confidence *= 1.05  # 5% boost for high RL confidence
+                        self.logger.info(f"   ✅ RL confidence boost applied: {confidence:.2f}")
             else:
-                self.logger.info(f"🎯 RL agrees with strategy: {selected_strategy}")
+                # Use traditional selector but weighted by RL recommendation
+                selected_strategy = self.strategy_selector_2026.select_strategy(
+                    market_regime, volatility, trend_strength, confidence_scores
+                )
+                
+                # If RL strongly recommends a different strategy, consider it
+                if rl_selected_strategy != selected_strategy:
+                    self.logger.info(f"🎰 RL recommends: {rl_selected_strategy} (selected: {selected_strategy})")
+                else:
+                    self.logger.info(f"🎯 RL agrees with strategy: {selected_strategy}")
             
             # Apply strategy-specific filters
             signal, confidence = self.strategy_selector_2026.apply_strategy_filters(
@@ -657,6 +679,35 @@ class TradingBot:
             if signal == 'HOLD':
                 self.logger.info(f"Strategy {selected_strategy} filtered out trade")
                 return False
+            
+            # SMART STRATEGY ENFORCEMENT: Validate ML model predictions
+            if Config.REQUIRE_ML_MODEL:
+                # Get ML model prediction and confidence
+                ml_signal, ml_confidence = self.ml_model.predict(indicators)
+                
+                self.logger.info(f"🤖 ML Model Validation:")
+                self.logger.info(f"   ML Signal: {ml_signal} (confidence: {ml_confidence:.2f})")
+                self.logger.info(f"   Minimum ML Confidence: {Config.MIN_ML_CONFIDENCE:.2f}")
+                
+                # Check if ML model agrees and has sufficient confidence
+                if ml_confidence < Config.MIN_ML_CONFIDENCE:
+                    self.logger.warning(f"❌ ML confidence too low: {ml_confidence:.2f} < {Config.MIN_ML_CONFIDENCE:.2f}")
+                    return False
+                
+                if ml_signal != signal:
+                    self.logger.warning(f"⚠️ ML model disagrees with signal: {signal} vs {ml_signal}")
+                    # If ML strongly disagrees, reject the trade
+                    if ml_confidence > 0.75:
+                        self.logger.warning(f"❌ ML model strongly disagrees, trade rejected")
+                        return False
+                    # Otherwise reduce confidence
+                    confidence *= 0.80
+                    self.logger.info(f"   Confidence reduced to {confidence:.2f}")
+                else:
+                    self.logger.info(f"   ✅ ML model agrees with signal")
+                    # Boost confidence when ML agrees
+                    confidence = (confidence + ml_confidence) / 2
+                    self.logger.info(f"   Confidence boosted to {confidence:.2f}")
             
             self.logger.info(f"🎯 Selected Strategy: {selected_strategy} (adjusted confidence: {confidence:.2f})")
         except Exception as e:

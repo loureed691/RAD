@@ -81,6 +81,13 @@ class Config:
     RETRAIN_INTERVAL = int(os.getenv('RETRAIN_INTERVAL', '86400'))
     ML_MODEL_PATH = os.getenv('ML_MODEL_PATH', 'models/signal_model.pkl')
     
+    # Smart Self-Learning Strategy Requirements (ENHANCED)
+    REQUIRE_ML_MODEL = os.getenv('REQUIRE_ML_MODEL', 'true').lower() in ('true', '1', 'yes')
+    MIN_ML_CONFIDENCE = float(os.getenv('MIN_ML_CONFIDENCE', '0.65'))  # Minimum ML confidence for trades
+    PRIORITIZE_DEEP_LEARNING = os.getenv('PRIORITIZE_DEEP_LEARNING', 'true').lower() in ('true', '1', 'yes')
+    PRIORITIZE_RL_STRATEGY = os.getenv('PRIORITIZE_RL_STRATEGY', 'true').lower() in ('true', '1', 'yes')
+    MIN_TRADES_FOR_SMART_STRATEGIES = int(os.getenv('MIN_TRADES_FOR_SMART_STRATEGIES', '20'))  # Min trades before using advanced ML
+    
     @classmethod
     def auto_configure_from_balance(cls, available_balance: float):
         """
