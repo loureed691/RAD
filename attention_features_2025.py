@@ -3,6 +3,7 @@ Attention-Based Feature Selection - 2025 Enhancement
 Dynamic feature weighting using attention mechanism
 """
 import numpy as np
+import os
 from typing import Dict, List, Tuple
 from logger import Logger
 from sklearn.preprocessing import StandardScaler
@@ -36,6 +37,9 @@ class AttentionFeatureSelector:
         
         # Feature names for interpretability
         self.feature_names = self._get_default_feature_names()
+        
+        # Load existing weights if available
+        self.load_weights()
         
     def _get_default_feature_names(self) -> List[str]:
         """Get default feature names matching ml_model.py"""
@@ -313,7 +317,7 @@ class AttentionFeatureSelector:
     def load_weights(self, filepath: str = 'models/attention_weights.npy'):
         """Load attention weights from disk"""
         try:
-            if np.os.path.exists(filepath):
+            if os.path.exists(filepath):
                 self.attention_weights = np.load(filepath)
                 self.logger.info(f"Loaded attention weights from {filepath}")
             else:
