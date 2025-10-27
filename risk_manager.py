@@ -293,31 +293,59 @@ class RiskManager:
         """
         adjusted_risk = base_risk
         
-        # 1. Adjust for win/loss streaks
-        if self.win_streak >= 3:
+        # 1. Adjust for win/loss streaks - IMPROVED: More conservative
+        if self.win_streak >= 5:
+            # Extended hot streak - increase risk moderately
+            adjusted_risk *= 1.25
+            self.logger.debug(f"Win streak adjustment: +25% (streak: {self.win_streak})")
+        elif self.win_streak >= 3:
             # On a hot streak - increase risk slightly
-            adjusted_risk *= 1.2
-            self.logger.debug(f"Win streak adjustment: +20% (streak: {self.win_streak})")
+            adjusted_risk *= 1.15  # Reduced from 1.2
+            self.logger.debug(f"Win streak adjustment: +15% (streak: {self.win_streak})")
+        elif self.loss_streak >= 5:
+            # Extended cold streak - reduce risk drastically
+            adjusted_risk *= 0.3  # Reduced from 0.5
+            self.logger.warning(f"Loss streak adjustment: -70% (streak: {self.loss_streak})")
         elif self.loss_streak >= 3:
             # On a cold streak - reduce risk significantly
             adjusted_risk *= 0.5
             self.logger.debug(f"Loss streak adjustment: -50% (streak: {self.loss_streak})")
+        elif self.loss_streak >= 2:
+            # IMPROVEMENT: Start reducing after 2 losses
+            adjusted_risk *= 0.7
+            self.logger.debug(f"Loss streak adjustment: -30% (streak: {self.loss_streak})")
         
-        # 2. Adjust for recent performance
-        if win_rate > 0.65:
+        # 2. Adjust for recent performance - IMPROVED: More responsive
+        if win_rate > 0.70:
+            # Very high win rate - can afford more risk
+            adjusted_risk *= 1.2  # Increased from 1.15
+            self.logger.debug(f"Win rate adjustment: +20% (rate: {win_rate:.1%})")
+        elif win_rate > 0.65:
             # High win rate - can afford slightly more risk
             adjusted_risk *= 1.15
             self.logger.debug(f"Win rate adjustment: +15% (rate: {win_rate:.1%})")
+        elif win_rate < 0.30:
+            # Very low win rate - reduce risk drastically
+            adjusted_risk *= 0.5  # Reduced from 0.7
+            self.logger.warning(f"Win rate adjustment: -50% (rate: {win_rate:.1%})")
         elif win_rate < 0.35:
             # Low win rate - reduce risk
             adjusted_risk *= 0.7
             self.logger.debug(f"Win rate adjustment: -30% (rate: {win_rate:.1%})")
         
-        # 3. Adjust for market volatility
-        if market_volatility > 0.06:
+        # 3. Adjust for market volatility - IMPROVED: More granular
+        if market_volatility > 0.08:
+            # Extreme volatility - reduce risk significantly
+            adjusted_risk *= 0.6  # New threshold
+            self.logger.warning(f"Volatility adjustment: -40% (vol: {market_volatility:.1%})")
+        elif market_volatility > 0.06:
             # High volatility - reduce risk
             adjusted_risk *= 0.75
             self.logger.debug(f"Volatility adjustment: -25% (vol: {market_volatility:.1%})")
+        elif market_volatility < 0.015:
+            # Very low volatility - can take more risk
+            adjusted_risk *= 1.15  # Increased from 1.1
+            self.logger.debug(f"Volatility adjustment: +15% (vol: {market_volatility:.1%})")
         elif market_volatility < 0.02:
             # Low volatility - can take slightly more risk
             adjusted_risk *= 1.1
@@ -482,10 +510,30 @@ class RiskManager:
         Returns:
             Tuple of (should_open, reason)
         """
-        # PROFITABILITY FIX: Check daily loss limit first
-        if self.daily_loss >= self.daily_loss_limit:
-            self.logger.warning(f"Daily loss limit reached: {self.daily_loss:.2%} >= {self.daily_loss_limit:.2%}")
-            return False, f"Daily loss limit reached ({self.daily_loss:.1%}). Stop trading for today."
+        # IMPROVEMENT: Check kill switch first
+        if self.kill_switch_active:
+            return False, f"Kill switch active: {self.kill_switch_reason}"
+        
+        # PROFITABILITY FIX: Check daily loss limit
+        from datetime import date
+        today = date.today()
+        
+        # Reset daily tracking if new day
+        if today != self.trading_date:
+            self.trading_date = today
+            self.daily_start_balance = balance
+            self.daily_loss = 0.0
+            self.logger.info(f"New trading day started with balance: ${balance:.2f}")
+        
+        # Calculate daily loss if we have a starting balance
+        if self.daily_start_balance > 0:
+            self.daily_loss = max(0, (self.daily_start_balance - balance) / self.daily_start_balance)
+            
+            if self.daily_loss >= self.daily_loss_limit:
+                self.logger.warning(
+                    f"Daily loss limit reached: {self.daily_loss:.2%} >= {self.daily_loss_limit:.2%}"
+                )
+                return False, f"Daily loss limit reached ({self.daily_loss:.1%}). Stop trading for today."
         
         # Check if we have too many open positions
         if current_positions >= self.max_open_positions:

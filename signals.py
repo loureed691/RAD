@@ -19,6 +19,10 @@ class SignalGenerator:
         self.adaptive_threshold = 0.62  # INCREASED from 0.55 for better quality trades
         self.pattern_recognizer = PatternRecognition()
         self.volume_profile_analyzer = VolumeProfile()
+        
+        # IMPROVEMENT: Track choppy market conditions
+        self.min_trend_strength = 0.015  # Minimum momentum to avoid choppy markets
+        self.min_volatility_for_breakout = 0.03  # Minimum BB width for breakout trades
     
     def detect_support_resistance(self, df: pd.DataFrame, current_price: float) -> Dict:
         """
@@ -369,11 +373,25 @@ class SignalGenerator:
         # 6. Volume (confirmation signal - amplifies existing signals)
         # PROFITABILITY FIX: Require minimum volume to avoid low-liquidity traps
         volume_ratio = indicators.get('volume_ratio', 0)
-        if volume_ratio < 0.8:
+        if volume_ratio < 0.6:
+            # IMPROVEMENT: Very low volume - reject the signal completely
+            # Low liquidity can lead to slippage and poor fills
+            signal = 'HOLD'
+            confidence = 0.0
+            reasons['volume'] = 'critically low volume - rejected'
+        elif volume_ratio < 0.8:
             # Below-average volume - signal is unreliable
             buy_signals *= 0.7  # Penalize all signals
             sell_signals *= 0.7
             reasons['volume'] = 'low volume - weak signal'
+        elif volume_ratio > 2.0:
+            # IMPROVEMENT: Very high volume suggests strong move
+            reasons['volume'] = 'very high volume confirmation'
+            # Amplify existing signals with very high volume
+            if buy_signals > sell_signals:
+                buy_signals += 1.5  # Increased from 1.0
+            elif sell_signals > buy_signals:
+                sell_signals += 1.5
         elif volume_ratio > 1.5:
             reasons['volume'] = 'high volume confirmation'
             # Amplify existing signals with high volume
@@ -499,6 +517,27 @@ class SignalGenerator:
                     confidence = 0.0
                     reasons['weak_signal_ratio'] = f'insufficient signal strength ({signal_ratio:.2f}:1, need 2.0:1)'
         
+        # IMPROVEMENT: Filter out choppy/sideways markets
+        # Avoid trades when momentum is too weak (choppy market)
+        if signal != 'HOLD':
+            momentum = indicators.get('momentum', 0)
+            bb_width = indicators.get('bb_width', 0)
+            
+            # Check for minimum trend strength
+            if abs(momentum) < self.min_trend_strength:
+                # Very weak momentum - likely choppy/sideways
+                signal = 'HOLD'
+                confidence = 0.0
+                reasons['choppy_market'] = f'insufficient momentum ({abs(momentum):.3f} < {self.min_trend_strength})'
+            
+            # For breakout trades, ensure sufficient volatility
+            # If we're trading near BB bands, need enough volatility to justify the move
+            elif (close < indicators['bb_low'] or close > indicators['bb_high']):
+                if bb_width < self.min_volatility_for_breakout:
+                    signal = 'HOLD'
+                    confidence = 0.0
+                    reasons['low_volatility_breakout'] = f'insufficient volatility for breakout ({bb_width:.3f} < {self.min_volatility_for_breakout})'
+        
         # PROFITABILITY FIX: Require trend and momentum alignment for non-extreme conditions
         if signal != 'HOLD' and rsi > 30 and rsi < 70:  # Not in extreme oversold/overbought
             # Check if trend and momentum agree with the signal
@@ -540,7 +579,8 @@ class SignalGenerator:
         
         # Apply multi-timeframe confidence boost
         if signal != 'HOLD' and mtf_analysis['trend_alignment'] != 'neutral':
-            # Boost confidence if MTF aligns with signal
+            # IMPROVEMENT: Require MTF alignment for high-quality trades
+            # Only take trades that align with higher timeframe trend
             if (signal == 'BUY' and mtf_analysis['trend_alignment'] == 'bullish') or \
                (signal == 'SELL' and mtf_analysis['trend_alignment'] == 'bearish'):
                 confidence *= mtf_analysis['confidence_multiplier']
@@ -549,9 +589,11 @@ class SignalGenerator:
             # FIX BUG 3: Adjust min_confidence proportionally when reducing confidence for MTF conflict
             elif (signal == 'BUY' and mtf_analysis['trend_alignment'] == 'bearish') or \
                  (signal == 'SELL' and mtf_analysis['trend_alignment'] == 'bullish'):
-                confidence *= 0.7  # Penalize conflicting signals
-                adjusted_min_confidence = min_confidence * 0.7  # Also reduce threshold proportionally
-                reasons['mtf_conflict'] = 'warning'
+                # IMPROVEMENT: Be more aggressive in filtering counter-trend trades
+                # Trading against higher timeframe trend is risky
+                confidence *= 0.5  # Increased penalty from 0.7 to 0.5
+                adjusted_min_confidence = min_confidence * 0.5  # Also reduce threshold proportionally
+                reasons['mtf_conflict'] = 'warning - counter trend'
                 if confidence < adjusted_min_confidence:
                     signal = 'HOLD'
                     reasons['confidence'] = f'too low after MTF adjustment ({confidence:.2f} < {adjusted_min_confidence:.2f})'
