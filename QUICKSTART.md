@@ -11,11 +11,12 @@ Your bot is now **30-45% more profitable** with institutional-grade intelligence
 ✅ Kelly Criterion sizing
 ✅ Volume profile analysis
 ✅ Order book intelligence
+✅ **Automatic Web Dashboard** (NEW!)
 
 ### Do You Need to Change Anything?
 **No!** Just run: `python bot.py`
 
-Everything works automatically.
+Everything works automatically, including the **web dashboard** that starts at http://localhost:5000
 
 ---
 
@@ -49,6 +50,32 @@ RETRAIN_INTERVAL=21600      # Down from 86400
 - Lower risk = Kelly optimizes it
 - Longer intervals = MTF makes scans efficient
 - More retraining = faster adaptation
+
+
+---
+
+## 🌐 Web Dashboard
+
+The bot now automatically starts a **web dashboard** when it runs!
+
+**Access it at:** http://localhost:5000
+
+### Features:
+- 📊 Real-time performance metrics (balance, P&L, win rate)
+- 💼 Live open positions with unrealized P&L
+- 📈 Equity curve and drawdown charts
+- 🛡️ Risk metrics and portfolio heat
+- 🎯 Active strategy and market regime
+- ⚙️ System status and health monitoring
+
+### Configuration:
+```env
+ENABLE_DASHBOARD=true      # Enable/disable dashboard
+DASHBOARD_PORT=5000        # Change port if needed
+DASHBOARD_HOST=0.0.0.0     # Allow network access
+```
+
+See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for detailed information.
 
 ---
 
