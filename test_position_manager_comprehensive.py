@@ -18,21 +18,37 @@ def test_position_pnl_calculations():
     from position_manager import Position
     
     # Test 1: Normal long position
-    pos = Position('BTC-USDT', 'long', 50000, 0.1, 10, 49000, 52000)
-    pnl = pos.get_pnl(51000)
-    leveraged_pnl = pos.get_leveraged_pnl(51000)
+    entry_price = 50000
+    current_price = 51000
+    leverage = 10
+    pos = Position('BTC-USDT', 'long', entry_price, 0.1, leverage, 49000, 52000)
     
-    assert pnl == 0.02, f"Expected 0.02, got {pnl}"
-    assert leveraged_pnl == 0.2, f"Expected 0.2, got {leveraged_pnl}"
+    # Calculate expected values
+    expected_pnl = (current_price - entry_price) / entry_price  # 2% price gain
+    expected_leveraged_pnl = expected_pnl * leverage  # 20% ROI with 10x leverage
+    
+    pnl = pos.get_pnl(current_price)
+    leveraged_pnl = pos.get_leveraged_pnl(current_price)
+    
+    assert abs(pnl - expected_pnl) < 0.0001, f"Expected {expected_pnl}, got {pnl}"
+    assert abs(leveraged_pnl - expected_leveraged_pnl) < 0.0001, f"Expected {expected_leveraged_pnl}, got {leveraged_pnl}"
     print("  ✓ Normal long position P&L calculation")
     
     # Test 2: Normal short position
-    pos_short = Position('BTC-USDT', 'short', 50000, 0.1, 10, 51000, 48000)
-    pnl_short = pos_short.get_pnl(49000)
-    leveraged_pnl_short = pos_short.get_leveraged_pnl(49000)
+    entry_price_short = 50000
+    current_price_short = 49000
+    leverage_short = 10
+    pos_short = Position('BTC-USDT', 'short', entry_price_short, 0.1, leverage_short, 51000, 48000)
     
-    assert pnl_short == 0.02, f"Expected 0.02, got {pnl_short}"
-    assert leveraged_pnl_short == 0.2, f"Expected 0.2, got {leveraged_pnl_short}"
+    # Calculate expected values
+    expected_pnl_short = (entry_price_short - current_price_short) / entry_price_short  # 2% price drop = profit
+    expected_leveraged_pnl_short = expected_pnl_short * leverage_short  # 20% ROI
+    
+    pnl_short = pos_short.get_pnl(current_price_short)
+    leveraged_pnl_short = pos_short.get_leveraged_pnl(current_price_short)
+    
+    assert abs(pnl_short - expected_pnl_short) < 0.0001, f"Expected {expected_pnl_short}, got {pnl_short}"
+    assert abs(leveraged_pnl_short - expected_leveraged_pnl_short) < 0.0001, f"Expected {expected_leveraged_pnl_short}, got {leveraged_pnl_short}"
     print("  ✓ Normal short position P&L calculation")
     
     # Test 3: Edge case - zero entry price (should not crash)
@@ -285,10 +301,19 @@ def test_edge_cases():
     print("  ✓ Very high price handled")
     
     # Test 3: Very low price
-    pos_low = Position('BTC-USDT', 'long', 0.0001, 1000, 10, 0.00009, 0.00012)
-    pnl = pos_low.get_pnl(0.00011)
-    assert 0.09 < pnl < 0.11, f"Low price should calculate P&L correctly, got {pnl}"
-    print("  ✓ Very low price handled")
+    entry_price_low = 0.0001
+    current_price_low = 0.00011
+    pos_low = Position('BTC-USDT', 'long', entry_price_low, 1000, 10, 0.00009, 0.00012)
+    
+    # Calculate expected P&L: (0.00011 - 0.0001) / 0.0001 = 0.1 or 10%
+    expected_pnl_low = (current_price_low - entry_price_low) / entry_price_low
+    
+    pnl_low = pos_low.get_pnl(current_price_low)
+    
+    # Use floating point tolerance for comparison
+    tolerance = 0.01  # 1% tolerance for floating point arithmetic
+    assert abs(pnl_low - expected_pnl_low) < tolerance, f"Expected ~{expected_pnl_low}, got {pnl_low}"
+    print(f"  ✓ Very low price handled (P&L: {pnl_low:.4f}, expected: {expected_pnl_low:.4f})")
     
     # Test 4: Position duration calculation
     pos = Position('BTC-USDT', 'long', 50000, 0.1, 10, 48000, 52000)
