@@ -12,16 +12,20 @@ class BacktestEngine:
     
     def __init__(self, initial_balance: float = 10000, 
                  trading_fee_rate: float = 0.0006,  # 0.06% taker fee
-                 funding_rate: float = 0.0001):  # 0.01% per 8 hours
+                 funding_rate: float = 0.0001,  # 0.01% per 8 hours
+                 latency_ms: int = 200,  # Network latency in milliseconds
+                 slippage_bps: float = 5.0):  # Slippage in basis points (0.05%)
         """
-        Initialize backtest engine with realistic fees
+        Initialize backtest engine with realistic fees, latency, and slippage
         
-        PRIORITY 1: Include trading fees and funding rates for realistic PnL
+        PRIORITY 1: Include trading fees, funding rates, latency, and slippage for realistic PnL
         
         Args:
             initial_balance: Starting capital
             trading_fee_rate: Trading fee as decimal (default: 0.0006 = 0.06%)
             funding_rate: Funding rate per 8 hours (default: 0.0001 = 0.01%)
+            latency_ms: Network and exchange latency in milliseconds (default: 200ms)
+            slippage_bps: Expected slippage in basis points (default: 5 bps = 0.05%)
         """
         self.logger = Logger.get_logger()
         self.initial_balance = initial_balance
@@ -36,6 +40,11 @@ class BacktestEngine:
         self.total_trading_fees = 0.0
         self.total_funding_fees = 0.0
         self.funding_payments = []  # Track all funding payments
+        
+        # AUDIT FIX: Add latency and slippage simulation
+        self.latency_ms = latency_ms
+        self.slippage_bps = slippage_bps
+        self.total_slippage_cost = 0.0
     
     def reset(self):
         """Reset backtesting state"""
@@ -45,17 +54,22 @@ class BacktestEngine:
         self.equity_curve = []
         self.total_trading_fees = 0.0
         self.total_funding_fees = 0.0
+        self.total_slippage_cost = 0.0
         self.funding_payments = []
     
     def run_backtest(self, data: pd.DataFrame, strategy_func,
-                    initial_balance: float = None) -> Dict:
+                    initial_balance: float = None,
+                    use_next_bar_execution: bool = True) -> Dict:
         """
-        Run backtest on historical data
+        Run backtest on historical data with realistic execution
+        
+        AUDIT FIX: Add latency simulation by using next bar's open price
         
         Args:
             data: DataFrame with OHLCV and indicator data
             strategy_func: Function that takes (row, balance, positions) and returns signal
             initial_balance: Starting balance (overrides init value if provided)
+            use_next_bar_execution: If True, execute signals at next bar's open (realistic)
         
         Returns:
             Backtest results dictionary
@@ -67,8 +81,13 @@ class BacktestEngine:
         
         try:
             self.logger.info(f"Starting backtest with {len(data)} candles")
+            self.logger.info(f"Latency simulation: {self.latency_ms}ms, "
+                           f"Slippage: {self.slippage_bps} bps, "
+                           f"Next bar execution: {use_next_bar_execution}")
             
-            for idx, row in data.iterrows():
+            pending_signals = []  # Queue for signals to execute next bar
+            
+            for i, (idx, row) in enumerate(data.iterrows()):
                 # Update equity curve
                 current_equity = self.calculate_equity(row['close'])
                 self.equity_curve.append({
@@ -77,15 +96,29 @@ class BacktestEngine:
                     'equity': current_equity
                 })
                 
+                # AUDIT FIX: Execute pending signals from previous bar
+                # This simulates latency - signal generated on bar N, executed on bar N+1
+                if use_next_bar_execution and pending_signals:
+                    for signal in pending_signals:
+                        # Use current bar's open price (next bar after signal)
+                        signal_row = row.copy()
+                        signal_row['close'] = row['open']  # Execute at open
+                        self.execute_signal(signal, signal_row)
+                    pending_signals = []
+                
                 # Check for position exits first
                 self.check_exits(row)
                 
                 # Get signal from strategy
                 signal = strategy_func(row, self.balance, self.positions)
                 
-                # Execute signal
+                # AUDIT FIX: Queue signal for next bar execution (realistic latency)
                 if signal and signal != 'HOLD':
-                    self.execute_signal(signal, row)
+                    if use_next_bar_execution:
+                        pending_signals.append(signal)
+                    else:
+                        # Immediate execution (less realistic)
+                        self.execute_signal(signal, row)
             
             # Close any remaining positions at end
             if self.positions:
@@ -96,15 +129,16 @@ class BacktestEngine:
             # Calculate final metrics
             results = self.calculate_results()
             
-            # PRIORITY 1: Log fee impact
+            # PRIORITY 1: Log fee and slippage impact
             self.logger.info(
                 f"Backtest complete: Net P&L: ${results['total_pnl']:.2f} "
                 f"({results['total_pnl_pct']:.2%}), Win Rate: {results['win_rate']:.2%}, "
                 f"Sharpe: {results['sharpe_ratio']:.2f}"
             )
             self.logger.info(
-                f"Fees: Trading: ${results['total_trading_fees']:.2f}, "
+                f"Costs: Trading Fees: ${results['total_trading_fees']:.2f}, "
                 f"Funding: ${results['total_funding_fees']:.2f}, "
+                f"Slippage: ${results.get('total_slippage', 0):.2f}, "
                 f"Total: ${results['total_fees']:.2f} ({results['fee_impact_pct']:.1f}% of gross PnL)"
             )
             
@@ -112,6 +146,8 @@ class BacktestEngine:
             
         except Exception as e:
             self.logger.error(f"Error in backtest: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
             return {}
     
     def walk_forward_optimization(self, data: pd.DataFrame, strategy_func,
@@ -216,30 +252,96 @@ class BacktestEngine:
             self.logger.error(f"Error aggregating results: {e}")
             return {}
     
+    def calculate_slippage(self, price: float, amount: float, side: str, 
+                          volume: float = None) -> float:
+        """
+        Calculate realistic slippage based on order size and liquidity
+        
+        AUDIT FIX: Implement realistic slippage estimation
+        
+        Args:
+            price: Current market price
+            amount: Order size in base currency
+            side: 'buy' or 'sell'
+            volume: Recent volume (optional, used for liquidity-based slippage)
+            
+        Returns:
+            Slippage-adjusted execution price
+        """
+        # Base slippage from bid-ask spread (in basis points)
+        base_slippage_bps = self.slippage_bps
+        
+        # Additional slippage for large orders (if volume provided)
+        if volume is not None and volume > 0:
+            # If order size > 1% of recent volume, add impact slippage
+            order_value = price * amount
+            volume_value = price * volume
+            impact_ratio = order_value / volume_value if volume_value > 0 else 0
+            
+            if impact_ratio > 0.01:  # > 1% of volume
+                # Square root market impact model
+                impact_slippage_bps = base_slippage_bps * np.sqrt(impact_ratio * 100)
+                base_slippage_bps += impact_slippage_bps
+        
+        # Cap maximum slippage at 50 bps (0.5%)
+        total_slippage_bps = min(base_slippage_bps, 50.0)
+        
+        # Apply slippage direction
+        slippage_factor = total_slippage_bps / 10000.0  # Convert bps to decimal
+        
+        if side in ['buy', 'long']:
+            # Buying: pay more (slippage increases price)
+            slippage_price = price * (1 + slippage_factor)
+        else:
+            # Selling: receive less (slippage decreases price)
+            slippage_price = price * (1 - slippage_factor)
+        
+        return slippage_price
+    
     def execute_signal(self, signal: Dict, row: pd.Series):
-        """Execute a trading signal"""
+        """
+        Execute a trading signal with realistic latency and slippage
+        
+        AUDIT FIX: Add latency simulation and slippage
+        """
         try:
             side = signal.get('side', 'long')
             amount = signal.get('amount', 100)
             entry_price = row['close']
             leverage = signal.get('leverage', 10)
             
+            # AUDIT FIX: Apply slippage based on order size and liquidity
+            volume = row.get('volume', None)
+            slippage_price = self.calculate_slippage(entry_price, amount, side, volume)
+            
+            # Calculate slippage cost
+            slippage_cost = abs(slippage_price - entry_price) * amount
+            self.total_slippage_cost += slippage_cost
+            
+            # Use slippage-adjusted price for execution
+            execution_price = slippage_price
+            
             # Calculate position size
-            position_value = amount * entry_price
+            position_value = amount * execution_price
             required_margin = position_value / leverage
             
             if required_margin > self.balance * 0.95:
                 return  # Not enough balance
             
+            # PRIORITY 1: Calculate and deduct trading fee
+            trading_fee = position_value * self.trading_fee_rate
+            self.total_trading_fees += trading_fee
+            self.balance -= trading_fee
+            
             # Create position
             position = {
                 'side': side,
-                'entry_price': entry_price,
+                'entry_price': execution_price,  # Use slippage-adjusted price
                 'amount': amount,
                 'leverage': leverage,
                 'entry_time': row.get('timestamp', None),
-                'stop_loss': signal.get('stop_loss', entry_price * 0.95 if side == 'long' else entry_price * 1.05),
-                'take_profit': signal.get('take_profit', entry_price * 1.05 if side == 'long' else entry_price * 0.95)
+                'stop_loss': signal.get('stop_loss', execution_price * 0.95 if side == 'long' else execution_price * 1.05),
+                'take_profit': signal.get('take_profit', execution_price * 1.05 if side == 'long' else execution_price * 0.95)
             }
             
             self.positions.append(position)
@@ -373,6 +475,7 @@ class BacktestEngine:
                     'sharpe_ratio': 0,
                     'total_trading_fees': 0,
                     'total_funding_fees': 0,
+                    'total_slippage': 0,
                     'total_fees': 0
                 }
             
@@ -426,7 +529,8 @@ class BacktestEngine:
                 # PRIORITY 1: Fee metrics
                 'total_trading_fees': self.total_trading_fees,
                 'total_funding_fees': self.total_funding_fees,
-                'total_fees': self.total_trading_fees + self.total_funding_fees,
+                'total_slippage': self.total_slippage_cost,  # AUDIT FIX: Add slippage
+                'total_fees': self.total_trading_fees + self.total_funding_fees + self.total_slippage_cost,
                 'fee_impact_pct': ((gross_pnl - total_pnl) / gross_pnl * 100) if gross_pnl != 0 else 0,
                 'trades': self.closed_trades,
                 'equity_curve': self.equity_curve
