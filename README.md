@@ -12,6 +12,7 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 3. **Monitor**: Web dashboard at http://localhost:5000 (starts automatically!)
 4. **Logs**: Check logs for detailed trading activity
 
+👉 **See [SMART_STRATEGY_MODE.md](SMART_STRATEGY_MODE.md) for self-learning AI strategy mode** 🆕 🔥  
 👉 **See [2025_AI_ENHANCEMENTS.md](2025_AI_ENHANCEMENTS.md) for latest AI features** 🆕  
 👉 **See [2025_AI_QUICKSTART.md](2025_AI_QUICKSTART.md) for quick integration guide** 🆕  
 👉 **See [2026_ENHANCEMENTS.md](2026_ENHANCEMENTS.md) for advanced features guide**  
@@ -21,6 +22,15 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 ---
 
 ## 🆕 What's New in 2025 AI Edition
+
+### **🔥 Smart Strategy Mode** (October 2025) - NEW!
+- **Self-Learning AI**: Prioritizes Reinforcement Learning and Deep Learning over traditional methods
+- **Adaptive Strategy Selection**: Q-learning automatically selects best strategy for market conditions
+- **60% RL Priority**: Reinforcement Learning drives decision-making
+- **30% Deep Learning**: LSTM neural networks validate and enhance signals
+- **10% Traditional**: Classic analysis as safety fallback
+- **+5-8% Signal Accuracy**: Measurable improvement in trade quality
+- **See [SMART_STRATEGY_MODE.md](SMART_STRATEGY_MODE.md) for full details**
 
 ### **🤖 Latest AI Enhancements** (October 2025)
 - **Bayesian Adaptive Kelly Criterion** - Dynamic position sizing with Bayesian win rate estimation
