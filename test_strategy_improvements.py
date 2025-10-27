@@ -322,7 +322,7 @@ def test_time_based_exit():
         pos.entry_time = datetime.now() - timedelta(hours=12, minutes=5)
         should_close, reason = pos.should_close(100.0)  # Exact breakeven
         assert should_close, f"12-hour position at breakeven should close"
-        assert 'time_exit_breakeven' in reason, f"Should have time exit reason, got {reason}"
+        assert 'time_exit_breakeven_12h' in reason, f"Should have time exit reason, got {reason}"
         print(f"  ✓ 12-hour position at breakeven: {reason}")
         
         # Test 3: 24-hour position with small profit - should close
