@@ -179,6 +179,29 @@ class Config:
         
         SAFETY: Enhanced validation to prevent catastrophic configuration errors
         """
+        from logger import Logger
+        logger = Logger.get_logger()
+        
+        # Use enhanced config validator for comprehensive checks
+        try:
+            from config_validator import ConfigValidator
+            is_valid, messages = ConfigValidator.validate_config()
+            
+            # Log validation messages
+            for msg in messages:
+                if msg.startswith("WARNING:"):
+                    logger.warning(msg)
+                else:
+                    logger.error(msg)
+            
+            if not is_valid:
+                raise ValueError("Configuration validation failed. Check logs for details.")
+        except ImportError:
+            logger.debug("config_validator module not found, using legacy validation")
+            # Fallback to legacy validation
+            pass
+        
+        # Legacy validation (kept for backward compatibility)
         # Check API credentials
         if not cls.API_KEY or not cls.API_SECRET or not cls.API_PASSPHRASE:
             raise ValueError("KuCoin API credentials are required. Please set them in .env file")
@@ -208,9 +231,6 @@ class Config:
             raise ValueError(f"CHECK_INTERVAL must be between 10 and 3600 seconds, got {cls.CHECK_INTERVAL}")
         
         # SAFETY: Warn about aggressive settings
-        from logger import Logger
-        logger = Logger.get_logger()
-        
         if cls.LEVERAGE is not None and cls.LEVERAGE > 15:
             logger.warning(f"⚠️  HIGH LEVERAGE WARNING: {cls.LEVERAGE}x leverage is very risky!")
         
