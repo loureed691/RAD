@@ -518,6 +518,34 @@ class ReinforcementLearningStrategy:
         
         return strategy
     
+    def get_strategy_confidence(self, strategy: str, market_regime: str = 'neutral', volatility: float = 0.03) -> float:
+        """
+        Get confidence level for a specific strategy in current market conditions
+        
+        Args:
+            strategy: Strategy to evaluate
+            market_regime: Current market regime
+            volatility: Current volatility level
+            
+        Returns:
+            Confidence score (0-1)
+        """
+        state = self.get_state(market_regime, volatility)
+        q_values = self.q_table[state]
+        
+        # Normalize Q-values to confidence scores (0-1)
+        q_value = q_values.get(strategy, 0.0)
+        min_q = min(q_values.values())
+        max_q = max(q_values.values())
+        
+        # Avoid division by zero
+        if max_q == min_q:
+            return 0.5
+        
+        # Normalize to 0-1 range
+        confidence = (q_value - min_q) / (max_q - min_q)
+        return confidence
+    
     def update_q_value(self, 
                       market_regime: str, 
                       volatility: float, 

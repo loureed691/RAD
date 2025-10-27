@@ -206,6 +206,28 @@ class TradingBot:
         self.logger.info("   ✅ Adaptive Exit Strategy (Dynamic targets)")
         self.logger.info("   ✅ Reinforcement Learning Strategy Selector (Q-learning)")
         
+        # Smart Strategy Mode Configuration
+        self.logger.info("=" * 60)
+        self.logger.info("🧠 SMART STRATEGY MODE CONFIGURATION")
+        self.logger.info("=" * 60)
+        if Config.USE_SMART_STRATEGIES_ONLY:
+            self.logger.info("✅ SMART STRATEGIES ONLY MODE: ENABLED")
+            self.logger.info("   📊 Strategy Priority:")
+            self.logger.info(f"      🤖 Reinforcement Learning: {Config.RL_STRATEGY_WEIGHT*100:.0f}%")
+            self.logger.info(f"      🧠 Deep Learning: {Config.DEEP_LEARNING_WEIGHT*100:.0f}%")
+            self.logger.info(f"      📈 Traditional: {Config.TRADITIONAL_STRATEGY_WEIGHT*100:.0f}%")
+            self.logger.info("   🎯 Self-learning AI strategies prioritized")
+            self.logger.info("   ⚡ Adaptive strategy selection based on market conditions")
+        else:
+            self.logger.info("⚠️  SMART STRATEGIES ONLY MODE: DISABLED")
+            self.logger.info("   Using balanced mix of all available strategies")
+        
+        if Config.REQUIRE_ML_TRAINING:
+            self.logger.info(f"✅ ML Training Required: YES (min {Config.MIN_ML_TRAINING_SAMPLES} samples)")
+        else:
+            self.logger.info("⚠️  ML Training Required: NO (bot can trade without ML training)")
+        self.logger.info("=" * 60)
+        
         # State
         self.running = False
         self.last_scan_time = None
@@ -290,6 +312,17 @@ class TradingBot:
         Cached data from scanning is NEVER used for actual trading decisions.
         All market data, prices, and indicators are fetched in real-time.
         """
+        # SMART STRATEGY MODE: Check if ML models have sufficient training
+        if Config.REQUIRE_ML_TRAINING:
+            training_samples = len(self.ml_model.training_data)
+            if training_samples < Config.MIN_ML_TRAINING_SAMPLES:
+                self.logger.warning(
+                    f"⚠️  ML Training Required: {training_samples}/{Config.MIN_ML_TRAINING_SAMPLES} samples. "
+                    f"Skipping trade until ML model has sufficient training data."
+                )
+                return False
+            self.logger.debug(f"✅ ML Training Check Passed: {training_samples} samples available")
+        
         # Bug fix: Safely access opportunity dictionary with validation
         symbol = opportunity.get('symbol')
         signal = opportunity.get('signal')
@@ -636,18 +669,52 @@ class TradingBot:
                 'momentum': confidence if abs(momentum) > 0.02 else confidence * 0.6
             }
             
-            # Use traditional selector but weighted by RL recommendation
-            selected_strategy = self.strategy_selector_2026.select_strategy(
-                market_regime, volatility, trend_strength, confidence_scores
-            )
-            
-            # If RL strongly recommends a different strategy, consider it
-            if rl_selected_strategy != selected_strategy:
-                self.logger.info(f"🎰 RL recommends: {rl_selected_strategy} (selected: {selected_strategy})")
-                # For now, log the difference but use traditional selector
-                # In the future, could blend or use RL more aggressively
+            # SMART STRATEGY MODE: Prioritize RL and self-learning strategies
+            if Config.USE_SMART_STRATEGIES_ONLY:
+                # Give RL strategy higher priority in smart mode
+                selected_strategy = rl_selected_strategy
+                self.strategy_logger.info(f"🎯 SMART MODE: Using RL-selected strategy: {selected_strategy}")
+                
+                # Also get traditional selector's recommendation for comparison
+                traditional_strategy = self.strategy_selector_2026.select_strategy(
+                    market_regime, volatility, trend_strength, confidence_scores
+                )
+                
+                # Weighted decision: RL (60%), Traditional (40%) based on config
+                if traditional_strategy != rl_selected_strategy:
+                    # Log the disagreement
+                    self.strategy_logger.info(f"📊 Strategy comparison:")
+                    self.strategy_logger.info(f"   RL recommends: {rl_selected_strategy}")
+                    self.strategy_logger.info(f"   Traditional recommends: {traditional_strategy}")
+                    
+                    # In smart mode, we trust RL more but apply weighted decision
+                    rl_confidence = self.rl_strategy.get_strategy_confidence(
+                        rl_selected_strategy, market_regime, volatility
+                    )
+                    
+                    # If RL has low confidence, consider traditional selector
+                    if rl_confidence < 0.5 and Config.TRADITIONAL_STRATEGY_WEIGHT > 0:
+                        self.strategy_logger.info(f"   ⚠️  RL confidence low ({rl_confidence:.2f}), considering traditional strategy")
+                        # Blend strategies based on weights
+                        if Config.TRADITIONAL_STRATEGY_WEIGHT / (Config.RL_STRATEGY_WEIGHT + Config.TRADITIONAL_STRATEGY_WEIGHT) > 0.3:
+                            selected_strategy = traditional_strategy
+                            self.strategy_logger.info(f"   🔄 Switching to traditional strategy: {traditional_strategy}")
+                    else:
+                        self.strategy_logger.info(f"   ✅ RL confident ({rl_confidence:.2f}), using RL strategy")
+                else:
+                    self.strategy_logger.info(f"✅ RL and Traditional agree: {selected_strategy}")
             else:
-                self.logger.info(f"🎯 RL agrees with strategy: {selected_strategy}")
+                # Traditional mode: Use traditional selector but consider RL
+                selected_strategy = self.strategy_selector_2026.select_strategy(
+                    market_regime, volatility, trend_strength, confidence_scores
+                )
+                
+                # If RL strongly recommends a different strategy, log it
+                if rl_selected_strategy != selected_strategy:
+                    self.logger.info(f"🎰 RL recommends: {rl_selected_strategy} (selected: {selected_strategy})")
+                    # In traditional mode, we keep the traditional selector's choice
+                else:
+                    self.logger.info(f"🎯 RL agrees with strategy: {selected_strategy}")
             
             # Apply strategy-specific filters
             signal, confidence = self.strategy_selector_2026.apply_strategy_filters(

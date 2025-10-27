@@ -77,9 +77,20 @@ class Config:
     STRATEGY_LOG_FILE = os.getenv('STRATEGY_LOG_FILE', 'logs/strategy.log')
     DETAILED_LOG_LEVEL = os.getenv('DETAILED_LOG_LEVEL', 'DEBUG')  # Level for position and scanning logs
     
-    # Machine Learning
+    # Machine Learning & Smart Strategy Configuration
     RETRAIN_INTERVAL = int(os.getenv('RETRAIN_INTERVAL', '86400'))
     ML_MODEL_PATH = os.getenv('ML_MODEL_PATH', 'models/signal_model.pkl')
+    
+    # Smart Trading Strategy Mode - Prioritize self-learning AI/ML strategies
+    # When enabled, the bot will prioritize RL and Deep Learning over traditional methods
+    USE_SMART_STRATEGIES_ONLY = os.getenv('USE_SMART_STRATEGIES_ONLY', 'true').lower() in ('true', '1', 'yes')
+    REQUIRE_ML_TRAINING = os.getenv('REQUIRE_ML_TRAINING', 'false').lower() in ('true', '1', 'yes')
+    MIN_ML_TRAINING_SAMPLES = int(os.getenv('MIN_ML_TRAINING_SAMPLES', '50'))
+    
+    # Strategy Selection Weights (when USE_SMART_STRATEGIES_ONLY=true)
+    RL_STRATEGY_WEIGHT = float(os.getenv('RL_STRATEGY_WEIGHT', '0.6'))  # 60% weight to RL
+    DEEP_LEARNING_WEIGHT = float(os.getenv('DEEP_LEARNING_WEIGHT', '0.3'))  # 30% weight to Deep Learning
+    TRADITIONAL_STRATEGY_WEIGHT = float(os.getenv('TRADITIONAL_STRATEGY_WEIGHT', '0.1'))  # 10% weight to traditional
     
     @classmethod
     def auto_configure_from_balance(cls, available_balance: float):
