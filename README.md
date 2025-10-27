@@ -28,7 +28,7 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 - **Risk-Reward Validation** - Minimum 2:1 ratio required, excellent trades boosted
 - **Momentum Quality Analysis** - Avoid false breakouts with consistency checks
 - **Decision Quality Tracking** - Learn from past decisions and adapt thresholds
-- **Stricter Signal Filters** - 2.2:1 signal strength ratio (up from 2:0:1)
+- **Stricter Signal Filters** - 2.2:1 signal strength ratio (up from 2.0:1)
 - **Enhanced Trade Filter** - 0.68 minimum quality (up from 0.65)
 
 **Expected Impact:**
