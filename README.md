@@ -9,12 +9,14 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 
 1. **Setup**: Configure API keys in `.env` - see [QUICKSTART.md](QUICKSTART.md)
 2. **Run**: `python bot.py` - Auto-configures based on your balance
-3. **Monitor**: Check logs for real-time trading activity
+3. **Monitor**: Web dashboard at http://localhost:5000 (starts automatically!)
+4. **Logs**: Check logs for detailed trading activity
 
 👉 **See [2025_AI_ENHANCEMENTS.md](2025_AI_ENHANCEMENTS.md) for latest AI features** 🆕  
 👉 **See [2025_AI_QUICKSTART.md](2025_AI_QUICKSTART.md) for quick integration guide** 🆕  
 👉 **See [2026_ENHANCEMENTS.md](2026_ENHANCEMENTS.md) for advanced features guide**  
 👉 **See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions**
+👉 **See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for web dashboard details** 🆕
 
 ---
 

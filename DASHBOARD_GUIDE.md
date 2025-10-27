@@ -2,7 +2,21 @@
 
 ## Overview
 
-The RAD Trading Bot now includes a **comprehensive web-based dashboard** for real-time monitoring of all trading activities, positions, risk metrics, and system health.
+The RAD Trading Bot includes a **comprehensive web-based dashboard** for real-time monitoring of all trading activities, positions, risk metrics, and system health. **The dashboard now starts automatically when you run the bot!**
+
+## Quick Start
+
+Simply start your bot:
+```bash
+python bot.py
+```
+
+The dashboard will automatically start and be available at:
+```
+http://localhost:5000
+```
+
+**That's it!** No additional configuration needed.
 
 ## Features
 
@@ -62,16 +76,73 @@ Real-time system health monitoring:
 - **Equity Curve**: Visual representation of balance over time
 - **Drawdown Chart**: Visual representation of drawdown periods
 
+## Configuration
+
+The dashboard is **enabled by default** and starts automatically with the bot.
+
+### Environment Variables
+
+You can customize the dashboard behavior in your `.env` file:
+
+```env
+# Dashboard Configuration
+ENABLE_DASHBOARD=true       # Enable/disable dashboard (default: true)
+DASHBOARD_PORT=5000         # Port for web dashboard (default: 5000)
+DASHBOARD_HOST=0.0.0.0      # Host for dashboard (0.0.0.0 = accessible from any IP)
+```
+
+### Disabling the Dashboard
+
+If you want to disable the dashboard, set `ENABLE_DASHBOARD=false` in your `.env` file:
+
+```env
+ENABLE_DASHBOARD=false
+```
+
+### Changing the Port
+
+If port 5000 is already in use, you can change it:
+
+```env
+DASHBOARD_PORT=8080
+```
+
+Then access the dashboard at http://localhost:8080
+
 ## Usage
 
 ### Starting the Dashboard
 
-#### Method 1: Using the Example Script
+#### Automatic Start (Recommended)
+
+The dashboard **starts automatically** when you run the bot:
+
+```bash
+python bot.py
+# or
+python start.py
+```
+
+The bot will display a message like:
+```
+============================================================
+✅ DASHBOARD STARTED SUCCESSFULLY!
+   🌐 Access dashboard at: http://localhost:5000
+   🌐 Or from network: http://YOUR_IP:5000
+============================================================
+```
+
+#### Manual Start (For Testing Only)
+
+If you want to test the dashboard without running the bot, you can use the example script:
+
 ```bash
 python3 example_enhanced_dashboard.py
 ```
 
-#### Method 2: In Your Bot Code
+This runs the dashboard with simulated data for demonstration purposes.
+
+#### Method 2: Custom Integration (Advanced)
 ```python
 from dashboard import TradingDashboard
 
