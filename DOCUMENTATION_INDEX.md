@@ -53,6 +53,7 @@ This directory contains comprehensive documentation about the RAD KuCoin Futures
 - **MODERN_GRADIENT_BOOSTING.md** - ML model enhancements
 - **THREAD_SAFETY.md** - Thread safety implementation
 - **UNIFIED_LOGGING.md** - Unified logging system
+- **STATE_PERSISTENCE.md** - State tracking and persistence guide 🆕
 
 ### Testing & Development
 - **TESTING_README.md** - Testing guide and best practices
