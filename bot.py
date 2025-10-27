@@ -1315,7 +1315,11 @@ class TradingBot:
             total_pnl = 0
             initial_balance = 10000  # Default, will be updated if available
             if hasattr(self.analytics, 'equity_history') and len(self.analytics.equity_history) > 0:
-                initial_balance = self.analytics.equity_history[0][1] if self.analytics.equity_history[0][1] > 0 else 10000
+                eq0 = self.analytics.equity_history[0]
+                if (isinstance(eq0, (list, tuple)) and len(eq0) > 1 and isinstance(eq0[1], (int, float)) and eq0[1] > 0):
+                    initial_balance = eq0[1]
+                else:
+                    initial_balance = 10000
                 total_pnl = current_balance - initial_balance
             
             # Update performance stats
