@@ -726,6 +726,24 @@ class Position:
                 # Extreme profit (50%+ ROI) but TP is 10%+ away - protect profits
                 return True, 'emergency_profit_protection'
         
+        # IMPROVEMENT: Time-based exit for stale positions
+        # Close positions that have been open too long without reaching targets
+        position_age = (datetime.now() - self.entry_time).total_seconds() / 3600  # Hours
+        
+        # Exit stale positions based on performance
+        if position_age >= 48:  # 48 hours (2 days)
+            # Very stale position - close if near breakeven or small loss
+            if -0.02 <= current_pnl <= 0.02:  # Between -2% and +2%
+                return True, 'time_exit_stale_48h'
+        elif position_age >= 24:  # 24 hours (1 day)
+            # Stale position - close if making very small profit or loss
+            if -0.01 <= current_pnl <= 0.01:  # Between -1% and +1%
+                return True, 'time_exit_stale_24h'
+        elif position_age >= 12:  # 12 hours
+            # Moderate age - close if stuck at exact breakeven
+            if abs(current_pnl) < 0.005:  # Within 0.5% of breakeven
+                return True, 'time_exit_breakeven_12h'
+        
         return False, ''
     
     def get_pnl(self, current_price: float, include_fees: bool = False) -> float:
