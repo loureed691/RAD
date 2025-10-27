@@ -17,7 +17,7 @@ class SmartTradeFilter:
     
     def __init__(self):
         self.logger = Logger.get_logger()
-        self.min_quality_score = 0.65  # Minimum quality score to take trade
+        self.min_quality_score = 0.68  # OPTIMIZED: Higher threshold for smarter trade selection
         self.trade_history = []
         
     def calculate_trade_quality_score(self, 
@@ -117,13 +117,14 @@ class SmartTradeFilter:
             total_score += components['market_regime']
             
             # Determine recommendation
-            if total_score >= 0.75:
+            # OPTIMIZED: Higher thresholds for better trade selection
+            if total_score >= 0.78:
                 recommendation = 'EXCELLENT'
                 multiplier = 1.2  # Increase position size
-            elif total_score >= 0.65:
+            elif total_score >= 0.68:
                 recommendation = 'GOOD'
                 multiplier = 1.0  # Normal position size
-            elif total_score >= 0.55:
+            elif total_score >= 0.58:
                 recommendation = 'ACCEPTABLE'
                 multiplier = 0.8  # Reduce position size
             else:

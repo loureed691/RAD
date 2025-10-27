@@ -16,9 +16,148 @@ class SignalGenerator:
         self.logger = Logger.get_logger()
         self.strategy_logger = Logger.get_strategy_logger()
         self.market_regime = 'neutral'  # 'trending', 'ranging', 'neutral'
-        self.adaptive_threshold = 0.62  # INCREASED from 0.55 for better quality trades
+        self.adaptive_threshold = 0.65  # OPTIMIZED: Higher threshold for smarter trade selection
         self.pattern_recognizer = PatternRecognition()
         self.volume_profile_analyzer = VolumeProfile()
+        # Smart decision tracking for continuous improvement
+        self.recent_decisions = []  # Track recent decision quality
+        self.max_decision_history = 20
+    
+    def calculate_risk_reward_ratio(self, df: pd.DataFrame, signal: str, 
+                                   entry_price: float, indicators: Dict) -> Dict:
+        """
+        Calculate expected risk-reward ratio for a trade
+        Higher ratio = better trade opportunity
+        
+        Returns:
+            Dict with risk/reward analysis
+        """
+        if df.empty or len(df) < 20 or entry_price <= 0:
+            return {'ratio': 0.0, 'valid': False}
+        
+        try:
+            # Calculate ATR for volatility-based targets
+            atr = indicators.get('atr', entry_price * 0.02)
+            
+            # Get support/resistance levels
+            support_resistance = self.detect_support_resistance(df, entry_price)
+            
+            # Calculate potential risk and reward
+            if signal == 'BUY':
+                # Risk: Distance to support or ATR-based stop
+                support = support_resistance.get('support')
+                if support and support < entry_price:
+                    risk = entry_price - support
+                else:
+                    risk = atr * 1.5  # Default 1.5 ATR stop
+                
+                # Reward: Distance to resistance or ATR-based target
+                resistance = support_resistance.get('resistance')
+                if resistance and resistance > entry_price:
+                    reward = resistance - entry_price
+                else:
+                    reward = atr * 3.0  # Default 3 ATR target
+                    
+            else:  # SELL
+                # Risk: Distance to resistance or ATR-based stop
+                resistance = support_resistance.get('resistance')
+                if resistance and resistance > entry_price:
+                    risk = resistance - entry_price
+                else:
+                    risk = atr * 1.5
+                
+                # Reward: Distance to support or ATR-based target
+                support = support_resistance.get('support')
+                if support and support < entry_price:
+                    reward = entry_price - support
+                else:
+                    reward = atr * 3.0
+            
+            # Calculate ratio
+            ratio = reward / risk if risk > 0 else 0.0
+            
+            # Minimum acceptable ratio is 2:1
+            valid = ratio >= 2.0
+            
+            return {
+                'ratio': ratio,
+                'risk': risk,
+                'reward': reward,
+                'valid': valid,
+                'risk_pct': (risk / entry_price) * 100,
+                'reward_pct': (reward / entry_price) * 100
+            }
+            
+        except Exception as e:
+            self.logger.debug(f"Error calculating risk-reward ratio: {e}")
+            return {'ratio': 0.0, 'valid': False}
+    
+    def analyze_momentum_quality(self, df: pd.DataFrame, indicators: Dict, signal: str) -> Dict:
+        """
+        Analyze the quality of momentum to avoid false breakouts
+        
+        Returns:
+            Dict with momentum quality assessment
+        """
+        if df.empty or len(df) < 20:
+            return {'quality': 0.5, 'valid': True}
+        
+        try:
+            momentum = indicators.get('momentum', 0)
+            roc = indicators.get('roc', 0)
+            volume_ratio = indicators.get('volume_ratio', 1.0)
+            
+            # Get recent momentum history
+            recent_df = df.tail(10)
+            momentum_values = recent_df['momentum'].values if 'momentum' in recent_df.columns else []
+            
+            quality_score = 0.5  # Start neutral
+            
+            # Factor 1: Momentum consistency (not choppy)
+            if len(momentum_values) >= 5:
+                momentum_std = np.std(momentum_values)
+                momentum_mean = np.abs(np.mean(momentum_values))
+                
+                if momentum_mean > 0:
+                    consistency = 1 - min(momentum_std / momentum_mean, 1.0)
+                    quality_score += consistency * 0.2  # Up to 20% boost
+            
+            # Factor 2: Momentum acceleration (building momentum)
+            if len(momentum_values) >= 3:
+                recent_momentum = momentum_values[-3:]
+                if signal == 'BUY' and all(recent_momentum[i] < recent_momentum[i+1] for i in range(len(recent_momentum)-1)):
+                    quality_score += 0.15  # Accelerating bullish momentum
+                elif signal == 'SELL' and all(recent_momentum[i] > recent_momentum[i+1] for i in range(len(recent_momentum)-1)):
+                    quality_score += 0.15  # Accelerating bearish momentum
+            
+            # Factor 3: Volume confirmation
+            if volume_ratio > 1.5:
+                quality_score += 0.15  # Strong volume support
+            elif volume_ratio < 0.8:
+                quality_score -= 0.15  # Weak volume - suspicious
+            
+            # Factor 4: ROC alignment with momentum
+            if (momentum > 0 and roc > 0) or (momentum < 0 and roc < 0):
+                quality_score += 0.10  # Aligned indicators
+            
+            # Normalize to 0-1 range
+            quality_score = max(0.0, min(1.0, quality_score))
+            
+            # Valid if quality score >= 0.55
+            valid = quality_score >= 0.55
+            
+            return {
+                'quality': quality_score,
+                'valid': valid,
+                'details': {
+                    'volume_support': volume_ratio > 1.2,
+                    'acceleration': quality_score > 0.65
+                }
+            }
+            
+        except Exception as e:
+            self.logger.debug(f"Error analyzing momentum quality: {e}")
+            return {'quality': 0.5, 'valid': True}
     
     def detect_support_resistance(self, df: pd.DataFrame, current_price: float) -> Dict:
         """
@@ -473,13 +612,21 @@ class SignalGenerator:
             confidence = 0.0
             reasons['equal_signals'] = 'buy and sell signals balanced'
         
-        # Adaptive threshold based on market regime - MORE CONSERVATIVE
+        # OPTIMIZED: Adaptive threshold based on market regime and recent performance
         if self.market_regime == 'trending':
-            min_confidence = 0.58  # INCREASED from 0.52 for better quality
+            min_confidence = 0.60  # Higher threshold for trending markets to avoid false breakouts
         elif self.market_regime == 'ranging':
-            min_confidence = 0.65  # INCREASED from 0.58 - ranging markets are riskier
+            min_confidence = 0.68  # Even higher for ranging - most trades fail here
         else:
             min_confidence = self.adaptive_threshold
+        
+        # ENHANCEMENT: Increase threshold if recent decisions were poor quality
+        if len(self.recent_decisions) >= 5:
+            recent_quality = sum(d.get('quality', 0.5) for d in self.recent_decisions[-5:]) / 5
+            if recent_quality < 0.6:
+                # Recent poor quality - be more selective
+                min_confidence *= 1.1  # Increase threshold by 10%
+                self.logger.debug(f"Increasing confidence threshold due to recent poor quality: {min_confidence:.3f}")
         
         # Require minimum confidence threshold
         if confidence < min_confidence:
@@ -493,11 +640,33 @@ class SignalGenerator:
             stronger_signal = max(buy_signals, sell_signals)
             if stronger_signal > 0:
                 signal_ratio = stronger_signal / (weaker_signal + 1)  # Add 1 to avoid div by 0
-                # Require at least 2:1 ratio between winning and losing signals
-                if signal_ratio < 2.0:
+                # OPTIMIZED: Require at least 2.2:1 ratio for better trade selection
+                if signal_ratio < 2.2:
                     signal = 'HOLD'
                     confidence = 0.0
-                    reasons['weak_signal_ratio'] = f'insufficient signal strength ({signal_ratio:.2f}:1, need 2.0:1)'
+                    reasons['weak_signal_ratio'] = f'insufficient signal strength ({signal_ratio:.2f}:1, need 2.2:1)'
+        
+        # ENHANCEMENT: Calculate and validate risk-reward ratio
+        if signal != 'HOLD':
+            close = indicators.get('close', 0)
+            if close > 0:
+                rr_analysis = self.calculate_risk_reward_ratio(df, signal, close, indicators)
+                if rr_analysis.get('valid'):
+                    ratio = rr_analysis['ratio']
+                    reasons['risk_reward'] = f"{ratio:.2f}:1 (risk: {rr_analysis['risk_pct']:.1f}%, reward: {rr_analysis['reward_pct']:.1f}%)"
+                    
+                    # Boost confidence for excellent risk-reward
+                    if ratio >= 3.5:
+                        confidence *= 1.1  # 10% boost
+                        self.logger.info(f"✨ Excellent risk-reward ratio {ratio:.2f}:1 - boosting confidence")
+                    elif ratio >= 3.0:
+                        confidence *= 1.05  # 5% boost
+                else:
+                    # Poor risk-reward ratio - reject trade
+                    if rr_analysis.get('ratio', 0) < 2.0:
+                        signal = 'HOLD'
+                        confidence = 0.0
+                        reasons['poor_risk_reward'] = f"ratio too low ({rr_analysis.get('ratio', 0):.2f}:1, need >= 2.0:1)"
         
         # PROFITABILITY FIX: Require trend and momentum alignment for non-extreme conditions
         if signal != 'HOLD' and rsi > 30 and rsi < 70:  # Not in extreme oversold/overbought
@@ -524,6 +693,19 @@ class SignalGenerator:
                     signal = 'HOLD'
                     confidence = 0.0
                     reasons['trend_momentum_mismatch'] = 'trend and momentum not aligned with SELL'
+        
+        # ENHANCEMENT: Check momentum quality to avoid false breakouts
+        if signal != 'HOLD':
+            momentum_analysis = self.analyze_momentum_quality(df, indicators, signal)
+            if not momentum_analysis['valid']:
+                signal = 'HOLD'
+                confidence = 0.0
+                reasons['poor_momentum_quality'] = f"low quality momentum (score: {momentum_analysis['quality']:.2f})"
+            elif momentum_analysis['quality'] > 0.75:
+                # High quality momentum - boost confidence
+                confidence *= 1.08
+                confidence = min(confidence, 0.99)
+                reasons['momentum_quality'] = f"excellent ({momentum_analysis['quality']:.2f})"
         
         # Apply confluence scoring boost (NEW)
         if signal != 'HOLD':
@@ -582,6 +764,54 @@ class SignalGenerator:
     def set_adaptive_threshold(self, threshold: float):
         """Set adaptive confidence threshold"""
         self.adaptive_threshold = max(0.5, min(0.75, threshold))
+    
+    def record_decision_quality(self, signal: str, confidence: float, outcome: float = None):
+        """
+        Record decision quality for continuous improvement
+        
+        Args:
+            signal: The signal that was generated
+            confidence: The confidence level
+            outcome: Optional trade outcome (profit/loss %)
+        """
+        decision = {
+            'signal': signal,
+            'confidence': confidence,
+            'timestamp': pd.Timestamp.now(),
+            'quality': confidence  # Base quality on confidence
+        }
+        
+        if outcome is not None:
+            # Update quality based on actual outcome
+            if outcome > 0.01:  # Profitable trade
+                decision['quality'] = min(1.0, confidence * 1.2)  # Reward good decisions
+            elif outcome < -0.01:  # Losing trade
+                decision['quality'] = max(0.0, confidence * 0.7)  # Penalize bad decisions
+        
+        self.recent_decisions.append(decision)
+        
+        # Keep only recent history
+        if len(self.recent_decisions) > self.max_decision_history:
+            self.recent_decisions = self.recent_decisions[-self.max_decision_history:]
+    
+    def get_decision_quality_stats(self) -> Dict:
+        """
+        Get statistics on recent decision quality
+        
+        Returns:
+            Dict with quality metrics
+        """
+        if not self.recent_decisions:
+            return {'avg_quality': 0.5, 'count': 0}
+        
+        qualities = [d['quality'] for d in self.recent_decisions]
+        
+        return {
+            'avg_quality': np.mean(qualities),
+            'std_quality': np.std(qualities) if len(qualities) > 1 else 0.0,
+            'count': len(qualities),
+            'trend': 'improving' if len(qualities) >= 5 and np.mean(qualities[-5:]) > np.mean(qualities[:5]) else 'stable'
+        }
     
     def calculate_score(self, df: pd.DataFrame) -> float:
         """

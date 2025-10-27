@@ -997,6 +997,12 @@ class TradingBot:
                     signal = 'BUY' if position.side == 'long' else 'SELL'
                     self.ml_model.record_outcome(indicators, signal, pnl)
                     
+                    # ENHANCEMENT: Record decision quality for continuous improvement
+                    try:
+                        self.scanner.signal_generator.record_decision_quality(signal, 0.0, pnl)
+                    except Exception as e:
+                        self.logger.debug(f"Error recording decision quality: {e}")
+                    
                     # 2025 AI ENHANCEMENT: Update attention weights based on trade outcome
                     try:
                         features = self.ml_model.prepare_features(indicators).flatten()
