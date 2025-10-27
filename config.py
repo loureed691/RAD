@@ -44,7 +44,7 @@ class Config:
     # Dashboard Configuration
     ENABLE_DASHBOARD = os.getenv('ENABLE_DASHBOARD', 'true').lower() in ('true', '1', 'yes')
     DASHBOARD_PORT = int(os.getenv('DASHBOARD_PORT', '5000'))
-    DASHBOARD_HOST = os.getenv('DASHBOARD_HOST', '0.0.0.0')
+    DASHBOARD_HOST = os.getenv('DASHBOARD_HOST', '127.0.0.1')  # Localhost by default for security
     
     # Trading Configuration - will be auto-configured if not set in .env
     LEVERAGE = None  # Will be set by auto_configure_from_balance()

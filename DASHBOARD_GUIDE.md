@@ -109,6 +109,29 @@ DASHBOARD_PORT=8080
 
 Then access the dashboard at http://localhost:8080
 
+### Network Access and Security
+
+By default, `DASHBOARD_HOST=0.0.0.0` makes the dashboard accessible from any network interface, which is convenient but exposes your trading data on your local network.
+
+**For local-only access (recommended):**
+```env
+DASHBOARD_HOST=127.0.0.1
+```
+
+This restricts access to localhost only, preventing network access.
+
+**For network access (use with caution):**
+```env
+DASHBOARD_HOST=0.0.0.0
+```
+
+⚠️ **Security Warning**: Setting `DASHBOARD_HOST=0.0.0.0` exposes your trading dashboard to your local network. Only use this if:
+- You're on a trusted private network
+- You understand the security implications
+- You need to access the dashboard from other devices
+
+For production deployments, see the [Security Notes](#security-notes) section below.
+
 ## Usage
 
 ### Starting the Dashboard
