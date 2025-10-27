@@ -94,6 +94,9 @@ class Position:
         self.profit_acceleration = 0.0  # Rate of change of profit velocity
         self.partial_exits_taken = 0  # Track partial profit taking
         
+        # ATR-based profit targets tracking (institutional strategy)
+        self.atr_targets_hit = set()  # Track which ATR targets have been hit
+        
         # Volume profile analyzer for smarter exits
         self.volume_profile_analyzer = VolumeProfile()
     
@@ -131,15 +134,16 @@ class Position:
         return False
     
     def update_trailing_stop(self, current_price: float, trailing_percentage: float, 
-                            volatility: float = 0.03, momentum: float = 0.0):
+                            volatility: float = 0.03, momentum: float = 0.0, atr: float = None):
         """
-        Update trailing stop loss with adaptive parameters
+        Update trailing stop loss with adaptive parameters and ATR Chandelier Exit
         
         Args:
             current_price: Current market price
             trailing_percentage: Base trailing stop percentage
             volatility: Market volatility (e.g., ATR or BB width)
             momentum: Current price momentum (-1 to 1)
+            atr: Average True Range value for ATR-based stops
         """
         # Calculate current P/L percentage
         current_pnl = self.get_pnl(current_price)
@@ -148,7 +152,46 @@ class Position:
         if current_pnl > self.max_favorable_excursion:
             self.max_favorable_excursion = current_pnl
         
-        # PROFITABILITY FIX: More aggressive trailing to lock profits
+        # INSTITUTIONAL STRATEGY: ATR Chandelier Exit (most advanced trailing stop)
+        # Uses highest/lowest price since entry minus ATR multiplier
+        if atr is not None and atr > 0:
+            # ATR multiplier based on volatility regime and profit level
+            if volatility > 0.06:
+                atr_multiplier = 3.0  # Wide stop in high volatility
+            elif volatility > 0.04:
+                atr_multiplier = 2.5  # Standard high volatility
+            elif volatility > 0.02:
+                atr_multiplier = 2.0  # Normal market
+            else:
+                atr_multiplier = 1.5  # Tight stop in low volatility
+            
+            # Tighten ATR multiplier as profit increases (lock in gains)
+            if current_pnl > 0.10:  # >10% profit
+                atr_multiplier *= 0.6  # Much tighter
+            elif current_pnl > 0.05:  # >5% profit
+                atr_multiplier *= 0.75  # Tighter
+            elif current_pnl > 0.03:  # >3% profit
+                atr_multiplier *= 0.85  # Slightly tighter
+            
+            # Calculate ATR-based Chandelier stop
+            if self.side == 'long':
+                # For longs: highest price minus (ATR * multiplier)
+                atr_stop = self.highest_price - (atr * atr_multiplier)
+                # Only move stop up, never down
+                if atr_stop > self.stop_loss:
+                    self.stop_loss = atr_stop
+                    self.trailing_stop_activated = True
+                    return
+            else:  # short
+                # For shorts: lowest price plus (ATR * multiplier)
+                atr_stop = self.lowest_price + (atr * atr_multiplier)
+                # Only move stop down, never up
+                if atr_stop < self.stop_loss:
+                    self.stop_loss = atr_stop
+                    self.trailing_stop_activated = True
+                    return
+        
+        # FALLBACK: Standard percentage-based trailing stop (if ATR not available)
         adaptive_trailing = trailing_percentage
         
         # 1. Volatility adjustment - tighter overall for profit protection
@@ -595,14 +638,140 @@ class Position:
             return False
         except (KeyError, ValueError, ZeroDivisionError, TypeError, pd.errors.EmptyDataError):
             return False
+    
+    def calculate_atr_profit_targets(self, atr: float) -> Dict[str, Dict[str, float]]:
+        """
+        Calculate institutional-grade partial profit targets based on ATR multiples
+        
+        INSTITUTIONAL STRATEGY: Scale out at multiple ATR-based levels to maximize
+        profit while maintaining position for trend continuation
+        
+        Args:
+            atr: Average True Range value
+        
+        Returns:
+            Dictionary with profit targets and scaling percentages
+        """
+        if not atr or atr <= 0:
+            return {}
+        
+        # ATR-based profit targets (institutional best practice)
+        # Take partial profits at 1x, 2x, and 3x ATR from entry
+        targets = {}
+        
+        if self.side == 'long':
+            # Long position targets
+            targets['1x_atr'] = {
+                'price': self.entry_price + atr,
+                'scale_out_pct': 0.25,  # Close 25% at 1x ATR
+                'description': 'First profit target - quick win'
+            }
+            targets['2x_atr'] = {
+                'price': self.entry_price + (2 * atr),
+                'scale_out_pct': 0.25,  # Close 25% at 2x ATR
+                'description': 'Second profit target - trending move'
+            }
+            targets['3x_atr'] = {
+                'price': self.entry_price + (3 * atr),
+                'scale_out_pct': 0.50,  # Close remaining 50% at 3x ATR
+                'description': 'Final profit target - strong trend'
+            }
+        else:  # short
+            # Short position targets
+            targets['1x_atr'] = {
+                'price': self.entry_price - atr,
+                'scale_out_pct': 0.25,  # Close 25% at 1x ATR
+                'description': 'First profit target - quick win'
+            }
+            targets['2x_atr'] = {
+                'price': self.entry_price - (2 * atr),
+                'scale_out_pct': 0.25,  # Close 25% at 2x ATR
+                'description': 'Second profit target - trending move'
+            }
+            targets['3x_atr'] = {
+                'price': self.entry_price - (3 * atr),
+                'scale_out_pct': 0.50,  # Close remaining 50% at 3x ATR
+                'description': 'Final profit target - strong trend'
+            }
+        
+        return targets
+    
+    def check_atr_profit_targets(self, current_price: float, atr: float, 
+                                 targets_hit: set = None) -> Tuple[bool, str, float]:
+        """
+        Check if any ATR-based profit targets have been hit
+        
+        Args:
+            current_price: Current market price
+            atr: Average True Range value
+            targets_hit: Set of already hit targets (to avoid duplicate partial exits)
+        
+        Returns:
+            Tuple of (should_scale_out, target_name, scale_out_percentage)
+        """
+        if not atr or atr <= 0:
+            return False, '', 0.0
+        
+        if targets_hit is None:
+            targets_hit = set()
+        
+        # Get all profit targets
+        targets = self.calculate_atr_profit_targets(atr)
+        
+        if not targets:
+            return False, '', 0.0
+        
+        # Check targets in order (1x, 2x, 3x ATR)
+        for target_name in ['1x_atr', '2x_atr', '3x_atr']:
+            if target_name in targets_hit:
+                continue  # Already hit this target
+            
+            target = targets[target_name]
+            target_price = target['price']
+            scale_pct = target['scale_out_pct']
+            
+            # Check if target is hit
+            if self.side == 'long':
+                if current_price >= target_price:
+                    return True, target_name, scale_pct
+            else:  # short
+                if current_price <= target_price:
+                    return True, target_name, scale_pct
+        
+        return False, '', 0.0
 
 
-    def should_close(self, current_price: float) -> tuple[bool, str]:
-        """Check if position should be closed"""
+    def should_close(self, current_price: float, max_hold_hours: float = 48.0) -> tuple[bool, str]:
+        """
+        Check if position should be closed with comprehensive exit logic
+        
+        Args:
+            current_price: Current market price
+            max_hold_hours: Maximum hours to hold position (default 48 hours / 2 days)
+        
+        Returns:
+            Tuple of (should_close, reason)
+        """
         # Calculate current P/L percentage
         # CRITICAL FIX: Use leveraged P&L to check ROI-based thresholds (20% profit = 20% ROI, not 20% price movement)
         # This ensures positions close at the correct profit/loss levels the user expects
         current_pnl = self.get_leveraged_pnl(current_price)
+        
+        # INSTITUTIONAL STRATEGY: Time-based stop loss to prevent stagnant positions
+        # Close positions that haven't moved significantly after extended time
+        position_age_hours = (datetime.now() - self.entry_time).total_seconds() / 3600
+        
+        # Time-based exit for stagnant positions (freeing up capital)
+        if position_age_hours > max_hold_hours:
+            # Close if position is near breakeven after max hold time
+            if abs(current_pnl) < 0.02:  # Less than 2% ROI either way
+                return True, f'time_based_exit_stagnant_{position_age_hours:.1f}h'
+        
+        # Time-based exit for unprofitable positions held too long
+        if position_age_hours > (max_hold_hours / 2):  # After half max hold time
+            # Close losing positions that aren't recovering
+            if current_pnl < -0.03 and current_pnl > -0.10:  # -3% to -10% range
+                return True, f'time_based_exit_losing_{position_age_hours:.1f}h'
         
         # CRITICAL SAFETY: Tiered emergency stop loss based on ROI to prevent catastrophic losses
         # These are absolute maximum loss caps that override all other logic
@@ -1331,10 +1500,18 @@ class PositionManager:
                         momentum = indicators.get('momentum', 0.0)
                         rsi = indicators.get('rsi', 50.0)
                         
+                        # INSTITUTIONAL STRATEGY: Calculate ATR for adaptive stops and profit targets
+                        atr = indicators.get('atr', None)
+                        if atr is None or atr <= 0:
+                            # Fallback: use BB width as volatility measure
+                            atr = volatility * current_price if volatility > 0 else None
+                        
                         self.position_logger.debug(f"  Market Indicators:")
                         self.position_logger.debug(f"    Volatility (BB Width): {volatility:.4f}")
                         self.position_logger.debug(f"    Momentum: {momentum:+.4f}")
                         self.position_logger.debug(f"    RSI: {rsi:.2f}")
+                        if atr:
+                            self.position_logger.debug(f"    ATR: {atr:.4f}")
                         
                         # Calculate support/resistance levels
                         support_resistance = Indicators.calculate_support_resistance(df)
@@ -1354,13 +1531,44 @@ class PositionManager:
                         
                         self.position_logger.debug(f"    Trend Strength: {trend_strength:.2f}")
                         
-                        # Update trailing stop with adaptive parameters
+                        # INSTITUTIONAL STRATEGY: Check ATR-based partial profit targets first
+                        if atr and atr > 0:
+                            should_scale, target_name, scale_pct = position.check_atr_profit_targets(
+                                current_price, atr, position.atr_targets_hit
+                            )
+                            
+                            if should_scale and target_name not in position.atr_targets_hit:
+                                # Mark target as hit
+                                position.atr_targets_hit.add(target_name)
+                                
+                                # Calculate amount to close
+                                amount_to_close = position.amount * scale_pct
+                                
+                                self.position_logger.info(
+                                    f"  🎯 ATR Profit Target Hit: {target_name} "
+                                    f"(scaling out {scale_pct*100:.0f}% at {format_price(current_price)})"
+                                )
+                                
+                                # Execute partial exit
+                                pnl_result = self.scale_out_position(
+                                    symbol, amount_to_close, f'atr_target_{target_name}'
+                                )
+                                
+                                if pnl_result is not None:
+                                    self.logger.info(
+                                        f"ATR partial exit: {symbol}, target {target_name}, "
+                                        f"closed {scale_pct*100:.0f}%, P/L: {pnl_result:.2%}"
+                                    )
+                                    # Don't yield here - position still exists after partial exit
+                        
+                        # Update trailing stop with adaptive parameters and ATR
                         old_stop = position.stop_loss
                         position.update_trailing_stop(
                             current_price, 
                             self.trailing_stop_percentage,
                             volatility=volatility,
-                            momentum=momentum
+                            momentum=momentum,
+                            atr=atr  # Pass ATR for Chandelier Exit
                         )
                         
                         if position.stop_loss != old_stop:
