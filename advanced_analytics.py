@@ -6,6 +6,8 @@ import pandas as pd
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 from logger import Logger
+import joblib
+import os
 
 class AdvancedAnalytics:
     """Calculate advanced risk and performance metrics"""
@@ -15,6 +17,10 @@ class AdvancedAnalytics:
         self.trade_history = []
         self.equity_curve = []
         self.max_history_size = max_history_size
+        self.state_path = 'models/analytics_state.pkl'
+        
+        # Load existing state if available
+        self.load_state()
     
     def record_trade(self, trade_data: Dict):
         """
@@ -419,3 +425,28 @@ class AdvancedAnalytics:
         summary += "=" * 70 + "\n"
         
         return summary
+    
+    def save_state(self):
+        """Save analytics state to disk"""
+        try:
+            os.makedirs('models', exist_ok=True)
+            joblib.dump({
+                'trade_history': self.trade_history,
+                'equity_curve': self.equity_curve,
+                'max_history_size': self.max_history_size
+            }, self.state_path)
+            self.logger.info(f"💾 Analytics state saved ({len(self.trade_history)} trades, {len(self.equity_curve)} equity points)")
+        except Exception as e:
+            self.logger.error(f"Error saving analytics state: {e}")
+    
+    def load_state(self):
+        """Load analytics state from disk"""
+        try:
+            if os.path.exists(self.state_path):
+                data = joblib.load(self.state_path)
+                self.trade_history = data.get('trade_history', [])
+                self.equity_curve = data.get('equity_curve', [])
+                self.max_history_size = data.get('max_history_size', 10000)
+                self.logger.info(f"📂 Analytics state loaded ({len(self.trade_history)} trades, {len(self.equity_curve)} equity points)")
+        except Exception as e:
+            self.logger.error(f"Error loading analytics state: {e}")

@@ -3,6 +3,8 @@ Risk management system for the trading bot
 """
 from typing import Dict, List, Tuple
 from logger import Logger
+import joblib
+import os
 try:
     import numpy as np
 except ImportError as e:
@@ -26,6 +28,7 @@ class RiskManager:
         self.risk_per_trade = risk_per_trade
         self.max_open_positions = max_open_positions
         self.logger = Logger.get_logger()
+        self.state_path = 'models/risk_manager_state.pkl'
         
         # Drawdown tracking for protection
         self.peak_balance = 0.0
@@ -68,6 +71,9 @@ class RiskManager:
             'meme': ['DOGE', 'SHIB', 'PEPE'],
             'exchange': ['BNB', 'OKB', 'FTT']
         }
+        
+        # Load existing state if available
+        self.load_state()
     
     def record_trade_outcome(self, pnl: float):
         """
@@ -1167,3 +1173,56 @@ class RiskManager:
         
         # All checks passed
         return True, "guardrails_passed"
+    
+    def save_state(self):
+        """Save risk manager state to disk"""
+        try:
+            os.makedirs('models', exist_ok=True)
+            joblib.dump({
+                'peak_balance': self.peak_balance,
+                'current_drawdown': self.current_drawdown,
+                'daily_start_balance': self.daily_start_balance,
+                'daily_loss': self.daily_loss,
+                'trading_date': self.trading_date,
+                'win_streak': self.win_streak,
+                'loss_streak': self.loss_streak,
+                'recent_trades': self.recent_trades,
+                'total_trades': self.total_trades,
+                'wins': self.wins,
+                'losses': self.losses,
+                'total_profit': self.total_profit,
+                'total_loss': self.total_loss
+            }, self.state_path)
+            self.logger.info(f"💾 Risk manager state saved ({self.total_trades} trades tracked)")
+        except Exception as e:
+            self.logger.error(f"Error saving risk manager state: {e}")
+    
+    def load_state(self):
+        """Load risk manager state from disk"""
+        try:
+            if os.path.exists(self.state_path):
+                data = joblib.load(self.state_path)
+                self.peak_balance = data.get('peak_balance', 0.0)
+                self.current_drawdown = data.get('current_drawdown', 0.0)
+                self.daily_start_balance = data.get('daily_start_balance', 0.0)
+                self.daily_loss = data.get('daily_loss', 0.0)
+                self.trading_date = data.get('trading_date', None)
+                self.win_streak = data.get('win_streak', 0)
+                self.loss_streak = data.get('loss_streak', 0)
+                self.recent_trades = data.get('recent_trades', [])
+                self.total_trades = data.get('total_trades', 0)
+                self.wins = data.get('wins', 0)
+                self.losses = data.get('losses', 0)
+                self.total_profit = data.get('total_profit', 0.0)
+                self.total_loss = data.get('total_loss', 0.0)
+                
+                # Reset trading_date if it's a new day
+                from datetime import date
+                if self.trading_date != date.today():
+                    self.trading_date = date.today()
+                    self.daily_start_balance = 0.0
+                    self.daily_loss = 0.0
+                
+                self.logger.info(f"📂 Risk manager state loaded ({self.total_trades} trades, win rate: {self.get_win_rate():.1%})")
+        except Exception as e:
+            self.logger.error(f"Error loading risk manager state: {e}")

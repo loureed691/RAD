@@ -37,6 +37,9 @@ class AttentionFeatureSelector:
         # Feature names for interpretability
         self.feature_names = self._get_default_feature_names()
         
+        # Load existing weights if available
+        self.load_weights()
+        
     def _get_default_feature_names(self) -> List[str]:
         """Get default feature names matching ml_model.py"""
         return [

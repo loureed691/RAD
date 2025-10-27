@@ -1540,6 +1540,7 @@ class TradingBot:
         # Initialize timing for full cycles
         last_full_cycle = datetime.now()
         last_memory_cleanup = datetime.now()
+        last_state_save = datetime.now()  # Track periodic state saving
         
         try:
             while self.running:
@@ -1558,6 +1559,12 @@ class TradingBot:
                     if time_since_cleanup > 1800:  # 30 minutes
                         self._perform_memory_cleanup()
                         last_memory_cleanup = datetime.now()
+                    
+                    # CRITICAL: Periodic state saving (every 5 minutes) to prevent data loss
+                    time_since_save = (datetime.now() - last_state_save).total_seconds()
+                    if time_since_save > 300:  # 5 minutes
+                        self._save_all_states()
+                        last_state_save = datetime.now()
                     
                     # Very short sleep to avoid CPU hogging while staying responsive
                     # Main loop is now lightweight - heavy work delegated to background threads
@@ -1623,6 +1630,55 @@ class TradingBot:
         except Exception as e:
             self.logger.error(f"Error during memory cleanup: {e}")
     
+    def _save_all_states(self):
+        """
+        Periodically save all component states to prevent data loss
+        Called every 5 minutes during runtime
+        """
+        try:
+            self.logger.debug("💾 Periodic state save...")
+            
+            # Save ML model
+            try:
+                self.ml_model.save_model()
+            except Exception as e:
+                self.logger.debug(f"Error saving ML model: {e}")
+            
+            # Save deep learning model
+            try:
+                self.deep_learning_predictor.save()
+            except Exception as e:
+                self.logger.debug(f"Error saving deep learning model: {e}")
+            
+            # Save RL Q-table
+            try:
+                self.rl_strategy.save_q_table()
+            except Exception as e:
+                self.logger.debug(f"Error saving RL Q-table: {e}")
+            
+            # Save attention weights
+            try:
+                self.attention_features_2025.save_weights()
+            except Exception as e:
+                self.logger.debug(f"Error saving attention weights: {e}")
+            
+            # Save analytics state
+            try:
+                self.analytics.save_state()
+            except Exception as e:
+                self.logger.debug(f"Error saving analytics state: {e}")
+            
+            # Save risk manager state
+            try:
+                self.risk_manager.save_state()
+            except Exception as e:
+                self.logger.debug(f"Error saving risk manager state: {e}")
+            
+            self.logger.debug("✅ Periodic state save complete")
+            
+        except Exception as e:
+            self.logger.error(f"Error during periodic state save: {e}")
+    
     def shutdown(self):
         """Clean shutdown of the bot"""
         self.logger.info("=" * 60)
@@ -1679,6 +1735,9 @@ class TradingBot:
                 except Exception as e:
                     self.logger.error(f"Error closing position {symbol} during shutdown: {e}")
         
+        # Save all component states to preserve data
+        self.logger.info("💾 Saving component states...")
+        
         # Save ML model to preserve training data and performance metrics
         try:
             self.ml_model.save_model()
@@ -1698,6 +1757,27 @@ class TradingBot:
             self.logger.info("💾 Reinforcement learning Q-table saved successfully")
         except Exception as e:
             self.logger.error(f"Error saving RL Q-table: {e}")
+        
+        # Save attention weights
+        try:
+            self.attention_features_2025.save_weights()
+            self.logger.info("💾 Attention weights saved successfully")
+        except Exception as e:
+            self.logger.error(f"Error saving attention weights: {e}")
+        
+        # Save analytics state
+        try:
+            self.analytics.save_state()
+            self.logger.info("💾 Analytics state saved successfully")
+        except Exception as e:
+            self.logger.error(f"Error saving analytics state: {e}")
+        
+        # Save risk manager state
+        try:
+            self.risk_manager.save_state()
+            self.logger.info("💾 Risk manager state saved successfully")
+        except Exception as e:
+            self.logger.error(f"Error saving risk manager state: {e}")
         
         # Close WebSocket and API connections
         try:
