@@ -27,7 +27,7 @@ class TestStatePersistence(unittest.TestCase):
         # Temporarily override models directory
         self.models_backup = None
         if os.path.exists('models'):
-            self.models_backup = 'models_backup_' + str(int(datetime.now().timestamp()))
+            self.models_backup = tempfile.mkdtemp(prefix='models_backup_')
             shutil.move('models', self.models_backup)
         
         # Create new models directory for testing
