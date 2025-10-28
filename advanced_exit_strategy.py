@@ -371,3 +371,147 @@ class AdvancedExitStrategy:
                 break
         
         return applicable_trailing
+    
+    def calculate_atr_profit_targets(self, entry_price: float,
+                                     atr: float,
+                                     position_side: str,
+                                     atr_multiples: list = None) -> list:
+        """
+        Calculate profit targets based on ATR (Average True Range) - ENHANCED
+        More dynamic than fixed percentage targets
+        
+        Args:
+            entry_price: Entry price
+            atr: Average True Range value
+            position_side: 'long' or 'short'
+            atr_multiples: List of ATR multiples for targets
+            
+        Returns:
+            List of profit target prices
+        """
+        if atr_multiples is None:
+            # Default: 2x, 3x, and 5x ATR
+            atr_multiples = [2.0, 3.0, 5.0]
+        
+        targets = []
+        for multiple in atr_multiples:
+            if position_side == 'long':
+                target_price = entry_price + (atr * multiple)
+            else:  # short
+                target_price = entry_price - (atr * multiple)
+            
+            targets.append({
+                'price': target_price,
+                'atr_multiple': multiple,
+                'distance_pct': abs(target_price - entry_price) / entry_price
+            })
+        
+        return targets
+    
+    def detect_trend_acceleration(self, momentum_history: list,
+                                 volume_history: list,
+                                 lookback: int = 5) -> Dict:
+        """
+        Detect if trend is accelerating (good for letting winners run) - ENHANCED
+        
+        Args:
+            momentum_history: List of recent momentum values
+            volume_history: List of recent volume ratios
+            lookback: Number of periods to analyze
+            
+        Returns:
+            Dict with acceleration status and strength
+        """
+        if not momentum_history or len(momentum_history) < lookback:
+            return {'accelerating': False, 'strength': 0.0}
+        
+        try:
+            recent_momentum = momentum_history[-lookback:]
+            recent_volume = volume_history[-lookback:] if len(volume_history) >= lookback else []
+            
+            # Check if momentum is increasing
+            momentum_slope = 0
+            for i in range(1, len(recent_momentum)):
+                if abs(recent_momentum[i]) > abs(recent_momentum[i-1]):
+                    momentum_slope += 1
+            
+            momentum_increasing = momentum_slope > (lookback * 0.6)  # 60% of the time
+            
+            # Check if volume is increasing (confirmation)
+            volume_increasing = False
+            if recent_volume:
+                volume_slope = sum(1 for i in range(1, len(recent_volume)) 
+                                 if recent_volume[i] > recent_volume[i-1])
+                volume_increasing = volume_slope > (lookback * 0.5)
+            
+            # Calculate acceleration strength
+            if momentum_increasing and volume_increasing:
+                strength = 1.0
+            elif momentum_increasing or volume_increasing:
+                strength = 0.6
+            else:
+                strength = 0.0
+            
+            return {
+                'accelerating': strength > 0.5,
+                'strength': strength,
+                'momentum_increasing': momentum_increasing,
+                'volume_increasing': volume_increasing
+            }
+            
+        except Exception as e:
+            self.logger.debug(f"Error detecting trend acceleration: {e}")
+            return {'accelerating': False, 'strength': 0.0}
+    
+    def detect_exhaustion(self, rsi: float,
+                         volume_ratio: float,
+                         position_side: str,
+                         price_distance_from_entry: float) -> Dict:
+        """
+        Detect trend exhaustion signals for early exit - ENHANCED
+        
+        Args:
+            rsi: Current RSI value
+            volume_ratio: Current volume vs average
+            position_side: 'long' or 'short'
+            price_distance_from_entry: Distance from entry as percentage
+            
+        Returns:
+            Dict with exhaustion status and reason
+        """
+        exhausted = False
+        reasons = []
+        severity = 0.0
+        
+        # Check for extreme RSI
+        if position_side == 'long':
+            if rsi > 80:  # Extreme overbought
+                exhausted = True
+                severity += 0.5
+                reasons.append(f'extreme overbought (RSI: {rsi:.1f})')
+            elif rsi > 75 and volume_ratio < 1.0:  # Overbought with declining volume
+                exhausted = True
+                severity += 0.3
+                reasons.append(f'overbought with weak volume (RSI: {rsi:.1f}, vol: {volume_ratio:.2f})')
+        else:  # short
+            if rsi < 20:  # Extreme oversold
+                exhausted = True
+                severity += 0.5
+                reasons.append(f'extreme oversold (RSI: {rsi:.1f})')
+            elif rsi < 25 and volume_ratio < 1.0:  # Oversold with declining volume
+                exhausted = True
+                severity += 0.3
+                reasons.append(f'oversold with weak volume (RSI: {rsi:.1f}, vol: {volume_ratio:.2f})')
+        
+        # Check for extended move
+        if abs(price_distance_from_entry) > 0.08:  # More than 8% move
+            if volume_ratio < 0.8:  # Declining volume on extended move
+                exhausted = True
+                severity += 0.4
+                reasons.append(f'extended move with declining volume ({price_distance_from_entry:.1%}, vol: {volume_ratio:.2f})')
+        
+        return {
+            'exhausted': exhausted,
+            'severity': min(severity, 1.0),
+            'reasons': reasons
+        }

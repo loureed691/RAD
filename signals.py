@@ -167,10 +167,10 @@ class SignalGenerator:
     
     def detect_market_regime(self, df: pd.DataFrame) -> str:
         """
-        Detect market regime to adapt strategy
+        Detect market regime to adapt strategy - ENHANCED with more granular detection
         
         Returns:
-            'trending', 'ranging', or 'neutral'
+            'trending', 'ranging', 'neutral', 'volatile', or 'consolidating'
         """
         if df.empty or len(df) < 20:
             return 'neutral'
@@ -181,6 +181,15 @@ class SignalGenerator:
         volatility = indicators.get('bb_width', 0)
         momentum = abs(indicators.get('momentum', 0))
         roc = abs(indicators.get('roc', 0))
+        volume_ratio = indicators.get('volume_ratio', 1.0)
+        
+        # ENHANCED: Check for volatility spike
+        if volatility > 0.08:  # Very high volatility
+            return 'volatile'
+        
+        # ENHANCED: Check for consolidation (low volatility + low volume)
+        if volatility < 0.015 and momentum < 0.008 and volume_ratio < 0.9:
+            return 'consolidating'
         
         # Strong trend indicators
         if momentum > 0.03 or roc > 3.0:
@@ -190,6 +199,69 @@ class SignalGenerator:
             return 'ranging'
         
         return 'neutral'
+    
+    def detect_market_structure(self, df: pd.DataFrame) -> Dict:
+        """
+        Detect market structure: higher highs/lower lows, trend strength
+        ENHANCED: Better trend validation
+        
+        Returns:
+            Dict with market structure info
+        """
+        if df.empty or len(df) < 20:
+            return {'structure': 'neutral', 'strength': 0.0}
+        
+        try:
+            # Look at recent price action
+            recent_df = df.tail(20)
+            closes = recent_df['close'].values
+            highs = recent_df['high'].values
+            lows = recent_df['low'].values
+            
+            # Find swing points
+            swing_highs = []
+            swing_lows = []
+            
+            for i in range(2, len(highs) - 2):
+                # Swing high: higher than 2 bars on each side
+                if highs[i] > max(highs[i-2:i]) and highs[i] > max(highs[i+1:i+3]):
+                    swing_highs.append(highs[i])
+                # Swing low: lower than 2 bars on each side
+                if lows[i] < min(lows[i-2:i]) and lows[i] < min(lows[i+1:i+3]):
+                    swing_lows.append(lows[i])
+            
+            # Determine structure
+            structure = 'neutral'
+            strength = 0.0
+            
+            if len(swing_highs) >= 2 and len(swing_lows) >= 2:
+                # Check for higher highs and higher lows (uptrend)
+                hh_count = sum(1 for i in range(1, len(swing_highs)) if swing_highs[i] > swing_highs[i-1])
+                hl_count = sum(1 for i in range(1, len(swing_lows)) if swing_lows[i] > swing_lows[i-1])
+                
+                # Check for lower highs and lower lows (downtrend)
+                lh_count = sum(1 for i in range(1, len(swing_highs)) if swing_highs[i] < swing_highs[i-1])
+                ll_count = sum(1 for i in range(1, len(swing_lows)) if swing_lows[i] < swing_lows[i-1])
+                
+                # Uptrend: more HH and HL
+                if hh_count + hl_count > lh_count + ll_count:
+                    structure = 'uptrend'
+                    strength = (hh_count + hl_count) / (len(swing_highs) + len(swing_lows) - 2)
+                # Downtrend: more LH and LL
+                elif lh_count + ll_count > hh_count + hl_count:
+                    structure = 'downtrend'
+                    strength = (lh_count + ll_count) / (len(swing_highs) + len(swing_lows) - 2)
+            
+            return {
+                'structure': structure,
+                'strength': min(strength, 1.0),
+                'swing_highs': len(swing_highs),
+                'swing_lows': len(swing_lows)
+            }
+            
+        except Exception as e:
+            self.logger.debug(f"Error detecting market structure: {e}")
+            return {'structure': 'neutral', 'strength': 0.0}
     
     def analyze_multi_timeframe(self, df_1h: pd.DataFrame, df_4h: pd.DataFrame = None, 
                                df_1d: pd.DataFrame = None) -> Dict:
@@ -285,6 +357,9 @@ class SignalGenerator:
         
         # Detect market regime for adaptive strategy
         self.market_regime = self.detect_market_regime(df)
+        
+        # ENHANCED: Detect market structure
+        market_structure = self.detect_market_structure(df)
         
         # Detect divergences for additional signal strength
         divergence = self.detect_divergence(df)
@@ -453,6 +528,18 @@ class SignalGenerator:
                 reasons['divergence'] = 'bearish divergence detected'
                 self.logger.info(f"🔍 Bearish divergence detected (strength: {divergence['strength']:.1f})")
         
+        # 11. Market Structure Confirmation (ENHANCED - NEW)
+        if market_structure['strength'] > 0.5:
+            structure_weight = market_structure['strength'] * 2.5
+            if market_structure['structure'] == 'uptrend':
+                buy_signals += structure_weight
+                reasons['market_structure'] = f"strong uptrend (strength: {market_structure['strength']:.1f})"
+                self.logger.debug(f"📊 Strong uptrend structure detected")
+            elif market_structure['structure'] == 'downtrend':
+                sell_signals += structure_weight
+                reasons['market_structure'] = f"strong downtrend (strength: {market_structure['strength']:.1f})"
+                self.logger.debug(f"📊 Strong downtrend structure detected")
+        
         total_signals = buy_signals + sell_signals
         
         # Calculate confidence
@@ -473,11 +560,17 @@ class SignalGenerator:
             confidence = 0.0
             reasons['equal_signals'] = 'buy and sell signals balanced'
         
-        # Adaptive threshold based on market regime - MORE CONSERVATIVE
+        # Adaptive threshold based on market regime - MORE CONSERVATIVE (ENHANCED)
         if self.market_regime == 'trending':
             min_confidence = 0.58  # INCREASED from 0.52 for better quality
         elif self.market_regime == 'ranging':
             min_confidence = 0.65  # INCREASED from 0.58 - ranging markets are riskier
+        elif self.market_regime == 'volatile':
+            min_confidence = 0.72  # NEW: Very high threshold for volatile markets
+            reasons['regime_note'] = 'volatile market - high threshold'
+        elif self.market_regime == 'consolidating':
+            min_confidence = 0.68  # NEW: High threshold for consolidation (breakout plays risky)
+            reasons['regime_note'] = 'consolidating market - wait for breakout'
         else:
             min_confidence = self.adaptive_threshold
         

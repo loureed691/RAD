@@ -341,20 +341,77 @@ class AdaptiveStrategySelector2026:
             f"trades={perf['trades']}, win_rate={perf['win_rate']:.2%}"
         )
     
+    def calculate_dynamic_strategy_weights(self, market_regime: str,
+                                          volatility: float) -> Dict[str, float]:
+        """
+        Calculate dynamic strategy weights based on market conditions - ENHANCED
+        
+        Args:
+            market_regime: Current market regime
+            volatility: Market volatility
+            
+        Returns:
+            Dict of strategy weights
+        """
+        weights = {}
+        
+        for strategy_name, strategy_info in self.strategies.items():
+            if not strategy_info['active']:
+                weights[strategy_name] = 0.0
+                continue
+            
+            # Start with base weight
+            weight = strategy_info['weight']
+            
+            # ENHANCED: Adjust based on regime match
+            if market_regime in strategy_info['best_regimes']:
+                weight *= 1.5  # 50% boost for matching regime
+            
+            # ENHANCED: Adjust based on recent performance with decay
+            perf = strategy_info['performance']
+            if perf['trades'] >= 10:
+                # Weight by win rate (0.5 to 1.5 multiplier)
+                performance_multiplier = 0.5 + perf['win_rate']
+                weight *= performance_multiplier
+            
+            # ENHANCED: Volatility-specific adjustments
+            if strategy_name == 'breakout' and volatility < 0.3:
+                weight *= 1.3  # Breakouts better in low volatility
+            elif strategy_name == 'mean_reversion' and volatility < 0.4:
+                weight *= 1.2  # Mean reversion better in moderate volatility
+            elif strategy_name == 'momentum' and volatility > 0.4:
+                weight *= 0.7  # Momentum riskier in high volatility
+            
+            weights[strategy_name] = weight
+        
+        # Normalize weights
+        total_weight = sum(weights.values())
+        if total_weight > 0:
+            weights = {k: v / total_weight for k, v in weights.items()}
+        
+        return weights
+    
     def get_strategy_ensemble_signal(self, indicators: Dict,
                                     base_signal: str,
-                                    base_confidence: float) -> Tuple[str, float]:
+                                    base_confidence: float,
+                                    market_regime: str = 'neutral',
+                                    volatility: float = 0.5) -> Tuple[str, float]:
         """
-        Get ensemble signal from multiple strategies
+        Get ensemble signal from multiple strategies - ENHANCED with dynamic weighting
         
         Args:
             indicators: Technical indicators
             base_signal: Base signal from primary analysis
             base_confidence: Base confidence score
+            market_regime: Current market regime (for dynamic weighting)
+            volatility: Market volatility (for dynamic weighting)
             
         Returns:
             Tuple of (ensemble_signal, ensemble_confidence)
         """
+        # ENHANCED: Calculate dynamic weights
+        dynamic_weights = self.calculate_dynamic_strategy_weights(market_regime, volatility)
+        
         strategy_votes = {'BUY': 0, 'SELL': 0, 'HOLD': 0}
         confidence_sum = 0.0
         vote_count = 0
@@ -368,8 +425,8 @@ class AdaptiveStrategySelector2026:
                 strategy_name, indicators, base_signal, base_confidence
             )
             
-            # Weight vote by strategy weight
-            weight = strategy_info['weight']
+            # ENHANCED: Use dynamic weight instead of static weight
+            weight = dynamic_weights.get(strategy_name, strategy_info['weight'])
             strategy_votes[signal] += weight
             confidence_sum += conf * weight
             vote_count += weight
@@ -380,9 +437,9 @@ class AdaptiveStrategySelector2026:
         # Calculate ensemble confidence
         ensemble_confidence = confidence_sum / vote_count if vote_count > 0 else 0.0
         
-        # Require majority agreement (>50% of weight)
+        # ENHANCED: Stricter majority requirement (>55% of weight)
         winning_weight = strategy_votes[ensemble_signal]
-        if winning_weight < 0.5:
+        if winning_weight < 0.55:
             return 'HOLD', 0.0
         
         return ensemble_signal, ensemble_confidence

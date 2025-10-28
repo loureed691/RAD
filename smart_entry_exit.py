@@ -26,7 +26,7 @@ class SmartEntryExit:
                             signal: str,
                             volatility: float) -> Dict:
         """
-        Analyze order book to determine optimal entry timing
+        Analyze order book to determine optimal entry timing - ENHANCED with deeper analysis
         
         Args:
             orderbook: Order book with bids and asks
@@ -46,8 +46,8 @@ class SmartEntryExit:
                     'reason': 'No order book data'
                 }
             
-            bids = orderbook['bids'][:10]  # Top 10 bids
-            asks = orderbook['asks'][:10]  # Top 10 asks
+            bids = orderbook['bids'][:20]  # ENHANCED: Use top 20 for better depth analysis
+            asks = orderbook['asks'][:20]  # ENHANCED: Use top 20 for better depth analysis
             
             if not bids or not asks:
                 return {
@@ -61,12 +61,32 @@ class SmartEntryExit:
             bid_volume = sum([bid[1] for bid in bids])
             ask_volume = sum([ask[1] for ask in asks])
             
+            # ENHANCED: Calculate weighted depth (first 5 vs next 15)
+            bid_volume_near = sum([bid[1] for bid in bids[:5]])
+            ask_volume_near = sum([ask[1] for ask in asks[:5]])
+            bid_volume_far = sum([bid[1] for bid in bids[5:]])
+            ask_volume_far = sum([ask[1] for ask in asks[5:]])
+            
             # Order book imbalance (OBI)
             total_volume = bid_volume + ask_volume
             if total_volume > 0:
                 obi = (bid_volume - ask_volume) / total_volume
             else:
                 obi = 0.0
+            
+            # ENHANCED: Calculate depth-weighted OBI
+            total_volume_near = bid_volume_near + ask_volume_near
+            if total_volume_near > 0:
+                obi_near = (bid_volume_near - ask_volume_near) / total_volume_near
+            else:
+                obi_near = 0.0
+            
+            # ENHANCED: Detect order book walls (large orders)
+            avg_bid_size = bid_volume / len(bids) if bids else 0
+            avg_ask_size = ask_volume / len(asks) if asks else 0
+            
+            bid_wall = any(bid[1] > avg_bid_size * 3 for bid in bids[:5])  # 3x average in top 5
+            ask_wall = any(ask[1] > avg_ask_size * 3 for ask in asks[:5])
             
             # Spread analysis
             best_bid = bids[0][0]
@@ -100,6 +120,21 @@ class SmartEntryExit:
                         optimal_entry = best_bid + (best_ask - best_bid) * 0.3
                         reason.append('wide spread - use limit order')
                 
+                # ENHANCED: Check near-price OBI for immediate pressure
+                if obi_near > 0.25:  # Very strong near bid pressure
+                    timing_score += 0.15
+                    reason.append('strong near-price bid pressure')
+                
+                # ENHANCED: Bid wall detected (support level)
+                if bid_wall:
+                    timing_score += 0.1
+                    reason.append('bid wall detected (strong support)')
+                
+                # ENHANCED: Ask wall warning (resistance)
+                if ask_wall:
+                    timing_score -= 0.1
+                    reason.append('ask wall detected (resistance ahead)')
+                
                 # Check for liquidity
                 if near_liquidity > bid_volume * 0.3:
                     timing_score += 0.15
@@ -118,6 +153,21 @@ class SmartEntryExit:
                         recommendation = 'limit'
                         optimal_entry = best_ask - (best_ask - best_bid) * 0.3
                         reason.append('wide spread - use limit order')
+                
+                # ENHANCED: Check near-price OBI for immediate pressure
+                if obi_near < -0.25:  # Very strong near ask pressure
+                    timing_score += 0.15
+                    reason.append('strong near-price ask pressure')
+                
+                # ENHANCED: Ask wall detected (resistance level)
+                if ask_wall:
+                    timing_score += 0.1
+                    reason.append('ask wall detected (strong resistance)')
+                
+                # ENHANCED: Bid wall warning (support)
+                if bid_wall:
+                    timing_score -= 0.1
+                    reason.append('bid wall detected (support below)')
                 
                 # Check for liquidity
                 if near_liquidity > ask_volume * 0.3:
