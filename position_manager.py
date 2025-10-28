@@ -792,7 +792,7 @@ class PositionManager:
         # but protects against future multi-threaded enhancements
         self._positions_lock = threading.Lock()
     
-    def _get_price_for_pnl(self, ticker: Dict) -> tuple[Optional[float], str]:
+    def _get_price_for_pnl(self, ticker: Dict) -> Tuple[Optional[float], str]:
         """Extract the appropriate price for P&L calculation from ticker data
         
         KUCOIN P&L FIX: Use mark price to match KuCoin's P&L calculations exactly.
