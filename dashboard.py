@@ -595,7 +595,7 @@ class TradingDashboard:
                 'xaxis': {'title': 'Time', 'color': '#ffffff'},
                 'yaxis': {'title': 'Balance (USDT)', 'color': '#ffffff'},
                 'plot_bgcolor': '#1a1a1a',
-                'paper_bgcolor': '#2a2a2a',
+                'paper_bgcolor': '#1a1a1a',
                 'font': {'color': '#ffffff'},
                 'margin': {'l': 50, 'r': 20, 't': 20, 'b': 50}
             }
@@ -662,7 +662,9 @@ class TradingDashboard:
             hovermode='x unified'
         )
         
-        # Generate HTML without Plotly.js (already included by first chart)
+        # Generate HTML without Plotly.js (already included by equity chart above)
+        # This approach reduces page size by ~3MB since both charts are always
+        # rendered together on the dashboard
         return fig.to_html(include_plotlyjs=False, full_html=False, config={'responsive': True})
     
     def update_stats(self, stats: Dict):
@@ -724,7 +726,7 @@ class TradingDashboard:
                 'xaxis': {'title': 'Time', 'color': '#ffffff'},
                 'yaxis': {'title': 'Drawdown (%)', 'color': '#ffffff'},
                 'plot_bgcolor': '#1a1a1a',
-                'paper_bgcolor': '#2a2a2a',
+                'paper_bgcolor': '#1a1a1a',
                 'font': {'color': '#ffffff'},
                 'margin': {'l': 50, 'r': 20, 't': 20, 'b': 50}
             }
