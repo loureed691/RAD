@@ -1257,6 +1257,27 @@ class PositionManager:
     
     def update_positions(self):
         """Update all positions and manage trailing stops with adaptive parameters"""
+        # CRITICAL FIX: Clean up positions that were closed externally before processing
+        # This prevents the position manager from trying to manage already-closed positions
+        try:
+            exchange_positions = self.client.get_open_positions()
+            exchange_symbols = {pos.get('symbol') for pos in exchange_positions if pos.get('symbol')}
+            
+            # Thread-safe cleanup of positions not on exchange
+            with self._positions_lock:
+                local_symbols = set(self.positions.keys())
+                orphaned_symbols = local_symbols - exchange_symbols
+                
+                if orphaned_symbols:
+                    self.logger.info(f"Cleaning up {len(orphaned_symbols)} positions that were closed externally: {orphaned_symbols}")
+                    for symbol in orphaned_symbols:
+                        self.position_logger.info(f"Removing externally closed position from tracking: {symbol}")
+                        del self.positions[symbol]
+        except Exception as e:
+            # If we can't check exchange positions, log and continue
+            # Better to process with potentially stale data than to skip entirely
+            self.logger.warning(f"Unable to verify positions on exchange during update: {e}")
+        
         # Get a thread-safe snapshot of positions to iterate over
         with self._positions_lock:
             positions_snapshot = list(self.positions.keys())
