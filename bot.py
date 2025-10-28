@@ -1354,12 +1354,19 @@ class TradingBot:
                 leverage = getattr(pos, 'leverage', 1)
                 side = getattr(pos, 'side', 'long')
                 
+                # Calculate price change percentage (unleveraged)
                 if side == 'long':
-                    pnl_percent = ((current_price - entry_price) / entry_price) * leverage if entry_price > 0 else 0
+                    price_change_pct = ((current_price - entry_price) / entry_price) if entry_price > 0 else 0
                 else:
-                    pnl_percent = ((entry_price - current_price) / entry_price) * leverage if entry_price > 0 else 0
+                    price_change_pct = ((entry_price - current_price) / entry_price) if entry_price > 0 else 0
                 
-                unrealized_pnl = pnl_percent * (amount * entry_price)
+                # Calculate ROI percentage (leveraged) for display
+                pnl_percent = price_change_pct * leverage
+                
+                # Calculate unrealized P&L in USD (unleveraged, matching KuCoin display)
+                # KuCoin shows unleveraged P&L: (price_change %) * (position_value)
+                # This matches the actual USD profit/loss on the position
+                unrealized_pnl = price_change_pct * (amount * entry_price)
                 
                 # Calculate duration
                 entry_time = getattr(pos, 'entry_time', datetime.now())
