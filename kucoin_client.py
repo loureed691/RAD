@@ -1250,27 +1250,9 @@ class KuCoinClient:
             if order.get('cost'):
                 self.orders_logger.info(f"  Total Cost: {order.get('cost')}")
             self.orders_logger.info(f"  Status: {order.get('status', 'N/A')}")
-            # Format timestamp if available
+            # Display timestamp exactly as KuCoin returns it (in milliseconds)
             timestamp = order.get('timestamp', 'N/A')
-            if timestamp and timestamp != 'N/A':
-                try:
-                    from datetime import datetime
-                    # Heuristic: if timestamp > 10^12, it's milliseconds; if < 10^10, it's seconds
-                    ts = float(timestamp)
-                    if ts > 1e12:
-                        ts = ts / 1000.0
-                    elif ts < 1e10:
-                        ts = ts
-                    else:
-                        # Ambiguous, log a warning and assume milliseconds
-                        self.orders_logger.warning(f"Ambiguous timestamp units for value: {timestamp}, assuming milliseconds.")
-                        ts = ts / 1000.0
-                    timestamp_str = datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
-                    self.orders_logger.info(f"  Timestamp: {timestamp_str}")
-                except Exception as e:
-                    self.orders_logger.info(f"  Timestamp: {timestamp} (error: {e})")
-            else:
-                self.orders_logger.info(f"  Timestamp: N/A")
+            self.orders_logger.info(f"  Timestamp: {timestamp}")
             
             # Check actual slippage if we have both prices
             if order.get('average'):
