@@ -126,8 +126,8 @@ class TestPreventDoubleClose(unittest.TestCase):
         # The position should be cleaned up silently
         self.assertEqual(len(closed_positions), 0)
         
-        # Note: The position won't be removed here because update_positions
-        # doesn't check exchange state - it only checks when close_position is called
+        # Note: The position will be cleaned up during the close attempt within update_positions(),
+        # as update_positions now re-checks for position existence after updates.
     
     def test_close_position_not_in_tracking(self):
         """Test that close_position returns None when position not in local tracking"""
