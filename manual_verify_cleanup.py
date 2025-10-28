@@ -19,6 +19,18 @@ with patch('logger.Logger.get_logger'), \
      patch('logger.Logger.get_orders_logger'):
     from position_manager import PositionManager, Position
 
+
+def exhaust_generator(gen):
+    """
+    Consume a generator to execute its code.
+    
+    The position manager's update_positions() is a generator that performs
+    cleanup at the start and yields closed positions. We need to consume
+    it to trigger the cleanup logic.
+    """
+    for _ in gen:
+        pass
+
 def scenario_1():
     """Scenario 1: Position exists locally but was closed externally"""
     print("Scenario 1: Position closed externally")
@@ -48,10 +60,9 @@ def scenario_1():
     mock_client.get_open_positions = Mock(return_value=[])
     print(f"✓ Exchange returns: No open positions (closed externally)")
     
-    # Update positions (should clean up the orphaned position)
-    # Exhaust the generator to trigger the cleanup
-    for _ in pm.update_positions():
-        pass
+    # Trigger update_positions() to execute cleanup logic
+    # The cleanup happens at the start of the generator, before yielding any closed positions
+    exhaust_generator(pm.update_positions())
     
     print(f"  Position count after update: {len(pm.positions)}")
     
@@ -100,9 +111,8 @@ def scenario_2():
     
     print(f"✓ Exchange returns: 1 open position (BTC/USDT:USDT)")
     
-    # Update positions
-    for _ in pm.update_positions():
-        pass
+    # Trigger update_positions() to execute cleanup logic
+    exhaust_generator(pm.update_positions())
     
     print(f"  Position count after update: {len(pm.positions)}")
     print(f"  Remaining positions: {list(pm.positions.keys())}")
@@ -149,9 +159,8 @@ def scenario_3():
     
     print(f"✓ Exchange returns: {len(mock_client.get_open_positions())} open positions")
     
-    # Update positions
-    for _ in pm.update_positions():
-        pass
+    # Trigger update_positions() to execute cleanup logic
+    exhaust_generator(pm.update_positions())
     
     print(f"  Position count after update: {len(pm.positions)}")
     
