@@ -49,7 +49,9 @@ def scenario_1():
     print(f"✓ Exchange returns: No open positions (closed externally)")
     
     # Update positions (should clean up the orphaned position)
-    list(pm.update_positions())
+    # Exhaust the generator to trigger the cleanup
+    for _ in pm.update_positions():
+        pass
     
     print(f"  Position count after update: {len(pm.positions)}")
     
@@ -99,7 +101,8 @@ def scenario_2():
     print(f"✓ Exchange returns: 1 open position (BTC/USDT:USDT)")
     
     # Update positions
-    list(pm.update_positions())
+    for _ in pm.update_positions():
+        pass
     
     print(f"  Position count after update: {len(pm.positions)}")
     print(f"  Remaining positions: {list(pm.positions.keys())}")
@@ -147,7 +150,8 @@ def scenario_3():
     print(f"✓ Exchange returns: {len(mock_client.get_open_positions())} open positions")
     
     # Update positions
-    list(pm.update_positions())
+    for _ in pm.update_positions():
+        pass
     
     print(f"  Position count after update: {len(pm.positions)}")
     
