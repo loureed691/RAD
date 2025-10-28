@@ -272,7 +272,6 @@ class TradingDashboard:
                     }
                 }
             </style>
-            <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
         </head>
         <body>
             <div class="container">
@@ -337,11 +336,11 @@ class TradingDashboard:
                 <div class="two-column">
                     <div class="chart-container">
                         <h3>Equity Curve</h3>
-                        <div id="equityChart"></div>
+                        {{ equity_chart_html|safe }}
                     </div>
                     <div class="chart-container">
                         <h3>Drawdown</h3>
-                        <div id="drawdownChart"></div>
+                        {{ drawdown_chart_html|safe }}
                     </div>
                 </div>
                 
@@ -540,32 +539,22 @@ class TradingDashboard:
                     </div>
                 </div>
             </div>
-            
-            <script>
-                // Equity curve chart
-                var equityData = {{ equity_chart_data|safe }};
-                Plotly.newPlot('equityChart', equityData.data, equityData.layout, {responsive: true});
-                
-                // Drawdown chart
-                var drawdownData = {{ drawdown_chart_data|safe }};
-                Plotly.newPlot('drawdownChart', drawdownData.data, drawdownData.layout, {responsive: true});
-            </script>
         </body>
         </html>
         """
         
         @self.app.route('/')
         def dashboard():
-            # Generate equity chart
-            equity_chart = self.generate_equity_chart()
-            drawdown_chart = self.generate_drawdown_chart()
+            # Generate equity and drawdown charts as HTML
+            equity_chart_html = self.generate_equity_chart_html()
+            drawdown_chart_html = self.generate_drawdown_chart_html()
             
             return render_template_string(
                 dashboard_html,
                 stats=self.stats,
                 recent_trades=self.recent_trades[-20:],  # Last 20 trades
-                equity_chart_data=json.dumps(equity_chart),
-                drawdown_chart_data=json.dumps(drawdown_chart),
+                equity_chart_html=equity_chart_html,
+                drawdown_chart_html=drawdown_chart_html,
                 open_positions=self.open_positions,
                 risk_metrics=self.risk_metrics,
                 strategy_info=self.strategy_info,
@@ -611,6 +600,70 @@ class TradingDashboard:
                 'margin': {'l': 50, 'r': 20, 't': 20, 'b': 50}
             }
         }
+    
+    def generate_equity_chart_html(self) -> str:
+        """Generate Plotly equity curve chart as HTML"""
+        if not self.equity_data:
+            return '<div class="no-data">No equity data available</div>'
+        
+        timestamps = [point['timestamp'] for point in self.equity_data]
+        balances = [point['balance'] for point in self.equity_data]
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=timestamps,
+            y=balances,
+            mode='lines',
+            name='Balance',
+            line=dict(color='#00ff88', width=2)
+        ))
+        
+        fig.update_layout(
+            xaxis=dict(title='Time', color='#ffffff', gridcolor='#333'),
+            yaxis=dict(title='Balance (USDT)', color='#ffffff', gridcolor='#333'),
+            plot_bgcolor='#1a1a1a',
+            paper_bgcolor='#1a1a1a',
+            font=dict(color='#ffffff'),
+            margin=dict(l=50, r=20, t=20, b=50),
+            height=300,
+            hovermode='x unified'
+        )
+        
+        # Generate HTML with Plotly.js embedded (self-contained, no CDN)
+        return fig.to_html(include_plotlyjs=True, full_html=False, config={'responsive': True})
+    
+    def generate_drawdown_chart_html(self) -> str:
+        """Generate Plotly drawdown chart as HTML"""
+        if not self.drawdown_data:
+            return '<div class="no-data">No drawdown data available</div>'
+        
+        timestamps = [point['timestamp'] for point in self.drawdown_data]
+        drawdowns = [point['drawdown'] for point in self.drawdown_data]
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=timestamps,
+            y=drawdowns,
+            mode='lines',
+            name='Drawdown',
+            line=dict(color='#ff4444', width=2),
+            fill='tozeroy',
+            fillcolor='rgba(255, 68, 68, 0.2)'
+        ))
+        
+        fig.update_layout(
+            xaxis=dict(title='Time', color='#ffffff', gridcolor='#333'),
+            yaxis=dict(title='Drawdown (%)', color='#ffffff', gridcolor='#333'),
+            plot_bgcolor='#1a1a1a',
+            paper_bgcolor='#1a1a1a',
+            font=dict(color='#ffffff'),
+            margin=dict(l=50, r=20, t=20, b=50),
+            height=300,
+            hovermode='x unified'
+        )
+        
+        # Generate HTML without Plotly.js (already included by first chart)
+        return fig.to_html(include_plotlyjs=False, full_html=False, config={'responsive': True})
     
     def update_stats(self, stats: Dict):
         """Update dashboard statistics"""
