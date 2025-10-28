@@ -1122,8 +1122,34 @@ class PositionManager:
             # Thread-safe position check and retrieval
             with self._positions_lock:
                 if symbol not in self.positions:
+                    self.logger.debug(f"Position {symbol} not in local tracking, already closed")
                     return None
                 position = self.positions[symbol]
+            
+            # CRITICAL FIX: Check if position actually exists on exchange before attempting close
+            # This prevents trying to close already-closed positions
+            exchange_positions = self.client.get_open_positions()
+            position_exists_on_exchange = False
+            for exchange_pos in exchange_positions:
+                if exchange_pos.get('symbol') == symbol:
+                    position_exists_on_exchange = True
+                    break
+            
+            if not position_exists_on_exchange:
+                self.logger.info(f"Position {symbol} not found on exchange (already closed externally), removing from tracking")
+                self.position_logger.info(f"\n{'='*80}")
+                self.position_logger.info(f"POSITION ALREADY CLOSED: {symbol}")
+                self.position_logger.info(f"  Position was closed externally (manually or liquidation)")
+                self.position_logger.info(f"  Removing from local tracking without P/L calculation")
+                self.position_logger.info(f"{'='*80}\n")
+                
+                # Remove from local tracking
+                with self._positions_lock:
+                    if symbol in self.positions:
+                        del self.positions[symbol]
+                
+                # Return None to indicate we couldn't calculate P/L
+                return None
             
             self.position_logger.info(f"\n{'='*80}")
             self.position_logger.info(f"CLOSING POSITION: {symbol}")
@@ -1388,6 +1414,13 @@ class PositionManager:
                     self.position_logger.debug(f"  Using simple trailing stop (no market data)")
                     position.update_trailing_stop(current_price, self.trailing_stop_percentage)
                 
+                # CRITICAL FIX: Re-check position still exists in tracking after updates
+                # It might have been closed by another thread or process
+                with self._positions_lock:
+                    if symbol not in self.positions:
+                        self.position_logger.debug(f"  Position {symbol} was closed during update cycle, skipping")
+                        continue
+                
                 # Check if position should be closed
                 # First check advanced exit strategies
                 current_pnl = position.get_pnl(current_price)  # Base price change %
@@ -1455,6 +1488,7 @@ class PositionManager:
                     pnl = self.close_position(symbol, exit_reason)
                     if pnl is not None:
                         yield symbol, pnl, position
+                    # Continue to next position - this one is closed
                     continue
                 
                 # SMART ENHANCEMENT: Check smart exit optimizer for early exit signals
