@@ -138,10 +138,10 @@ class TestBuySellStrategyExecution(unittest.TestCase):
         current_price = 47500.0
         should_close, reason = position.should_close(current_price)
         
-        # Verify stop loss triggered
+        # Verify emergency stop triggered
+        # At -5% price move with 10x leverage = -50% ROI
+        # This triggers emergency_stop_liquidation_risk at -40% ROI threshold (triggers when ROI <= -0.40)
         self.assertTrue(should_close)
-        # Note: At -5% price move with 10x leverage = -50% ROI, 
-        # this triggers emergency_stop_liquidation_risk at -40% threshold
         self.assertIn('emergency_stop', reason)
     
     def test_short_position_stop_loss_triggers(self):
@@ -161,10 +161,10 @@ class TestBuySellStrategyExecution(unittest.TestCase):
         current_price = 3150.0
         should_close, reason = position.should_close(current_price)
         
-        # Verify stop loss triggered
+        # Verify emergency stop triggered
+        # At +5% price move against short with 5x leverage = -25% ROI
+        # This triggers emergency_stop_severe_loss at -25% ROI threshold (triggers when ROI <= -0.25)
         self.assertTrue(should_close)
-        # Note: At 5% price move against short with 5x leverage = -25% ROI,
-        # this triggers emergency_stop_severe_loss at -25% threshold
         self.assertIn('emergency_stop', reason)
     
     def test_long_position_take_profit_triggers(self):
@@ -312,13 +312,12 @@ class TestBuySellStrategyExecution(unittest.TestCase):
         should_close, reason = position.should_close(current_price)
         self.assertFalse(should_close)
         
-        # Test 4: Small profit close to TP does NOT trigger premature close
-        # Price at 54500 = 9% price move = 90% ROI, but only 0.92% away from TP
-        # Should NOT close because TP is very close (<2% away), so we wait for actual TP
+        # Test 4: High profit triggers intelligent profit taking
+        # Price at 54500 = 9% price move = 90% ROI with 10x leverage
+        # At such high profit, intelligent profit taking will trigger (>20% threshold)
+        # This verifies that exceptional profits are captured even before reaching TP
         current_price = 54500.0
         should_close, reason = position.should_close(current_price)
-        # At 90% ROI this will trigger intelligent profit taking regardless
-        # So we just verify it triggers correctly
         self.assertTrue(should_close)
         self.assertIn('take_profit', reason)
     
