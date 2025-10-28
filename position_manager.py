@@ -738,9 +738,10 @@ class Position:
             current_price: Current market price
             include_fees: If True, subtract trading fees from P/L (default: False for backward compatibility)
         
-        Note: This returns the unleveraged price change. To calculate the actual P/L in USD,
-        multiply the result by leverage to get the leveraged P/L percentage, then multiply by position_value:
-            pnl_usd = get_pnl(current_price) * leverage * position_value
+        Note: This returns the unleveraged price change as a decimal (e.g., 0.05 for 5%).
+        To calculate values matching KuCoin:
+            pnl_usd = get_pnl(current_price) * position_value  # Unleveraged P&L in USD (matches KuCoin)
+            roi_pct = get_pnl(current_price) * leverage  # Leveraged ROI as decimal (e.g., 0.50 for 50%)
         """
         # SAFETY: Validate inputs to prevent division by zero
         if current_price <= 0 or self.entry_price <= 0:
