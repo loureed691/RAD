@@ -792,6 +792,35 @@ class PositionManager:
         # but protects against future multi-threaded enhancements
         self._positions_lock = threading.Lock()
     
+    def _get_price_for_pnl(self, ticker: Dict) -> tuple[Optional[float], str]:
+        """Extract the appropriate price for P&L calculation from ticker data
+        
+        KUCOIN P&L FIX: Use mark price to match KuCoin's P&L calculations exactly.
+        Mark price is the fair price index used by KuCoin for P&L, liquidation, and funding.
+        It's more stable than last trade price and prevents manipulation.
+        
+        Args:
+            ticker: Ticker data from exchange
+        
+        Returns:
+            Tuple of (price, price_type) where price_type is "Mark" or "Last"
+        """
+        mark_price = None
+        if ticker and ticker.get('info') and isinstance(ticker['info'], dict):
+            mark_price_str = ticker['info'].get('markPrice')
+            if mark_price_str:
+                try:
+                    mark_price = float(mark_price_str)
+                except (ValueError, TypeError):
+                    pass
+        
+        # Use mark price if available, otherwise fall back to last price
+        if mark_price and mark_price > 0:
+            return mark_price, "Mark"
+        else:
+            last_price = ticker.get('last') if ticker else None
+            return last_price, "Last"
+    
     def sync_existing_positions(self):
         """Sync existing positions from the exchange and import them into management
         
@@ -1164,26 +1193,14 @@ class PositionManager:
                 self.position_logger.error(f"  ✗ Failed to get ticker")
                 return None
             
-            # KUCOIN P&L FIX: Use mark price for P&L calculation to match KuCoin exactly
-            # Mark price is the fair price index used by KuCoin for P&L and liquidation
-            mark_price = None
-            if ticker.get('info') and isinstance(ticker['info'], dict):
-                mark_price_str = ticker['info'].get('markPrice')
-                if mark_price_str:
-                    try:
-                        mark_price = float(mark_price_str)
-                    except (ValueError, TypeError):
-                        pass
-            
-            # Use mark price if available, otherwise fall back to last price
-            current_price = mark_price if mark_price and mark_price > 0 else ticker.get('last')
+            # Use mark price for P&L calculation to match KuCoin exactly
+            current_price, price_type = self._get_price_for_pnl(ticker)
             
             if not current_price or current_price <= 0:
                 self.logger.warning(f"Invalid price for {symbol}: {current_price}")
                 self.position_logger.error(f"  ✗ Invalid price: {current_price}")
                 return None
             
-            price_type = "Mark" if mark_price and mark_price > 0 else "Last"
             self.position_logger.info(f"  Exit Price ({price_type}): {format_price(current_price)}")
             
             # Calculate P/L (with leverage for accurate ROI)
@@ -1325,22 +1342,13 @@ class PositionManager:
                     try:
                         ticker = self.client.get_ticker(symbol)
                         if ticker:
-                            # KUCOIN P&L FIX: Use mark price for P&L calculation to match KuCoin exactly
-                            # Mark price is the fair price index used by KuCoin for P&L and liquidation
-                            # It's more stable than last trade price and prevents manipulation
-                            mark_price = None
-                            if ticker.get('info') and isinstance(ticker['info'], dict):
-                                mark_price_str = ticker['info'].get('markPrice')
-                                if mark_price_str:
-                                    try:
-                                        mark_price = float(mark_price_str)
-                                    except (ValueError, TypeError):
-                                        pass
-                            
-                            # Use mark price if available, otherwise fall back to last price
-                            current_price = mark_price if mark_price and mark_price > 0 else ticker.get('last')
+                            # Use mark price for P&L calculation to match KuCoin exactly
+                            current_price, price_type = self._get_price_for_pnl(ticker)
                             
                             if current_price and current_price > 0:
+                                # Log which price type we're using for transparency
+                                if attempt == 0:  # Only log on first successful attempt
+                                    self.position_logger.debug(f"  Using {price_type} price: {format_price(current_price)}")
                                 break  # Got valid price, exit retry loop
                             else:
                                 self.position_logger.debug(f"  Attempt {attempt + 1}: Invalid price in ticker: {current_price}")
@@ -2009,22 +2017,14 @@ class PositionManager:
             if not ticker:
                 return None
             
-            # KUCOIN P&L FIX: Use mark price for P&L calculation to match KuCoin exactly
-            mark_price = None
-            if ticker.get('info') and isinstance(ticker['info'], dict):
-                mark_price_str = ticker['info'].get('markPrice')
-                if mark_price_str:
-                    try:
-                        mark_price = float(mark_price_str)
-                    except (ValueError, TypeError):
-                        pass
-            
-            # Use mark price if available, otherwise fall back to last price
-            current_price = mark_price if mark_price and mark_price > 0 else ticker.get('last')
+            # Use mark price for P&L calculation to match KuCoin exactly
+            current_price, price_type = self._get_price_for_pnl(ticker)
             
             if not current_price or current_price <= 0:
                 self.logger.warning(f"Invalid price for {symbol}: {current_price}")
                 return None
+            
+            self.logger.debug(f"Scaling out of {symbol} using {price_type} price: {format_price(current_price)}")
             
             # Close partial position with correct leverage (mark as critical)
             side = 'sell' if position.side == 'long' else 'buy'
