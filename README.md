@@ -33,6 +33,7 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 ---
 
 👉 **NEW: [ML_COORDINATOR_2025.md](ML_COORDINATOR_2025.md) - Unified ML/AI Strategy Framework** 🆕🔥  
+👉 **NEW: [ML_COORDINATOR_STRATEGY_INTEGRATION.md](ML_COORDINATOR_STRATEGY_INTEGRATION.md) - Integration Guide** 🆕  
 👉 **See [2025_AI_ENHANCEMENTS.md](2025_AI_ENHANCEMENTS.md) for latest AI features** 🆕  
 👉 **See [2025_AI_QUICKSTART.md](2025_AI_QUICKSTART.md) for quick integration guide** 🆕  
 👉 **See [2026_ENHANCEMENTS.md](2026_ENHANCEMENTS.md) for advanced features guide**  
@@ -54,6 +55,13 @@ The ultimate unified ML/AI framework that coordinates ALL advanced components:
 - **Bayesian Confidence Calibration** (Historical win rate integration)
 - **Seamless Integration** - Enhances existing strategies without breaking changes
 - **Robust Fallback** - Gracefully degrades to technical analysis if needed
+
+**✅ Verified Integration:**
+- Works seamlessly with **DCA Strategy** (adapts to ML confidence)
+- Works with **Stop Loss & Take Profit** (independent adaptive exits)
+- Works with **Hedging Strategy** (portfolio-level protection)
+- Works with all **Risk Management** systems
+- See [ML_COORDINATOR_STRATEGY_INTEGRATION.md](ML_COORDINATOR_STRATEGY_INTEGRATION.md) for details
 
 ### **🤖 Latest AI Enhancements** (October 2025)
 - **Bayesian Adaptive Kelly Criterion** - Dynamic position sizing with Bayesian win rate estimation
