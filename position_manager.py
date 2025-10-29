@@ -4,7 +4,7 @@ Position management with trailing stop loss
 import time
 import threading
 import pandas as pd
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 from datetime import datetime
 from kucoin_client import KuCoinClient
 from logger import Logger
@@ -839,6 +839,32 @@ class PositionManager:
         
         return None
     
+    def _batch_fetch_tickers(self, symbols: List[str]) -> Dict[str, Optional[Dict]]:
+        """Fetch tickers for multiple symbols efficiently
+        
+        PERFORMANCE OPTIMIZATION: Batch ticker fetching to reduce API calls.
+        Currently fetches individually but can be optimized later with true batch API.
+        
+        Args:
+            symbols: List of trading pair symbols
+            
+        Returns:
+            Dict mapping symbol to ticker data (or None if failed)
+        """
+        tickers = {}
+        
+        # TODO: If CCXT or KuCoin API supports batch ticker fetching, use it here
+        # For now, fetch individually but with minimal delay
+        for symbol in symbols:
+            try:
+                ticker = self.client.get_ticker(symbol)
+                tickers[symbol] = ticker
+            except Exception as e:
+                self.logger.debug(f"Failed to fetch ticker for {symbol}: {type(e).__name__}")
+                tickers[symbol] = None
+        
+        return tickers
+    
     def _get_price_for_pnl(self, ticker: Dict) -> Tuple[Optional[float], str]:
         """Extract the appropriate price for P&L calculation from ticker data
         
@@ -1410,6 +1436,9 @@ class PositionManager:
     
     def update_positions(self):
         """Update all positions and manage trailing stops with adaptive parameters"""
+        # PERFORMANCE METRICS: Track update cycle timing
+        cycle_start_time = time.time()
+        
         # CRITICAL FIX: Clean up positions that were closed externally before processing
         # This prevents the position manager from trying to manage already-closed positions
         # BUG FIX: Use a single atomic operation to check and snapshot positions
@@ -1774,6 +1803,15 @@ class PositionManager:
         
         if remaining_positions > 0:
             self.position_logger.info(f"{'='*80}\n")
+        
+        # PERFORMANCE METRICS: Log update cycle timing
+        cycle_duration = time.time() - cycle_start_time
+        if position_count > 0:
+            avg_time_per_position = cycle_duration / position_count
+            self.logger.debug(
+                f"Position update cycle completed: {position_count} positions in {cycle_duration:.2f}s "
+                f"(avg: {avg_time_per_position:.3f}s per position)"
+            )
     
     def get_open_positions_count(self) -> int:
         """Get number of open positions (thread-safe)"""
