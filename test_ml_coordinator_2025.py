@@ -70,7 +70,7 @@ class TestMLStrategyCoordinator2025(unittest.TestCase):
         self.assertIsNotNone(coordinator)
         self.assertIsNotNone(coordinator.mtf_fusion)
         self.assertIsNotNone(coordinator.rl_selector)
-        self.assertTrue(len(coordinator.ensemble_weights) > 0)
+        self.assertGreater(len(coordinator.ensemble_weights), 0)
         self.assertTrue(len(coordinator.component_performance) > 0)
     
     def test_signal_generator_with_ml_coordinator(self):
