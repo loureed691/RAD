@@ -96,15 +96,16 @@ class AttentionFeatureSelector:
         """
         Calculate attention weights for current features
         
-        This method returns the learned attention weights that can be used
-        to weight feature importance. It's an alias for calculate_attention_scores
-        but maintains semantic clarity when used for weighting purposes.
+        Computes attention scores based on the current feature values and
+        the learned attention weights (self.attention_weights). This method
+        is an alias for calculate_attention_scores but maintains semantic
+        clarity when the scores are used for weighting purposes.
         
         Args:
             features: Feature vector (shape: n_features)
             
         Returns:
-            Attention weights (shape: n_features)
+            Computed attention weights (shape: n_features)
         """
         return self.calculate_attention_scores(features)
     
