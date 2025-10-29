@@ -6,8 +6,6 @@ import unittest
 import pandas as pd
 import numpy as np
 import os
-from datetime import datetime, timedelta
-
 # Set environment before imports
 os.environ['LOG_LEVEL'] = 'ERROR'
 os.environ['LOG_FILE'] = '/tmp/test_ml_coordinator.log'
