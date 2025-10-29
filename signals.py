@@ -1,5 +1,6 @@
 """
 Trading signal generation based on technical indicators
+Enhanced with ML Strategy Coordinator 2025 for cutting-edge ML/AI integration
 """
 import pandas as pd
 import numpy as np
@@ -8,6 +9,13 @@ from indicators import Indicators
 from logger import Logger
 from pattern_recognition import PatternRecognition
 from volume_profile import VolumeProfile
+
+# Import ML Strategy Coordinator 2025
+try:
+    from ml_strategy_coordinator_2025 import MLStrategyCoordinator2025
+    ML_COORDINATOR_AVAILABLE = True
+except ImportError:
+    ML_COORDINATOR_AVAILABLE = False
 
 class SignalGenerator:
     """Generate trading signals based on multiple indicators"""
@@ -19,6 +27,21 @@ class SignalGenerator:
         self.adaptive_threshold = 0.62  # INCREASED from 0.55 for better quality trades
         self.pattern_recognizer = PatternRecognition()
         self.volume_profile_analyzer = VolumeProfile()
+        
+        # Initialize ML Strategy Coordinator 2025 (cutting-edge ML/AI)
+        if ML_COORDINATOR_AVAILABLE:
+            try:
+                self.ml_coordinator = MLStrategyCoordinator2025()
+                self.ml_coordinator_enabled = True
+                self.logger.info("✅ ML Strategy Coordinator 2025 enabled - Using cutting-edge ML/AI strategies")
+            except Exception as e:
+                self.logger.warning(f"⚠️  ML Strategy Coordinator unavailable: {e}")
+                self.ml_coordinator = None
+                self.ml_coordinator_enabled = False
+        else:
+            self.ml_coordinator = None
+            self.ml_coordinator_enabled = False
+            self.logger.info("ℹ️  ML Strategy Coordinator 2025 not available - Using standard technical analysis")
     
     def detect_support_resistance(self, df: pd.DataFrame, current_price: float) -> Dict:
         """
@@ -558,6 +581,37 @@ class SignalGenerator:
         
         self.logger.debug(f"Signal: {signal}, Confidence: {confidence:.2f}, Regime: {self.market_regime}, Buy: {buy_signals:.1f}/{total_signals:.1f}, Sell: {sell_signals:.1f}/{total_signals:.1f}")
         
+        # === ML STRATEGY COORDINATOR 2025 INTEGRATION ===
+        # Apply cutting-edge ML/AI enhancements using unified ML framework
+        if self.ml_coordinator_enabled and signal != 'HOLD':
+            try:
+                # Get volatility for ML coordinator
+                volatility = indicators.get('bb_width', 0.03)
+                
+                # Generate unified ML-enhanced signal
+                ml_signal, ml_confidence, ml_reasons = self.ml_coordinator.generate_unified_signal(
+                    technical_signal=signal,
+                    technical_confidence=confidence,
+                    technical_reasons=reasons,
+                    df_1h=df,
+                    df_4h=df_4h,
+                    df_1d=df_1d,
+                    indicators=indicators,
+                    market_regime=self.market_regime,
+                    volatility=volatility
+                )
+                
+                # Use ML-enhanced signal and confidence
+                signal = ml_signal
+                confidence = ml_confidence
+                reasons.update(ml_reasons)
+                
+                self.logger.info(f"🤖 ML Strategy Coordinator enhanced signal: {signal} (conf: {confidence:.2%})")
+                
+            except Exception as e:
+                self.logger.warning(f"ML Strategy Coordinator error (falling back to technical): {e}")
+                # Continue with technical signal on error
+        
         # Log strategy details to strategy logger if signal is not HOLD
         if signal != 'HOLD':
             self.strategy_logger.info("=" * 80)
@@ -569,6 +623,8 @@ class SignalGenerator:
             self.strategy_logger.info(f"  Buy Signals: {buy_signals:.2f} / {total_signals:.2f}")
             self.strategy_logger.info(f"  Sell Signals: {sell_signals:.2f} / {total_signals:.2f}")
             self.strategy_logger.info(f"  Multi-Timeframe Alignment: {mtf_analysis['trend_alignment']}")
+            if self.ml_coordinator_enabled:
+                self.strategy_logger.info(f"  ML Coordinator: ACTIVE ✅")
             self.strategy_logger.info("")
             self.strategy_logger.info("  Strategy Components:")
             for key, value in reasons.items():
