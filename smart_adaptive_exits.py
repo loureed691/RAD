@@ -15,7 +15,21 @@ Version: 1.0
 import numpy as np
 from typing import Dict, Optional, Tuple, List
 from datetime import datetime, timedelta
-from logger import Logger
+
+# Try to import logger, use print fallback if not available
+try:
+    from logger import Logger
+except ImportError:
+    # Fallback logger for testing environments
+    class Logger:
+        @staticmethod
+        def get_logger():
+            class SimpleLogger:
+                def debug(self, msg): pass
+                def info(self, msg): pass
+                def warning(self, msg): pass
+                def error(self, msg): print(f"ERROR: {msg}")
+            return SimpleLogger()
 
 
 class MarketRegimeDetector:

@@ -1671,12 +1671,23 @@ class PositionManager:
                 
                 # Check standard stop loss and take profit conditions with adaptive emergency thresholds
                 # Pass volatility if available for smart adaptive emergency levels
-                volatility_for_emergency = locals().get('volatility', None)
+                # Track whether we have volatility data from earlier calculations
+                has_volatility = 'volatility' in locals() and volatility is not None
+                volatility_for_emergency = volatility if has_volatility else None
+                
+                # Get drawdown from risk manager if available (for adaptive thresholds)
+                # TODO: Integrate with actual risk_manager instance passed from bot.py
+                current_drawdown_val = 0.0
+                
+                # Calculate portfolio correlation if we have multiple positions
+                # TODO: Implement actual correlation calculation from positions
+                portfolio_correlation_val = 0.5
+                
                 should_close, reason = position.should_close(
                     current_price, 
                     volatility=volatility_for_emergency,
-                    current_drawdown=0.0,  # TODO: pass actual drawdown from risk_manager
-                    portfolio_correlation=0.5  # TODO: calculate actual correlation
+                    current_drawdown=current_drawdown_val,
+                    portfolio_correlation=portfolio_correlation_val
                 )
                 if should_close:
                     self.position_logger.info(f"  ✓ Closing position: {reason}")
