@@ -1102,7 +1102,7 @@ class PositionManager:
                         close = indicators.get('close', fill_price)
                         sma_20 = indicators.get('sma_20', close)
                         sma_50 = indicators.get('sma_50', close)
-                        if sma_50 > 0 and not pd.isna(sma_50) and not pd.isna(sma_20):
+                        if not pd.isna(sma_50) and not pd.isna(sma_20) and sma_50 > 0:
                             trend_strength = min(abs(sma_20 - sma_50) / sma_50 * 10, 1.0)
                         else:
                             trend_strength = 0.5
