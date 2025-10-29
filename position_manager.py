@@ -1371,12 +1371,11 @@ class PositionManager:
                 
                 if orphaned_symbols:
                     self.logger.info(f"Cleaning up {len(orphaned_symbols)} positions that were closed externally: {orphaned_symbols}")
-                    # Thread-safe position removal
-                    with self._positions_lock:
-                        for symbol in orphaned_symbols:
-                            self.position_logger.info(f"Removing externally closed position from tracking: {symbol}")
-                            if symbol in self.positions:
-                                del self.positions[symbol]
+                    # Remove orphaned positions (already inside lock)
+                    for symbol in orphaned_symbols:
+                        self.position_logger.info(f"Removing externally closed position from tracking: {symbol}")
+                        if symbol in self.positions:
+                            del self.positions[symbol]
         except Exception as e:
             # If we can't check exchange positions, log and continue
             # Better to process with potentially stale data than to skip entirely

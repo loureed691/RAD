@@ -1532,6 +1532,9 @@ class TradingBot:
                     initial_balance = 10000
                 total_pnl = current_balance - initial_balance
             
+            # Get comprehensive performance metrics from performance_2026
+            perf_metrics = self.performance_2026.get_comprehensive_metrics()
+            
             # Update performance stats
             self.dashboard.update_stats({
                 'balance': current_balance,
@@ -1545,10 +1548,10 @@ class TradingBot:
                     getattr(pos, 'amount', 0) * getattr(pos, 'entry_price', 0)
                     for pos in self.position_manager.positions.values()
                 ),
-                'sharpe_ratio': getattr(self.performance_2026, 'get_sharpe_ratio', lambda: 0)(),
-                'sortino_ratio': getattr(self.performance_2026, 'get_sortino_ratio', lambda: 0)(),
-                'calmar_ratio': getattr(self.performance_2026, 'get_calmar_ratio', lambda: 0)(),
-                'profit_factor': metrics.get('profit_factor', 0)
+                'sharpe_ratio': perf_metrics.get('sharpe_ratio', 0),
+                'sortino_ratio': perf_metrics.get('sortino_ratio', 0),
+                'calmar_ratio': perf_metrics.get('calmar_ratio', 0),
+                'profit_factor': perf_metrics.get('profit_factor', 0)
             })
             
             # Update open positions
@@ -1594,9 +1597,9 @@ class TradingBot:
             
             self.dashboard.update_positions(positions_data)
             
-            # Update risk metrics
-            max_dd = getattr(self.performance_2026, 'get_max_drawdown', lambda: 0)()
-            current_dd = getattr(self.risk_manager, 'current_drawdown', 0)
+            # Update risk metrics - use comprehensive metrics for consistency
+            max_dd = perf_metrics.get('max_drawdown_pct', 0) / 100  # Convert from percentage
+            current_dd = perf_metrics.get('current_drawdown_pct', 0) / 100  # Convert from percentage
             
             # Calculate portfolio heat
             open_positions = list(self.position_manager.positions.values())
