@@ -1,22 +1,57 @@
-# Quick Start - Intelligence Upgrade
+# Quick Start - Ultra-Simple Setup
 
-## 🚀 In 30 Seconds
+## 🚀 Get Started in 60 Seconds
 
-Your bot is now **30-45% more profitable** with institutional-grade intelligence.
+Your bot now features **intelligent auto-configuration** - just add your API keys and go!
 
-### What Changed?
-✅ Multi-timeframe analysis (1h, 4h, 1d)
-✅ Enhanced ML model (26 features)
-✅ Portfolio diversification
-✅ Kelly Criterion sizing
-✅ Volume profile analysis
-✅ Order book intelligence
-✅ **Automatic Web Dashboard** (NEW!)
+### Setup (3 Simple Steps)
 
-### Do You Need to Change Anything?
-**No!** Just run: `python bot.py`
+1. **Copy the config file:**
+   ```bash
+   cp .env.example .env
+   ```
 
-Everything works automatically, including the **web dashboard** that starts at http://localhost:5000
+2. **Add your KuCoin API credentials:**
+   ```env
+   KUCOIN_API_KEY=your_api_key_here
+   KUCOIN_API_SECRET=your_api_secret_here
+   KUCOIN_API_PASSPHRASE=your_api_passphrase_here
+   ```
+
+3. **Run the bot:**
+   ```bash
+   python bot.py
+   ```
+
+**That's it!** Everything else is automatically configured:
+- ✅ Optimal leverage based on your account size (4-12x)
+- ✅ Smart position sizing (30-60% of balance)
+- ✅ Adaptive risk management (1-3% per trade)
+- ✅ WebSocket real-time data (enabled)
+- ✅ Web dashboard (http://localhost:5000)
+- ✅ DCA and hedging strategies (enabled)
+- ✅ Optimal scanning intervals (60s)
+- ✅ Parallel workers for fast scanning (20 workers)
+
+---
+
+## 📊 What You'll See
+
+When the bot starts, you'll see logs like:
+
+```
+🤖 INITIALIZING ADVANCED KUCOIN FUTURES TRADING BOT
+💰 Available balance: $5000.00 USDT
+🤖 Auto-configured LEVERAGE: 8x (balance: $5000.00)
+🤖 Auto-configured MAX_POSITION_SIZE: $2500.00 (balance: $5000.00)
+🤖 Auto-configured RISK_PER_TRADE: 2.00% (balance: $5000.00)
+🤖 Auto-configured MIN_PROFIT_THRESHOLD: 0.62% (balance: $5000.00)
+📊 Dashboard: ENABLED at http://localhost:5000
+🌐 WebSocket: ENABLED for real-time data
+⏱️  Opportunity scan interval: 60s
+⚙️  Parallel workers: 20 (market scanning)
+✅ Bot initialized successfully!
+```
 
 ---
 
@@ -34,23 +69,34 @@ Everything works automatically, including the **web dashboard** that starts at h
 
 ---
 
-## 🎯 Optional: Maximize Performance
+## 🎯 Optional: Override Defaults (Advanced Users Only)
 
-Update your `.env` for best results:
+**Most users don't need to change anything!** But if you want to customize:
 
 ```env
-MAX_OPEN_POSITIONS=5        # Up from 3
-RISK_PER_TRADE=0.015        # Down from 0.02
-CHECK_INTERVAL=180          # Up from 60
-RETRAIN_INTERVAL=21600      # Down from 86400
+# Override specific settings in .env
+LEVERAGE=8                   # Use 8x leverage instead of auto (4-12x)
+RISK_PER_TRADE=0.015        # Use 1.5% risk instead of auto (1-3%)
+MAX_OPEN_POSITIONS=5        # Allow 5 concurrent positions
+CHECK_INTERVAL=120          # Scan every 2 minutes instead of 1 minute
+ENABLE_DASHBOARD=false      # Disable the web dashboard
 ```
 
-**Why?**
-- More positions = better diversification
-- Lower risk = Kelly optimizes it
-- Longer intervals = MTF makes scans efficient
-- More retraining = faster adaptation
+**See `.env.example` for all available options.**
 
+### Balance-Based Auto-Configuration
+
+The bot automatically adjusts settings based on your account size:
+
+| Balance | Leverage | Risk/Trade | Max Position |
+|---------|----------|------------|--------------|
+| $10-100 (Micro) | 4x | 1.0% | 30% of balance |
+| $100-1K (Small) | 6x | 1.5% | 40% of balance |
+| $1K-10K (Medium) | 8x | 2.0% | 50% of balance |
+| $10K-100K (Large) | 10x | 2.5% | 60% of balance |
+| $100K+ (Very Large) | 12x | 3.0% | 60% of balance |
+
+**Safety First:** Smaller accounts get lower leverage and risk to protect your capital while learning.
 
 ---
 
