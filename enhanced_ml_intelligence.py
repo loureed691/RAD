@@ -522,21 +522,33 @@ class ReinforcementLearningStrategy:
                       market_regime: str, 
                       volatility: float, 
                       strategy: str, 
-                      reward: float):
+                      reward: float,
+                      next_market_regime: Optional[str] = None,
+                      next_volatility: Optional[float] = None):
         """
-        Update Q-value based on trade outcome
+        Update Q-value based on trade outcome using proper Q-learning formula
         
         Args:
             market_regime: Market regime when trade was taken
             volatility: Volatility when trade was taken
             strategy: Strategy used
             reward: Reward (profit/loss)
+            next_market_regime: Market regime after action (optional)
+            next_volatility: Volatility after action (optional)
         """
         state = self.get_state(market_regime, volatility)
         
         # Q-learning update
         current_q = self.q_table[state][strategy]
-        max_future_q = max(self.q_table[state].values())
+        
+        # Proper Q-learning: use max Q-value from NEXT state
+        if next_market_regime is not None and next_volatility is not None:
+            next_state = self.get_state(next_market_regime, next_volatility)
+            max_future_q = max(self.q_table[next_state].values())
+        else:
+            # If next state not available, assume terminal state (max_future_q = 0)
+            # This simplifies to immediate reward-based learning
+            max_future_q = 0.0
         
         new_q = current_q + self.learning_rate * (
             reward + self.discount_factor * max_future_q - current_q
@@ -549,7 +561,7 @@ class ReinforcementLearningStrategy:
         
         self.logger.debug(
             f"Updated Q-value: {state} -> {strategy}: "
-            f"{current_q:.3f} -> {new_q:.3f} (reward: {reward:.3f})"
+            f"{current_q:.3f} -> {new_q:.3f} (reward: {reward:.3f}, max_future: {max_future_q:.3f})"
         )
     
     def save_q_table(self, path: str = 'models/q_table.pkl'):
