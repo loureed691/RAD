@@ -461,12 +461,13 @@ class ReinforcementLearningStrategy:
         self.discount_factor = discount_factor
         
         # Q-table: state -> action -> Q-value
-        # States: market regime (5 types) + volatility level (3 levels) = 15 states
+        # States: market regime (3 types) + volatility level (3 levels) = 9 states
         # Actions: 4 strategies
         self.q_table = {}
         
         # Initialize Q-table
-        regimes = ['bull', 'bear', 'neutral', 'high_vol', 'low_vol']
+        # Updated to match actual market regime values: 'trending', 'ranging', 'neutral'
+        regimes = ['trending', 'ranging', 'neutral']
         vol_levels = ['low', 'medium', 'high']
         strategies = ['trend_following', 'mean_reversion', 'breakout', 'momentum']
         
@@ -503,6 +504,16 @@ class ReinforcementLearningStrategy:
             Selected strategy name
         """
         state = self.get_state(market_regime, volatility)
+        
+        # Handle case where state doesn't exist in q_table (defensive coding)
+        if state not in self.q_table:
+            self.logger.debug(f"Unknown state '{state}', defaulting to neutral")
+            # Default to neutral state with same volatility level
+            vol_level = state.split('_')[-1] if '_' in state else 'medium'
+            state = f"neutral_{vol_level}"
+            # If still not found, just use neutral_medium
+            if state not in self.q_table:
+                state = "neutral_medium"
         
         # Epsilon-greedy strategy selection
         if np.random.random() < self.epsilon:
