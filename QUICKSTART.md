@@ -42,7 +42,7 @@ When the bot starts, you'll see logs like:
 ```
 🤖 INITIALIZING ADVANCED KUCOIN FUTURES TRADING BOT
 💰 Available balance: $5000.00 USDT
-🤖 Auto-configured LEVERAGE: 10x (balance: $5000.00)
+🤖 Auto-configured LEVERAGE: 8x (balance: $5000.00)
 🤖 Auto-configured MAX_POSITION_SIZE: $2500.00 (balance: $5000.00)
 🤖 Auto-configured RISK_PER_TRADE: 2.00% (balance: $5000.00)
 🤖 Auto-configured MIN_PROFIT_THRESHOLD: 0.62% (balance: $5000.00)
