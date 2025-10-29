@@ -2,7 +2,7 @@
 Smart and Adaptive Exit Management System
 
 This module enhances take profit, stop loss, and emergency stops with:
-1. ML-based regime detection for adaptive thresholds
+1. Threshold-based regime detection for adaptive thresholds
 2. ATR-based dynamic stop placement
 3. Volume profile integration for profit targets
 4. Volatility percentile-based adjustments
