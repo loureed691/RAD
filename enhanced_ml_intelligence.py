@@ -468,7 +468,10 @@ class ReinforcementLearningStrategy:
         # Initialize Q-table with ALL possible regimes from both detection methods
         # advanced_risk_2026: 'bull', 'bear', 'neutral', 'high_vol', 'low_vol'
         # signals.py: 'trending', 'ranging', 'neutral'
-        regimes = ['bull', 'bear', 'neutral', 'high_vol', 'low_vol', 'trending', 'ranging']
+        # 'neutral' appears in both lists; deduplication is intentional.
+        regimes_source1 = ['bull', 'bear', 'neutral', 'high_vol', 'low_vol']
+        regimes_source2 = ['trending', 'ranging', 'neutral']
+        regimes = list(set(regimes_source1 + regimes_source2))
         vol_levels = ['low', 'medium', 'high']
         strategies = ['trend_following', 'mean_reversion', 'breakout', 'momentum']
         
