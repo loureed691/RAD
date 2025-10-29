@@ -168,6 +168,26 @@ class BayesianAdaptiveKelly:
             self.logger.error(f"Error calculating avg win/loss: {e}")
             return 0.02, 0.01
     
+    def get_win_rate_estimate(self, window_trades: int = None) -> float:
+        """
+        Get the Bayesian win rate estimate (mean value)
+        
+        This is a convenience method that returns just the mean win rate
+        from the full Bayesian calculation.
+        
+        Args:
+            window_trades: Number of recent trades to use (None = all)
+            
+        Returns:
+            Estimated win rate as a float between 0 and 1
+        """
+        try:
+            win_stats = self.calculate_bayesian_win_rate(window_trades)
+            return win_stats['mean']
+        except Exception as e:
+            self.logger.error(f"Error getting win rate estimate: {e}")
+            return 0.5  # Default to 50% if error
+    
     def calculate_dynamic_kelly_fraction(self, uncertainty: float,
                                         market_volatility: float = 0.03) -> float:
         """
