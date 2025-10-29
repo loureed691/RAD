@@ -151,17 +151,18 @@ Successfully implemented and integrated **DCA (Dollar Cost Averaging)** and **He
 Unit Tests:
 ├─ DCA Strategy: 12 tests ✅
 ├─ Hedging Strategy: 14 tests ✅
-└─ Total: 26 tests
+└─ Subtotal: 26 unit tests
 
 Integration Tests:
 ├─ Feature Integration: 11 tests ✅
-└─ Total: 11 tests
+└─ Subtotal: 11 integration tests
 
 Regression Tests:
 ├─ Existing Bot Tests: 12/12 passing ✅
-└─ No breaking changes
+└─ Subtotal: 12 regression tests
 
-Total: 49 tests, all passing
+Grand Total: 49 tests (26 unit + 11 integration + 12 regression)
+All tests passing ✅
 ```
 
 ### Code Quality
@@ -295,7 +296,8 @@ HEDGE_VOLATILITY_THRESHOLD=0.06
 
 1. **Pull latest code:**
    ```bash
-   git pull origin copilot/evaluate-trading-strategies
+   # Replace 'main' with your target branch name
+   git pull origin main
    ```
 
 2. **Update dependencies:**
@@ -431,3 +433,10 @@ Both DCA and Hedging strategies are **production-ready** and provide **significa
 - **Issues:** All tests passing, no known issues
 
 **Status:** ✅ COMPLETE AND READY FOR PRODUCTION
+
+---
+
+**Note:** This implementation includes 49 total tests:
+- 26 unit tests (test_dca_hedging_strategies.py)
+- 11 integration tests (test_strategy_integration.py)
+- 12 regression tests (existing bot tests)
