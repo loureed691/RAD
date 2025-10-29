@@ -159,9 +159,11 @@ To monitor ML Coordinator performance:
 ## Troubleshooting
 
 ### ML Coordinator not loading
-- Check if all dependencies are installed
-- Verify enhanced_ml_intelligence.py exists
+- Check if all dependencies are installed (`pip install -r requirements.txt`)
+- Verify `enhanced_ml_intelligence.py` exists in the project root
+- Verify `attention_features_2025.py` and `bayesian_kelly_2025.py` exist (optional components)
 - Check logs for initialization errors
+- The system will fall back to technical analysis if ML components are unavailable
 
 ### Low confidence scores
 - Normal for uncertain market conditions

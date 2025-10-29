@@ -157,7 +157,11 @@ class TestMLStrategyCoordinator2025(unittest.TestCase):
         features = coordinator._prepare_features(self.indicators)
         
         self.assertIsInstance(features, np.ndarray)
-        self.assertEqual(len(features), 31)  # Expected feature count
+        # Verify we have expected number of features (31 as defined in coordinator)
+        expected_features = 31
+        self.assertEqual(len(features), expected_features, 
+                        f"Feature count mismatch. Expected {expected_features}, got {len(features)}. "
+                        f"Update test if feature engineering changed.")
         self.assertTrue(np.all(np.isfinite(features)))  # No NaN or inf
     
     def test_adaptive_weight_updates(self):
