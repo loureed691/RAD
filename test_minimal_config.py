@@ -153,7 +153,7 @@ def test_minimal_env_config():
         # Cleanup temp file
         try:
             os.unlink(temp_env_path)
-        except:
+        except (OSError, FileNotFoundError):
             pass
 
 

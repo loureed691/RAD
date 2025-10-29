@@ -105,7 +105,7 @@ def validate_minimal_config():
         # Cleanup
         try:
             os.unlink(temp_env_path)
-        except:
+        except (OSError, FileNotFoundError):
             pass
 
 
