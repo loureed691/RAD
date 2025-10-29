@@ -48,14 +48,14 @@ This directory contains comprehensive validation tests for the trading bot, cove
 
 The repository includes additional specialized tests:
 
-- **2025 AI Features**: `test_2025_ai_enhancements.py`, `test_enhanced_ml_intelligence.py`, `test_modern_gradient_boosting.py`
-- **Advanced Features**: `test_comprehensive_advanced.py`, `test_advanced_strategy_integration.py`
+- **2025 AI Features**: `test_2025_ai_enhancements.py`, `test_enhanced_ml_intelligence.py`, `test_modern_gradient_boosting.py`, `test_ml_coordinator_2025.py`
+- **Advanced Features**: `test_comprehensive_advanced.py`, `test_advanced_strategy_integration.py`, `test_dca_hedging_strategies.py`, `test_smart_adaptive_exits.py`
 - **Risk Management**: `test_risk_management.py`, `test_emergency_stops.py`, `test_adaptive_stops.py`
 - **Trading Methods**: `test_enhanced_trading_methods.py`, `test_smart_enhancements.py`, `test_smart_optimizations.py`, `test_smart_profit_taking.py`
 - **Live Trading**: `test_live_trading.py`, `test_live_mode_comprehensive.py`, `test_real_bot_functionality.py`
 - **Performance**: `test_performance_improvements.py`, `test_profitability_improvements.py`
 - **WebSocket**: `test_websocket_integration.py`
-- **Feature Verification**: `test_feature_verification.py`
+- **Feature Verification**: `test_feature_verification.py`, `test_state_persistence.py`, `test_volume_profile.py`
 - **Strategy Testing**: `test_trading_strategies.py`, `test_strategy_optimizations.py`
 - **Simulation**: `test_real_world_simulation.py`, `test_realistic_scenario.py`, `test_trade_simulation.py`
 
