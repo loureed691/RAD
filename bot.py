@@ -45,6 +45,8 @@ from dca_strategy import DCAStrategy
 from hedging_strategy import HedgingStrategy
 # Dashboard
 from dashboard import TradingDashboard, FLASK_AVAILABLE
+# Production-grade validation
+from data_validator import DataValidator
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -183,6 +185,9 @@ class TradingBot:
         # DCA and Hedging Strategies
         self.dca_strategy = DCAStrategy()
         self.hedging_strategy = HedgingStrategy()
+        
+        # Production-grade data validator
+        self.data_validator = DataValidator()
         
         self.logger.info("🚀 2026 Advanced Features Activated:")
         self.logger.info("   ✅ Advanced Risk Manager (Regime-aware Kelly)")
@@ -406,6 +411,12 @@ class TradingBot:
         
         self.logger.debug(f"✅ Guardrails passed: {block_reason}")
         
+        # PRODUCTION: Validate signal before proceeding
+        is_valid, reason = self.data_validator.validate_signal(signal, confidence)
+        if not is_valid:
+            self.logger.error(f"❌ Invalid signal data for {symbol}: {reason}")
+            return False
+        
         # Validate trade
         is_valid, reason = self.risk_manager.validate_trade(
             symbol, signal, confidence
@@ -420,6 +431,12 @@ class TradingBot:
         if not ticker:
             return False
         
+        # PRODUCTION: Validate ticker data is fresh and complete
+        is_valid, reason = self.data_validator.validate_ticker_data(ticker, symbol)
+        if not is_valid:
+            self.logger.error(f"❌ Invalid ticker data for {symbol}: {reason}")
+            return False
+        
         # Bug fix: Safely access 'last' price with validation
         entry_price = ticker.get('last')
         if not entry_price or entry_price <= 0:
@@ -430,6 +447,13 @@ class TradingBot:
         ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
         df = Indicators.calculate_all(ohlcv)
         indicators = Indicators.get_latest_indicators(df)
+        
+        # PRODUCTION: Validate indicators before using them
+        is_valid, reason = self.data_validator.validate_indicators(indicators, symbol)
+        if not is_valid:
+            self.logger.error(f"❌ Invalid indicators for {symbol}: {reason}")
+            return False
+        
         volatility = indicators.get('bb_width', 0.03)
         
         # 2025 OPTIMIZATION: Enhanced multi-timeframe analysis
@@ -963,6 +987,24 @@ class TradingBot:
                 except Exception as e:
                     self.logger.warning(f"DCA planning error: {e}, using full position")
                     use_dca = False
+        
+        # PRODUCTION: Validate all position parameters before opening
+        take_profit_price = None  # Calculate if needed
+        is_valid, reason = self.data_validator.validate_position_parameters(
+            symbol=symbol,
+            side='long' if signal == 'BUY' else 'short',
+            amount=position_size,
+            entry_price=entry_price,
+            stop_loss=stop_loss_price,
+            take_profit=take_profit_price,
+            leverage=leverage
+        )
+        
+        if not is_valid:
+            self.logger.error(f"❌ Invalid position parameters for {symbol}: {reason}")
+            return False
+        
+        self.logger.debug(f"✅ Position parameters validated for {symbol}")
         
         # Open position (first entry if using DCA, full position otherwise)
         success = self.position_manager.open_position(
