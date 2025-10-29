@@ -292,6 +292,8 @@ class TradingBot:
         self._scan_thread_running = False
         self._position_monitor_running = False
         self._dashboard_running = False
+        # Raise KeyboardInterrupt to break out of any blocking calls
+        raise KeyboardInterrupt()
     
     def execute_trade(self, opportunity: dict) -> bool:
         """
