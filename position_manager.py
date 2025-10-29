@@ -2105,3 +2105,135 @@ class PositionManager:
             except Exception as e:
                 self.logger.error(f"Error modifying position targets for {symbol}: {e}")
                 return False
+    
+    def save_state(self, filepath: str = 'models/position_manager_state.pkl'):
+        """
+        Save position manager state to disk for crash recovery
+        
+        PRODUCTION CRITICAL: Enables recovery after bot restarts/crashes
+        without losing track of open positions
+        
+        Args:
+            filepath: Path to save state file
+        """
+        try:
+            import joblib
+            import os
+            
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            
+            # Prepare state for serialization
+            state = {
+                'positions': {},
+                'trailing_stop_percentage': self.trailing_stop_percentage,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # Serialize positions
+            with self._positions_lock:
+                for symbol, position in self.positions.items():
+                    state['positions'][symbol] = {
+                        'symbol': position.symbol,
+                        'side': position.side,
+                        'entry_price': position.entry_price,
+                        'amount': position.amount,
+                        'leverage': position.leverage,
+                        'stop_loss': position.stop_loss,
+                        'take_profit': position.take_profit,
+                        'highest_price': position.highest_price,
+                        'lowest_price': position.lowest_price,
+                        'entry_time': position.entry_time.isoformat(),
+                        'trailing_stop_activated': position.trailing_stop_activated,
+                        'max_favorable_excursion': position.max_favorable_excursion,
+                        'initial_stop_loss': position.initial_stop_loss,
+                        'initial_take_profit': position.initial_take_profit,
+                        'breakeven_moved': position.breakeven_moved,
+                        'partial_exits_taken': position.partial_exits_taken,
+                    }
+            
+            # Save to disk
+            joblib.dump(state, filepath)
+            self.logger.debug(f"Position manager state saved to {filepath}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to save position manager state: {e}")
+            return False
+    
+    def load_state(self, filepath: str = 'models/position_manager_state.pkl'):
+        """
+        Load position manager state from disk
+        
+        PRODUCTION CRITICAL: Recovers state after bot restart/crash
+        
+        Args:
+            filepath: Path to state file
+            
+        Returns:
+            True if state loaded successfully, False otherwise
+        """
+        try:
+            import joblib
+            import os
+            
+            if not os.path.exists(filepath):
+                self.logger.debug(f"No saved state found at {filepath}")
+                return False
+            
+            # Load state
+            state = joblib.load(filepath)
+            
+            # Validate state
+            if 'positions' not in state:
+                self.logger.warning(f"Invalid state file: missing positions")
+                return False
+            
+            # Restore positions
+            with self._positions_lock:
+                for symbol, pos_data in state['positions'].items():
+                    try:
+                        # Recreate Position object
+                        position = Position(
+                            symbol=pos_data['symbol'],
+                            side=pos_data['side'],
+                            entry_price=pos_data['entry_price'],
+                            amount=pos_data['amount'],
+                            leverage=pos_data['leverage'],
+                            stop_loss=pos_data['stop_loss'],
+                            take_profit=pos_data.get('take_profit')
+                        )
+                        
+                        # Restore additional state
+                        position.highest_price = pos_data.get('highest_price', position.entry_price)
+                        position.lowest_price = pos_data.get('lowest_price', position.entry_price)
+                        position.entry_time = datetime.fromisoformat(pos_data['entry_time'])
+                        position.trailing_stop_activated = pos_data.get('trailing_stop_activated', False)
+                        position.max_favorable_excursion = pos_data.get('max_favorable_excursion', 0.0)
+                        position.initial_stop_loss = pos_data.get('initial_stop_loss', position.stop_loss)
+                        position.initial_take_profit = pos_data.get('initial_take_profit', position.take_profit)
+                        position.breakeven_moved = pos_data.get('breakeven_moved', False)
+                        position.partial_exits_taken = pos_data.get('partial_exits_taken', 0)
+                        
+                        self.positions[symbol] = position
+                        self.logger.info(f"Restored position: {symbol} {position.side} @ {position.entry_price}")
+                        
+                    except Exception as e:
+                        self.logger.error(f"Failed to restore position {symbol}: {e}")
+                        continue
+            
+            # Validate restored positions against exchange
+            num_restored = len(self.positions)
+            if num_restored > 0:
+                self.logger.info(f"✅ Restored {num_restored} position(s) from saved state")
+                self.logger.info(f"   Validating against exchange...")
+                
+                # Sync with exchange to ensure consistency
+                synced = self.sync_existing_positions()
+                self.logger.info(f"   Exchange reports {synced} open position(s)")
+                
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to load position manager state: {e}")
+            return False

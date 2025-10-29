@@ -268,6 +268,16 @@ class TradingBot:
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
         
+        # PRODUCTION CRITICAL: Load saved position state for crash recovery
+        self.logger.info("💾 Attempting to restore position state from disk...")
+        try:
+            if self.position_manager.load_state():
+                self.logger.info("✅ Position state restored successfully")
+            else:
+                self.logger.debug("No saved position state found (this is normal for first run)")
+        except Exception as e:
+            self.logger.warning(f"Could not load position state: {e}")
+        
         # Sync existing positions from exchange
         synced_positions = self.position_manager.sync_existing_positions()
         if synced_positions > 0:
@@ -1894,6 +1904,12 @@ class TradingBot:
             except Exception as e:
                 self.logger.debug(f"Error saving risk manager state: {e}")
             
+            # PRODUCTION CRITICAL: Save position manager state for crash recovery
+            try:
+                self.position_manager.save_state()
+            except Exception as e:
+                self.logger.debug(f"Error saving position manager state: {e}")
+            
             self.logger.debug("✅ Periodic state save complete")
             
         except Exception as e:
@@ -1998,6 +2014,13 @@ class TradingBot:
             self.logger.info("💾 Risk manager state saved successfully")
         except Exception as e:
             self.logger.error(f"Error saving risk manager state: {e}")
+        
+        # PRODUCTION CRITICAL: Save position manager state for crash recovery
+        try:
+            self.position_manager.save_state()
+            self.logger.info("💾 Position manager state saved successfully")
+        except Exception as e:
+            self.logger.error(f"Error saving position manager state: {e}")
         
         # Close WebSocket and API connections
         try:
