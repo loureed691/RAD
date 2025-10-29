@@ -804,6 +804,40 @@ class PositionManager:
         # Note: This is mainly for safety, as the bot is typically single-threaded
         # but protects against future multi-threaded enhancements
         self._positions_lock = threading.Lock()
+        
+        # PERFORMANCE OPTIMIZATION: Cache for market limits to reduce API calls
+        self._market_limits_cache: Dict[str, Dict] = {}
+        self._limits_cache_time: Dict[str, float] = {}
+        self._limits_cache_ttl = 300  # 5 minutes cache TTL
+    
+    def _get_cached_market_limits(self, symbol: str) -> Optional[Dict]:
+        """Get market limits with caching to reduce API calls
+        
+        Args:
+            symbol: Trading pair symbol
+            
+        Returns:
+            Market limits dict or None
+        """
+        current_time = time.time()
+        
+        # Check if cached value exists and is still valid
+        if symbol in self._market_limits_cache:
+            cache_age = current_time - self._limits_cache_time.get(symbol, 0)
+            if cache_age < self._limits_cache_ttl:
+                return self._market_limits_cache[symbol]
+        
+        # Cache miss or expired, fetch new data
+        try:
+            limits = self.client.get_market_limits(symbol)
+            if limits:
+                self._market_limits_cache[symbol] = limits
+                self._limits_cache_time[symbol] = current_time
+                return limits
+        except Exception as e:
+            self.logger.debug(f"Failed to fetch market limits for {symbol}: {e}")
+        
+        return None
     
     def _get_price_for_pnl(self, ticker: Dict) -> Tuple[Optional[float], str]:
         """Extract the appropriate price for P&L calculation from ticker data
@@ -865,12 +899,26 @@ class PositionManager:
                         continue
                 
                 # Extract position details
-                contracts = float(pos.get('contracts', 0))
+                # PERFORMANCE FIX: Convert once and validate
+                contracts_raw = pos.get('contracts', 0)
+                try:
+                    contracts = float(contracts_raw) if contracts_raw else 0.0
+                except (ValueError, TypeError):
+                    self.logger.warning(f"Invalid contracts value '{contracts_raw}' for {symbol}, skipping")
+                    continue
+                
                 if contracts == 0:
                     continue
                 
                 side = pos.get('side', 'long')  # 'long' or 'short'
-                entry_price = float(pos.get('entryPrice', 0))
+                
+                # PERFORMANCE FIX: Convert entry_price once with validation
+                entry_price_raw = pos.get('entryPrice', 0)
+                try:
+                    entry_price = float(entry_price_raw) if entry_price_raw else 0.0
+                except (ValueError, TypeError):
+                    self.logger.warning(f"Invalid entryPrice value '{entry_price_raw}' for {symbol}, skipping")
+                    continue
                 
                 # Extract leverage with multiple fallback options
                 # 1. Try CCXT unified 'leverage' field
@@ -1083,6 +1131,11 @@ class PositionManager:
             self.position_logger.info(f"  Order filled at: {format_price(fill_price)}")
             
             # SMART ADAPTIVE: Try to use smart adaptive targets if market data available
+            # PERFORMANCE FIX: Refactored to reduce nesting and improve error handling
+            stop_loss = None
+            take_profit = None
+            use_smart_targets = False
+            
             try:
                 # Get market data for adaptive calculations
                 ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
@@ -1124,21 +1177,20 @@ class PositionManager:
                         # Use smart targets
                         stop_loss = smart_targets['summary']['stop_price']
                         take_profit = smart_targets['summary']['target_price']
+                        use_smart_targets = True
                         
                         self.position_logger.info(f"  🧠 Using SMART ADAPTIVE targets:")
                         self.position_logger.info(f"     Regime: {smart_targets['summary']['regime']}")
                         self.position_logger.info(f"     Risk/Reward: {smart_targets['summary']['risk_reward_ratio']:.2f}")
                         self.position_logger.info(f"     {smart_targets['stop_loss']['reasoning']}")
                         self.position_logger.info(f"     {smart_targets['take_profit']['reasoning']}")
-                    else:
-                        raise ValueError("Indicators calculation failed")
-                else:
-                    raise ValueError("Insufficient market data")
             except Exception as e:
                 # Fallback to standard calculation
-                self.logger.debug(f"Smart targets unavailable, using standard: {e}")
+                self.logger.debug(f"Smart targets unavailable, using standard: {type(e).__name__}: {e}")
                 self.position_logger.info(f"  Using standard targets (smart system unavailable)")
-                
+            
+            # Calculate standard targets if smart targets not available
+            if not use_smart_targets:
                 # Calculate stop loss and take profit
                 # Using 3x risk/reward ratio for better profitability (was 2x)
                 if signal == 'BUY':
@@ -1360,11 +1412,12 @@ class PositionManager:
         """Update all positions and manage trailing stops with adaptive parameters"""
         # CRITICAL FIX: Clean up positions that were closed externally before processing
         # This prevents the position manager from trying to manage already-closed positions
+        # BUG FIX: Use a single atomic operation to check and snapshot positions
         try:
             exchange_positions = self.client.get_open_positions()
             exchange_symbols = {pos.get('symbol') for pos in exchange_positions if pos.get('symbol')}
             
-            # Thread-safe cleanup of positions not on exchange
+            # Thread-safe cleanup of positions not on exchange and create snapshot atomically
             with self._positions_lock:
                 local_symbols = set(self.positions.keys())
                 orphaned_symbols = local_symbols - exchange_symbols
@@ -1376,15 +1429,19 @@ class PositionManager:
                         self.position_logger.info(f"Removing externally closed position from tracking: {symbol}")
                         if symbol in self.positions:
                             del self.positions[symbol]
+                
+                # BUG FIX: Create snapshot while still holding lock after cleanup
+                # This ensures positions_snapshot is consistent with cleanup
+                positions_snapshot = list(self.positions.keys())
+                position_count = len(self.positions)
         except Exception as e:
             # If we can't check exchange positions, log and continue
             # Better to process with potentially stale data than to skip entirely
             self.logger.warning(f"Unable to verify positions on exchange during update: {e}")
-        
-        # Get a thread-safe snapshot of positions to iterate over
-        with self._positions_lock:
-            positions_snapshot = list(self.positions.keys())
-            position_count = len(self.positions)
+            # Create snapshot with current positions as fallback
+            with self._positions_lock:
+                positions_snapshot = list(self.positions.keys())
+                position_count = len(self.positions)
         
         if position_count > 0:
             self.position_logger.info(f"\n{'='*80}")
@@ -1445,7 +1502,8 @@ class PositionManager:
                 
                 self.position_logger.info(f"  Current Price: {format_price(current_price)}")
                 
-                # Calculate current P/L (with leverage for accurate ROI)
+                # PERFORMANCE FIX: Calculate P/L once and reuse throughout update cycle
+                # This avoids redundant calculations (was calculated 3+ times)
                 current_pnl = position.get_pnl(current_price)  # Base price change %
                 leveraged_pnl = position.get_leveraged_pnl(current_price)  # Actual ROI %
                 position_value = position.amount * position.entry_price
@@ -1552,8 +1610,7 @@ class PositionManager:
                 
                 # Check if position should be closed
                 # First check advanced exit strategies
-                current_pnl = position.get_pnl(current_price)  # Base price change %
-                leveraged_pnl = position.get_leveraged_pnl(current_price)  # Actual ROI %
+                # PERFORMANCE FIX: Reuse P&L calculations from above (lines 1468-1471)
                 
                 # Prepare data for advanced exit strategy
                 position_data = {
@@ -2070,8 +2127,8 @@ class PositionManager:
         if closing_entire_position:
             return self.close_position(symbol, reason)
         
-        # Check minimum order size before attempting to scale out
-        limits = self.client.get_market_limits(symbol)
+        # PERFORMANCE FIX: Check minimum order size using cached limits to reduce API calls
+        limits = self._get_cached_market_limits(symbol)
         if limits:
             min_amount = limits['amount']['min']
             if min_amount and amount_to_close < min_amount:
