@@ -83,7 +83,7 @@ The bot intelligently adjusts settings based on your account size:
 **Purpose:** Balanced growth with moderate risk
 
 **Auto-Configured:**
-- **Leverage:** 8x (balanced, industry standard)
+- **Leverage:** 8x (balanced, commonly used)
 - **Max Position Size:** 50% of balance (e.g., $2,500 on $5,000)
 - **Risk Per Trade:** 2.0% (standard risk management)
 - **Min Profit Threshold:** 0.62% (covers fees + good profit)
