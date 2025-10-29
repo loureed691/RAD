@@ -125,8 +125,8 @@ stress:
 	python scenario_stress_engine.py
 
 optimize:
-	@echo "🎯 Running hyperparameter optimization..."
-	python -c "from automl import AutoML; AutoML().optimize_strategies()"
+	@echo "🎯 Running profitability optimization with Bayesian search..."
+	python profitability_optimizer.py
 
 paper-trade:
 	@echo "📝 Starting paper trading mode..."
