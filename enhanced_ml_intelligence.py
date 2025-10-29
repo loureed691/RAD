@@ -461,12 +461,14 @@ class ReinforcementLearningStrategy:
         self.discount_factor = discount_factor
         
         # Q-table: state -> action -> Q-value
-        # States: market regime (5 types) + volatility level (3 levels) = 15 states
+        # States: market regime (7 types) + volatility level (3 levels) = 21 states
         # Actions: 4 strategies
         self.q_table = {}
         
-        # Initialize Q-table
-        regimes = ['bull', 'bear', 'neutral', 'high_vol', 'low_vol']
+        # Initialize Q-table with ALL possible regimes from both detection methods
+        # advanced_risk_2026: 'bull', 'bear', 'neutral', 'high_vol', 'low_vol'
+        # signals.py: 'trending', 'ranging', 'neutral'
+        regimes = ['bull', 'bear', 'neutral', 'high_vol', 'low_vol', 'trending', 'ranging']
         vol_levels = ['low', 'medium', 'high']
         strategies = ['trend_following', 'mean_reversion', 'breakout', 'momentum']
         
@@ -480,8 +482,25 @@ class ReinforcementLearningStrategy:
         self.epsilon_decay = 0.995
         self.min_epsilon = 0.05
     
+    def _normalize_regime(self, market_regime: str) -> str:
+        """
+        Normalize market regime to ensure compatibility with Q-table
+        Maps similar regimes to consistent values for better learning
+        """
+        # Regime is already in Q-table, use as-is
+        regime_lower = market_regime.lower()
+        if regime_lower in ['bull', 'bear', 'neutral', 'high_vol', 'low_vol', 'trending', 'ranging']:
+            return regime_lower
+        
+        # Map unknown regimes to neutral as fallback
+        self.logger.warning(f"Unknown market regime '{market_regime}', mapping to 'neutral'")
+        return 'neutral'
+    
     def get_state(self, market_regime: str, volatility: float) -> str:
         """Convert market conditions to state string"""
+        # Normalize regime first
+        normalized_regime = self._normalize_regime(market_regime)
+        
         if volatility > 0.06:
             vol_level = 'high'
         elif volatility > 0.03:
@@ -489,7 +508,7 @@ class ReinforcementLearningStrategy:
         else:
             vol_level = 'low'
         
-        return f"{market_regime}_{vol_level}"
+        return f"{normalized_regime}_{vol_level}"
     
     def select_strategy(self, market_regime: str, volatility: float) -> str:
         """
