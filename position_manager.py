@@ -597,33 +597,46 @@ class Position:
             return False
 
 
-    def should_close(self, current_price: float) -> tuple[bool, str]:
-        """Check if position should be closed"""
+    def should_close(self, current_price: float, volatility: float = None, 
+                     current_drawdown: float = 0.0, portfolio_correlation: float = 0.5) -> tuple[bool, str]:
+        """Check if position should be closed with adaptive emergency thresholds
+        
+        Args:
+            current_price: Current market price
+            volatility: Current market volatility (optional, for adaptive thresholds)
+            current_drawdown: Current account drawdown (0-1)
+            portfolio_correlation: Portfolio correlation measure (0-1)
+        """
         # Calculate current P/L percentage
         # CRITICAL FIX: Use leveraged P&L to check ROI-based thresholds (20% profit = 20% ROI, not 20% price movement)
         # This ensures positions close at the correct profit/loss levels the user expects
         current_pnl = self.get_leveraged_pnl(current_price)
         
-        # CRITICAL SAFETY: Tiered emergency stop loss based on ROI to prevent catastrophic losses
-        # These are absolute maximum loss caps that override all other logic
-        # Protects against extreme scenarios where stop loss fails or leverage magnifies losses
+        # SMART ADAPTIVE: Use adaptive emergency thresholds based on market conditions
+        # If volatility is provided, use smart adaptive system, otherwise use base levels
+        if volatility is not None:
+            try:
+                from smart_adaptive_exits import AdaptiveEmergencyManager
+                emergency_mgr = AdaptiveEmergencyManager()
+                should_trigger, reason = emergency_mgr.should_trigger_emergency(
+                    current_pnl, volatility, current_drawdown, portfolio_correlation
+                )
+                if should_trigger:
+                    return True, reason
+            except Exception as e:
+                # Fallback to base levels if adaptive system fails
+                pass
         
-        # TIGHTENED: Emergency stops adjusted based on leverage to prevent excessive losses
-        # With high leverage, price moves are amplified, so we need tighter emergency stops
-        
+        # FALLBACK: Base emergency thresholds (used when adaptive system not available)
         # Level 1: Emergency stop at -40% ROI (liquidation danger zone)
-        # This is reduced from -50% to prevent getting too close to liquidation
         if current_pnl <= -0.40:
             return True, 'emergency_stop_liquidation_risk'
         
         # Level 2: Critical stop at -25% ROI (severe loss)
-        # Reduced from -35% - this should catch failing positions before catastrophic loss
         if current_pnl <= -0.25:
             return True, 'emergency_stop_severe_loss'
         
         # Level 3: Warning stop at -15% ROI (unacceptable loss)
-        # Reduced from -20% - if regular stops fail, this catches it earlier
-        # This should almost never trigger if stop losses are working correctly
         if current_pnl <= -0.15:
             return True, 'emergency_stop_excessive_loss'
         
@@ -1069,14 +1082,71 @@ class PositionManager:
             fill_price = order.get('average') or current_price
             self.position_logger.info(f"  Order filled at: {format_price(fill_price)}")
             
-            # Calculate stop loss and take profit
-            # Using 3x risk/reward ratio for better profitability (was 2x)
-            if signal == 'BUY':
-                stop_loss = fill_price * (1 - stop_loss_percentage)
-                take_profit = fill_price * (1 + stop_loss_percentage * 3)
-            else:
-                stop_loss = fill_price * (1 + stop_loss_percentage)
-                take_profit = fill_price * (1 - stop_loss_percentage * 3)
+            # SMART ADAPTIVE: Try to use smart adaptive targets if market data available
+            try:
+                # Get market data for adaptive calculations
+                ohlcv = self.client.get_ohlcv(symbol, timeframe='1h', limit=100)
+                if ohlcv and len(ohlcv) >= 50:
+                    from indicators import Indicators
+                    from smart_adaptive_exits import SmartAdaptiveExitManager
+                    
+                    df = Indicators.calculate_all(ohlcv)
+                    if not df.empty:
+                        indicators = Indicators.get_latest_indicators(df)
+                        
+                        # Extract parameters for smart targets
+                        atr = indicators.get('atr', fill_price * 0.03)
+                        volatility = indicators.get('bb_width', 0.03)
+                        
+                        # Calculate trend strength
+                        close = indicators.get('close', fill_price)
+                        sma_20 = indicators.get('sma_20', close)
+                        sma_50 = indicators.get('sma_50', close)
+                        if not pd.isna(sma_50) and not pd.isna(sma_20) and sma_50 > 0:
+                            trend_strength = min(abs(sma_20 - sma_50) / sma_50 * 10, 1.0)
+                        else:
+                            trend_strength = 0.5
+                        
+                        # Get support/resistance
+                        support_resistance = Indicators.calculate_support_resistance(df)
+                        
+                        # Calculate smart adaptive targets
+                        smart_exit_mgr = SmartAdaptiveExitManager()
+                        smart_targets = smart_exit_mgr.calculate_smart_targets(
+                            entry_price=fill_price,
+                            side='long' if signal == 'BUY' else 'short',
+                            atr=atr,
+                            volatility=volatility,
+                            trend_strength=trend_strength,
+                            support_resistance=support_resistance
+                        )
+                        
+                        # Use smart targets
+                        stop_loss = smart_targets['summary']['stop_price']
+                        take_profit = smart_targets['summary']['target_price']
+                        
+                        self.position_logger.info(f"  🧠 Using SMART ADAPTIVE targets:")
+                        self.position_logger.info(f"     Regime: {smart_targets['summary']['regime']}")
+                        self.position_logger.info(f"     Risk/Reward: {smart_targets['summary']['risk_reward_ratio']:.2f}")
+                        self.position_logger.info(f"     {smart_targets['stop_loss']['reasoning']}")
+                        self.position_logger.info(f"     {smart_targets['take_profit']['reasoning']}")
+                    else:
+                        raise ValueError("Indicators calculation failed")
+                else:
+                    raise ValueError("Insufficient market data")
+            except Exception as e:
+                # Fallback to standard calculation
+                self.logger.debug(f"Smart targets unavailable, using standard: {e}")
+                self.position_logger.info(f"  Using standard targets (smart system unavailable)")
+                
+                # Calculate stop loss and take profit
+                # Using 3x risk/reward ratio for better profitability (was 2x)
+                if signal == 'BUY':
+                    stop_loss = fill_price * (1 - stop_loss_percentage)
+                    take_profit = fill_price * (1 + stop_loss_percentage * 3)
+                else:
+                    stop_loss = fill_price * (1 + stop_loss_percentage)
+                    take_profit = fill_price * (1 - stop_loss_percentage * 3)
             
             stop_loss_pct = (1 - stop_loss/fill_price) if signal == 'SELL' else (stop_loss/fill_price - 1)
             take_profit_pct = (1 - take_profit/fill_price) if signal == 'SELL' else (take_profit/fill_price - 1)
@@ -1599,8 +1669,26 @@ class PositionManager:
                 except Exception as e:
                     self.logger.debug(f"Smart exit optimizer error for {symbol}: {e}")
                 
-                # Check standard stop loss and take profit conditions
-                should_close, reason = position.should_close(current_price)
+                # Check standard stop loss and take profit conditions with adaptive emergency thresholds
+                # Pass volatility if available for smart adaptive emergency levels
+                # Track whether we have volatility data from earlier calculations
+                has_volatility = 'volatility' in locals() and volatility is not None
+                volatility_for_emergency = volatility if has_volatility else None
+                
+                # Get drawdown from risk manager if available (for adaptive thresholds)
+                # TODO: Integrate with actual risk_manager instance passed from bot.py
+                current_drawdown_val = 0.0
+                
+                # Calculate portfolio correlation if we have multiple positions
+                # TODO: Implement actual correlation calculation from positions
+                portfolio_correlation_val = 0.5
+                
+                should_close, reason = position.should_close(
+                    current_price, 
+                    volatility=volatility_for_emergency,
+                    current_drawdown=current_drawdown_val,
+                    portfolio_correlation=portfolio_correlation_val
+                )
                 if should_close:
                     self.position_logger.info(f"  ✓ Closing position: {reason}")
                     pnl = self.close_position(symbol, reason)
