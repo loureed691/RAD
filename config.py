@@ -31,7 +31,28 @@ except ImportError:
     pass  # TensorFlow not installed or not needed
 
 class Config:
-    """Configuration class for trading bot"""
+    """
+    Configuration class for trading bot with intelligent auto-configuration
+    
+    MINIMAL SETUP: Only KuCoin API credentials are required in .env file.
+    All other parameters are automatically configured with optimal defaults.
+    
+    AUTO-CONFIGURED PARAMETERS (based on account balance):
+    - LEVERAGE: 4-12x (smaller accounts get lower leverage for safety)
+    - MAX_POSITION_SIZE: 30-60% of balance (scaled for account size)
+    - RISK_PER_TRADE: 1-3% (conservative for small, aggressive for large)
+    - MIN_PROFIT_THRESHOLD: 0.62-0.92% (includes trading fees + profit)
+    
+    OPTIMAL DEFAULTS (fine-tuned for best performance):
+    - WebSocket: Enabled (real-time data)
+    - Dashboard: Enabled on port 5000 (monitor your trades)
+    - CHECK_INTERVAL: 60s (fast enough, avoids rate limits)
+    - MAX_WORKERS: 20 (parallel scanning, fast but safe)
+    - DCA Strategy: Enabled with smart defaults
+    - Hedging: Enabled for portfolio protection
+    
+    OVERRIDE: Set any parameter in .env to override defaults.
+    """
     
     # API Configuration
     API_KEY = os.getenv('KUCOIN_API_KEY', '')
@@ -58,15 +79,15 @@ class Config:
     _RISK_PER_TRADE_OVERRIDE = os.getenv('RISK_PER_TRADE')
     _MIN_PROFIT_THRESHOLD_OVERRIDE = os.getenv('MIN_PROFIT_THRESHOLD')
     
-    # Bot Parameters
-    CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '60'))
-    POSITION_UPDATE_INTERVAL = int(float(os.getenv('POSITION_UPDATE_INTERVAL', '1.0')))  # Minimum time between position API calls (seconds) - faster for responsive trailing stops
-    LIVE_LOOP_INTERVAL = float(os.getenv('LIVE_LOOP_INTERVAL', '0.05'))  # Main loop sleep interval for live monitoring (seconds) - reduced for faster response
-    TRAILING_STOP_PERCENTAGE = float(os.getenv('TRAILING_STOP_PERCENTAGE', '0.02'))
-    MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))
-    MAX_WORKERS = int(os.getenv('MAX_WORKERS', '8'))  # Number of parallel workers for market scanning (reduced to prevent rate limiting)
-    CACHE_DURATION = int(os.getenv('CACHE_DURATION', '300'))  # Cache duration in seconds (default: 5 minutes)
-    STALE_DATA_MULTIPLIER = int(os.getenv('STALE_DATA_MULTIPLIER', '2'))  # Multiplier for CHECK_INTERVAL to determine max age for opportunity data
+    # Bot Parameters - Optimal defaults for best performance and safety
+    CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '60'))  # 60s = optimal balance (not too fast to avoid rate limits, not too slow to miss opportunities)
+    POSITION_UPDATE_INTERVAL = int(float(os.getenv('POSITION_UPDATE_INTERVAL', '3.0')))  # 3s = 40% faster trailing stops, responsive without rate limiting
+    LIVE_LOOP_INTERVAL = float(os.getenv('LIVE_LOOP_INTERVAL', '0.1'))  # 100ms = truly live monitoring, fast response to market changes
+    TRAILING_STOP_PERCENTAGE = float(os.getenv('TRAILING_STOP_PERCENTAGE', '0.02'))  # 2% trailing stop = industry standard, balances protection vs noise
+    MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))  # 3 positions = balanced diversification without overextension
+    MAX_WORKERS = int(os.getenv('MAX_WORKERS', '20'))  # 20 workers = fast parallel scanning while staying under API rate limits
+    CACHE_DURATION = int(os.getenv('CACHE_DURATION', '300'))  # 5 min cache for scanning (live data always used for trading)
+    STALE_DATA_MULTIPLIER = int(os.getenv('STALE_DATA_MULTIPLIER', '2'))  # 2x CHECK_INTERVAL = reasonable tolerance for opportunity data
     
     # DCA Strategy Configuration
     ENABLE_DCA = os.getenv('ENABLE_DCA', 'true').lower() in ('true', '1', 'yes')

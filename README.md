@@ -7,10 +7,30 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 
 ## 🚀 Quick Start
 
-1. **Setup**: Configure API keys in `.env` - see [QUICKSTART.md](QUICKSTART.md)
-2. **Run**: `python bot.py` - Auto-configures based on your balance
+**Ultra-Simple Setup - Just 3 Steps:**
+
+1. **Setup API**: Copy `.env.example` to `.env` and add your KuCoin API credentials
+   ```bash
+   cp .env.example .env
+   # Edit .env and set: KUCOIN_API_KEY, KUCOIN_API_SECRET, KUCOIN_API_PASSPHRASE
+   ```
+
+2. **Run**: `python bot.py` - Everything auto-configures based on your balance!
+
 3. **Monitor**: Web dashboard at http://localhost:5000 (starts automatically!)
-4. **Logs**: Check logs for detailed trading activity
+
+**That's it!** No complex configuration needed. The bot automatically:
+- ✅ Sets optimal leverage based on your account size (4-12x)
+- ✅ Configures position sizing for your balance (30-60%)
+- ✅ Adjusts risk parameters (1-3% per trade)
+- ✅ Enables WebSocket for real-time data
+- ✅ Starts the dashboard for monitoring
+- ✅ Activates DCA and hedging strategies
+- ✅ Uses optimal scanning intervals (60s)
+
+**Advanced users**: You can override any setting in `.env` - see [AUTO_CONFIG.md](AUTO_CONFIG.md)
+
+---
 
 👉 **See [2025_AI_ENHANCEMENTS.md](2025_AI_ENHANCEMENTS.md) for latest AI features** 🆕  
 👉 **See [2025_AI_QUICKSTART.md](2025_AI_QUICKSTART.md) for quick integration guide** 🆕  
