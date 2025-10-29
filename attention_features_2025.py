@@ -92,6 +92,23 @@ class AttentionFeatureSelector:
             self.logger.error(f"Error calculating attention scores: {e}")
             return np.ones(self.n_features) / self.n_features
     
+    def calculate_attention_weights(self, features: np.ndarray) -> np.ndarray:
+        """
+        Calculate attention weights for current features
+        
+        Computes attention scores based on the current feature values and
+        the learned attention weights (self.attention_weights). This method
+        is an alias for calculate_attention_scores but maintains semantic
+        clarity when the scores are used for weighting purposes.
+        
+        Args:
+            features: Feature vector (shape: n_features)
+            
+        Returns:
+            Computed attention weights (shape: n_features)
+        """
+        return self.calculate_attention_scores(features)
+    
     def apply_attention(self, features: np.ndarray) -> np.ndarray:
         """
         Apply attention weighting to features
