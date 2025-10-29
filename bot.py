@@ -917,10 +917,58 @@ class TradingBot:
         except Exception as e:
             self.logger.debug(f"Could not check position size limit: {e}")
         
-        # Open position
+        # ═══════════════════════════════════════════════════════════════════════
+        # DCA STRATEGY INTEGRATION - Smart Entry Splitting
+        # ═══════════════════════════════════════════════════════════════════════
+        use_dca = False
+        dca_plan = None
+        
+        if Config.ENABLE_DCA and Config.DCA_ENTRY_ENABLED:
+            # Use DCA for lower confidence signals (smarter risk management)
+            if confidence < Config.DCA_CONFIDENCE_THRESHOLD:
+                try:
+                    # Get current price for DCA plan
+                    ticker = self.client.get_ticker(symbol)
+                    if ticker and 'last' in ticker:
+                        current_price = float(ticker['last'])
+                        
+                        # Create Entry DCA plan
+                        dca_plan = self.dca_strategy.initialize_entry_dca(
+                            symbol=symbol,
+                            signal=signal,
+                            total_amount=position_size,
+                            entry_price=current_price,
+                            confidence=confidence
+                        )
+                        
+                        # Use first entry amount instead of full position
+                        if dca_plan and len(dca_plan['entry_amounts']) > 0:
+                            use_dca = True
+                            position_size = dca_plan['entry_amounts'][0]
+                            self.logger.info(f"💰 DCA Entry Strategy activated for {symbol}")
+                            self.logger.info(f"   Confidence: {confidence:.2%} (< {Config.DCA_CONFIDENCE_THRESHOLD:.2%} threshold)")
+                            self.logger.info(f"   Splitting into {dca_plan['num_entries']} entries")
+                            self.logger.info(f"   First entry: {position_size:.4f} of {dca_plan['total_amount']:.4f}")
+                
+                except Exception as e:
+                    self.logger.warning(f"DCA planning error: {e}, using full position")
+                    use_dca = False
+        
+        # Open position (first entry if using DCA, full position otherwise)
         success = self.position_manager.open_position(
             symbol, signal, position_size, leverage, stop_loss_percentage
         )
+        
+        # If DCA plan created and first entry successful, record it
+        if use_dca and success and dca_plan:
+            try:
+                ticker = self.client.get_ticker(symbol)
+                if ticker and 'last' in ticker:
+                    fill_price = float(ticker['last'])
+                    self.dca_strategy.record_entry(symbol, position_size, fill_price)
+                    self.logger.info(f"💰 DCA Entry 1/{dca_plan['num_entries']} recorded for {symbol}")
+            except Exception as e:
+                self.logger.warning(f"Error recording DCA entry: {e}")
         
         # Record trade quality for learning
         if success:
@@ -1293,6 +1341,157 @@ class TradingBot:
                 f"Avg P/L: {metrics.get('avg_profit', 0):.2%}, "
                 f"Total Trades: {metrics.get('total_trades', 0)}"
             )
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # DCA STRATEGY MONITORING - Check for additional entries
+        # ═══════════════════════════════════════════════════════════════════════
+        if Config.ENABLE_DCA:
+            try:
+                active_dca_positions = self.dca_strategy.get_active_dca_positions()
+                for symbol in active_dca_positions:
+                    if symbol in self.position_manager.positions:
+                        # Get current price
+                        ticker = self.client.get_ticker(symbol)
+                        if ticker and 'last' in ticker:
+                            current_price = float(ticker['last'])
+                            
+                            # Check if next DCA entry should be made
+                            next_entry = self.dca_strategy.get_next_entry(symbol, current_price)
+                            if next_entry:
+                                amount, price = next_entry
+                                position = self.position_manager.positions[symbol]
+                                
+                                # Execute DCA entry using scale_in
+                                self.logger.info(f"💰 Executing DCA entry for {symbol}")
+                                success = self.position_manager.scale_in_position(
+                                    symbol, amount, price
+                                )
+                                
+                                if success:
+                                    self.dca_strategy.record_entry(symbol, amount, price)
+                                    plan = self.dca_strategy.get_dca_plan(symbol)
+                                    if plan:
+                                        self.logger.info(
+                                            f"💰 DCA Entry {plan['completed_entries']}/{plan['num_entries']} "
+                                            f"completed for {symbol}"
+                                        )
+                
+                # Accumulation DCA check for winning positions
+                if Config.DCA_ACCUMULATION_ENABLED:
+                    for symbol, position in self.position_manager.positions.items():
+                        # Get current P/L
+                        ticker = self.client.get_ticker(symbol)
+                        if ticker and 'last' in ticker:
+                            current_price = float(ticker['last'])
+                            current_pnl = position.get_pnl(current_price)
+                            
+                            # Track number of accumulation adds (use position attribute if exists)
+                            existing_adds = getattr(position, 'accumulation_adds', 0)
+                            
+                            # Check if should accumulate
+                            should_add = self.dca_strategy.should_accumulate(
+                                symbol, current_price, position.entry_price,
+                                current_pnl, existing_adds
+                            )
+                            
+                            if should_add:
+                                add_amount = self.dca_strategy.get_accumulation_amount(
+                                    position.amount, existing_adds + 1
+                                )
+                                
+                                self.logger.info(f"💎 Accumulation DCA triggered for {symbol}")
+                                success = self.position_manager.scale_in_position(
+                                    symbol, add_amount, current_price
+                                )
+                                
+                                if success:
+                                    # Track accumulation adds
+                                    if not hasattr(position, 'accumulation_adds'):
+                                        position.accumulation_adds = 0
+                                    position.accumulation_adds += 1
+                                    self.logger.info(f"💎 Accumulation add #{position.accumulation_adds} completed")
+                
+                # Cleanup old DCA plans
+                self.dca_strategy.cleanup_old_plans(max_age_hours=24)
+                
+            except Exception as e:
+                self.logger.debug(f"DCA monitoring error: {e}")
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # HEDGING STRATEGY MONITORING - Portfolio protection
+        # ═══════════════════════════════════════════════════════════════════════
+        if Config.ENABLE_HEDGING:
+            try:
+                # Get current portfolio state
+                balance = self.client.get_balance()
+                if balance and 'free' in balance:
+                    available_balance = float(balance.get('free', {}).get('USDT', 0))
+                    
+                    # Calculate total portfolio value
+                    position_value = sum(
+                        getattr(pos, 'amount', 0) * getattr(pos, 'entry_price', 0)
+                        for pos in self.position_manager.positions.values()
+                    )
+                    portfolio_value = available_balance + position_value
+                    
+                    if portfolio_value > 0:
+                        # Check drawdown hedge trigger
+                        current_drawdown = self.risk_manager.current_drawdown
+                        if current_drawdown > 0:
+                            hedge_rec = self.hedging_strategy.should_hedge_drawdown(
+                                current_drawdown, portfolio_value
+                            )
+                            if hedge_rec:
+                                hedge_id = self.hedging_strategy.create_hedge(hedge_rec)
+                                self.logger.warning(f"🛡️ Drawdown hedge activated: {hedge_id}")
+                        
+                        # Check volatility hedge trigger
+                        try:
+                            # Get market volatility from advanced risk manager
+                            volatility = getattr(self.advanced_risk_2026, 'current_volatility', 0.05)
+                            hedge_rec = self.hedging_strategy.should_hedge_volatility(
+                                volatility, portfolio_value
+                            )
+                            if hedge_rec:
+                                hedge_id = self.hedging_strategy.create_hedge(hedge_rec)
+                                self.logger.warning(f"🛡️ Volatility hedge activated: {hedge_id}")
+                        except Exception as e:
+                            self.logger.debug(f"Volatility hedge check error: {e}")
+                        
+                        # Check correlation hedge trigger
+                        if len(self.position_manager.positions) > 0:
+                            open_positions_dict = {}
+                            for symbol, pos in self.position_manager.positions.items():
+                                open_positions_dict[symbol] = {
+                                    'side': getattr(pos, 'side', 'long'),
+                                    'notional_value': getattr(pos, 'amount', 0) * getattr(pos, 'entry_price', 0)
+                                }
+                            
+                            hedge_rec = self.hedging_strategy.should_hedge_correlation(
+                                open_positions_dict, portfolio_value
+                            )
+                            if hedge_rec:
+                                hedge_id = self.hedging_strategy.create_hedge(hedge_rec)
+                                self.logger.warning(f"🛡️ Correlation hedge activated: {hedge_id}")
+                        
+                        # Check if existing hedges should be closed
+                        active_hedges = self.hedging_strategy.get_active_hedges()
+                        for hedge in active_hedges:
+                            current_conditions = {
+                                'drawdown': current_drawdown,
+                                'volatility': getattr(self.advanced_risk_2026, 'current_volatility', 0.05),
+                                'concentration': 0  # Will be calculated if needed
+                            }
+                            
+                            if self.hedging_strategy.should_close_hedge(hedge['hedge_id'], current_conditions):
+                                self.hedging_strategy.close_hedge(hedge['hedge_id'])
+                                self.logger.info(f"🛡️ Hedge closed: {hedge['hedge_id']}")
+                
+                # Cleanup old closed hedges
+                self.hedging_strategy.cleanup_old_hedges(max_age_hours=48)
+                
+            except Exception as e:
+                self.logger.debug(f"Hedging monitoring error: {e}")
         
         # Execute trades from opportunities found by background scanner
         self.scan_for_opportunities()

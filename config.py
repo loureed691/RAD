@@ -73,7 +73,7 @@ class Config:
     DCA_ENTRY_ENABLED = os.getenv('DCA_ENTRY_ENABLED', 'true').lower() in ('true', '1', 'yes')
     DCA_ACCUMULATION_ENABLED = os.getenv('DCA_ACCUMULATION_ENABLED', 'true').lower() in ('true', '1', 'yes')
     DCA_NUM_ENTRIES = int(os.getenv('DCA_NUM_ENTRIES', '3'))  # Number of DCA entries
-    DCA_CONFIDENCE_THRESHOLD = float(os.getenv('DCA_CONFIDENCE_THRESHOLD', '0.55'))  # Use DCA for signals below this confidence
+    DCA_CONFIDENCE_THRESHOLD = float(os.getenv('DCA_CONFIDENCE_THRESHOLD', '0.70'))  # Use DCA for signals below this confidence (smarter: 70%)
     
     # Hedging Strategy Configuration
     ENABLE_HEDGING = os.getenv('ENABLE_HEDGING', 'true').lower() in ('true', '1', 'yes')
