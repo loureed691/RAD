@@ -81,7 +81,7 @@ class Config:
     
     # Bot Parameters - Optimal defaults for best performance and safety
     CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '60'))  # 60s = optimal balance (not too fast to avoid rate limits, not too slow to miss opportunities)
-    POSITION_UPDATE_INTERVAL = int(float(os.getenv('POSITION_UPDATE_INTERVAL', '3.0')))  # 3s = 40% faster trailing stops, responsive without rate limiting
+    POSITION_UPDATE_INTERVAL = int(float(os.getenv('POSITION_UPDATE_INTERVAL', '3.0')))  # 3s (reduced from 5s, 40% faster trailing stops, responsive without rate limiting)
     LIVE_LOOP_INTERVAL = float(os.getenv('LIVE_LOOP_INTERVAL', '0.1'))  # 100ms = truly live monitoring, fast response to market changes
     TRAILING_STOP_PERCENTAGE = float(os.getenv('TRAILING_STOP_PERCENTAGE', '0.02'))  # 2% trailing stop = industry standard, balances protection vs noise
     MAX_OPEN_POSITIONS = int(os.getenv('MAX_OPEN_POSITIONS', '3'))  # 3 positions = balanced diversification without overextension
