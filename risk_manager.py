@@ -105,7 +105,7 @@ class RiskManager:
             self.daily_loss += abs(pnl)
             if self.daily_loss >= self.daily_loss_limit:
                 self.logger.warning(
-                    f"⚠️ Daily loss limit approaching: {self.daily_loss:.2%} / {self.daily_loss_limit:.2%}"
+                    f"⚠️ Daily loss limit reached or exceeded: {self.daily_loss:.2%} / {self.daily_loss_limit:.2%}"
                 )
         else:
             # Breakeven trade - reset streaks but don't count in wins/losses
