@@ -319,7 +319,7 @@ class MLStrategyCoordinator2025:
             
             # Derived features
             (indicators.get('ema_12', 0) - indicators.get('ema_26', 0)) / max(indicators.get('ema_26', 1), 1),
-            (indicators.get('close', 0) - indicators.get('sma_20', 0)) / max(indicators.get('sma_20', 1), 1),
+            ((indicators.get('close', 0) - indicators.get('sma_20', 0)) / indicators['sma_20'] if indicators.get('sma_20', 0) != 0 else 0.0),
             (indicators.get('close', 0) - indicators.get('bb_mid', 0)) / max(indicators.get('bb_width', 0.01), 0.01),
             
             # Additional features to reach 31
