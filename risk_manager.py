@@ -99,6 +99,14 @@ class RiskManager:
             self.win_streak = 0
             self.losses += 1
             self.total_loss += abs(pnl)
+            
+            # CRITICAL FIX: Track daily loss for daily loss limit protection
+            # Only count losses toward daily loss tracking
+            self.daily_loss += abs(pnl)
+            if self.daily_loss >= self.daily_loss_limit:
+                self.logger.warning(
+                    f"⚠️ Daily loss limit approaching: {self.daily_loss:.2%} / {self.daily_loss_limit:.2%}"
+                )
         else:
             # Breakeven trade - reset streaks but don't count in wins/losses
             self.win_streak = 0
@@ -1073,6 +1081,11 @@ class RiskManager:
         Returns:
             Risk adjustment factor (0.5-1.0) based on drawdown
         """
+        # Initialize daily tracking if not set
+        if self.daily_start_balance == 0.0:
+            self.daily_start_balance = current_balance
+            self.logger.debug(f"Initialized daily start balance: ${current_balance:.2f}")
+        
         # Track peak balance
         if current_balance > self.peak_balance:
             self.peak_balance = current_balance
