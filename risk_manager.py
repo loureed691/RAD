@@ -99,6 +99,14 @@ class RiskManager:
             self.win_streak = 0
             self.losses += 1
             self.total_loss += abs(pnl)
+            
+            # CRITICAL FIX: Track daily loss for daily loss limit protection
+            # Only count losses toward daily loss tracking
+            self.daily_loss += abs(pnl)
+            if self.daily_loss >= self.daily_loss_limit:
+                self.logger.warning(
+                    f"⚠️ Daily loss limit reached or exceeded: {self.daily_loss:.2%} / {self.daily_loss_limit:.2%}"
+                )
         else:
             # Breakeven trade - reset streaks but don't count in wins/losses
             self.win_streak = 0
@@ -268,8 +276,8 @@ class RiskManager:
         same_group_count = 0
         for pos in open_positions:
             pos_base = pos.symbol.split('/')[0].replace('USDT', '').replace('USD', '')
-            # Check if any group asset is in position base (single pass)
-            if group_assets_set & set(pos_base.split()):
+            # Check if any group asset is in position base (more efficient check)
+            if any(asset in pos_base for asset in group_assets_set):
                 same_group_count += 1
         
         # Allow max 2 positions from same correlation group
@@ -427,6 +435,11 @@ class RiskManager:
         Returns:
             Position size in contracts
         """
+        # Validate balance first
+        if balance <= 0:
+            self.logger.error(f"Invalid balance: {balance}. Cannot calculate position size.")
+            return 0.0
+        
         # Use Kelly Criterion if provided and valid, otherwise use standard risk
         if kelly_fraction is not None and kelly_fraction > 0:
             # Kelly suggests optimal fraction of capital to risk
@@ -445,6 +458,16 @@ class RiskManager:
             self.logger.error(f"Invalid entry_price: {entry_price}. Cannot calculate position size.")
             return 0.0
         
+        # Validate stop_loss_price
+        if stop_loss_price <= 0:
+            self.logger.error(f"Invalid stop_loss_price: {stop_loss_price}. Cannot calculate position size.")
+            return 0.0
+        
+        # Ensure stop loss is different from entry price
+        if abs(entry_price - stop_loss_price) < 0.0001:  # Essentially the same price
+            self.logger.error(f"Stop loss price ({stop_loss_price}) is too close to entry price ({entry_price})")
+            return 0.0
+        
         # Calculate price distance to stop loss
         price_distance = abs(entry_price - stop_loss_price) / entry_price
         
@@ -459,12 +482,7 @@ class RiskManager:
         # Cap at maximum position size
         position_value = min(position_value, self.max_position_size)
         
-        # SAFETY: Guard against invalid entry price
-        if entry_price <= 0:
-            self.logger.error(f"Invalid entry_price: {entry_price}, cannot calculate position size")
-            return 0.0
-        
-        # Convert to contracts
+        # Convert to contracts (entry_price already validated above)
         position_size = position_value / entry_price
         
         self.logger.debug(
@@ -1063,6 +1081,11 @@ class RiskManager:
         Returns:
             Risk adjustment factor (0.5-1.0) based on drawdown
         """
+        # Initialize daily tracking if not set
+        if self.daily_start_balance == 0.0:
+            self.daily_start_balance = current_balance
+            self.logger.debug(f"Initialized daily start balance: ${current_balance:.2f}")
+        
         # Track peak balance
         if current_balance > self.peak_balance:
             self.peak_balance = current_balance

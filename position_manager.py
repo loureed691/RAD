@@ -811,7 +811,8 @@ class PositionManager:
             if mark_price_str:
                 try:
                     mark_price = float(mark_price_str)
-                except (ValueError, TypeError):
+                except (ValueError, TypeError) as e:
+                    self.position_logger.debug(f"Could not parse mark price '{mark_price_str}': {e}")
                     pass
         
         # Use mark price if available, otherwise fall back to last price
@@ -1300,9 +1301,12 @@ class PositionManager:
                 
                 if orphaned_symbols:
                     self.logger.info(f"Cleaning up {len(orphaned_symbols)} positions that were closed externally: {orphaned_symbols}")
-                    for symbol in orphaned_symbols:
-                        self.position_logger.info(f"Removing externally closed position from tracking: {symbol}")
-                        del self.positions[symbol]
+                    # Thread-safe position removal
+                    with self._positions_lock:
+                        for symbol in orphaned_symbols:
+                            self.position_logger.info(f"Removing externally closed position from tracking: {symbol}")
+                            if symbol in self.positions:
+                                del self.positions[symbol]
         except Exception as e:
             # If we can't check exchange positions, log and continue
             # Better to process with potentially stale data than to skip entirely
