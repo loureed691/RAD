@@ -24,7 +24,6 @@ from logger import Logger
 from enhanced_ml_intelligence import (
     DeepLearningSignalPredictor,
     MultiTimeframeSignalFusion,
-    AdaptiveExitStrategy,
     ReinforcementLearningStrategy
 )
 
