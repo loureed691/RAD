@@ -510,8 +510,11 @@ class ReinforcementLearningStrategy:
             self.logger.debug(f"Unknown state '{state}', defaulting to neutral")
             # Default to neutral state with same volatility level
             vol_level = state.split('_')[-1] if '_' in state else 'medium'
+            # Validate volatility level
+            if vol_level not in ['low', 'medium', 'high']:
+                vol_level = 'medium'
             state = f"neutral_{vol_level}"
-            # If still not found, just use neutral_medium
+            # If still not found, just use neutral_medium as final fallback
             if state not in self.q_table:
                 state = "neutral_medium"
         
