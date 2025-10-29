@@ -521,9 +521,24 @@ class MLStrategyCoordinator2025:
             perf['accuracy'] = perf['correct'] / perf['total'] if perf['total'] > 0 else 0.5
     
     def update_rl_strategy(self, market_regime: str, volatility: float, 
-                          strategy: str, reward: float):
-        """Update RL Q-values based on trade outcome"""
-        self.rl_selector.update_q_value(market_regime, volatility, strategy, reward)
+                          strategy: str, reward: float,
+                          next_market_regime: Optional[str] = None,
+                          next_volatility: Optional[float] = None):
+        """
+        Update RL Q-values based on trade outcome
+        
+        Args:
+            market_regime: Market regime when trade was taken
+            volatility: Volatility when trade was taken
+            strategy: Strategy used
+            reward: Reward (profit/loss)
+            next_market_regime: Market regime after action (optional, for proper Q-learning)
+            next_volatility: Volatility after action (optional, for proper Q-learning)
+        """
+        self.rl_selector.update_q_value(
+            market_regime, volatility, strategy, reward,
+            next_market_regime, next_volatility
+        )
         
         # Periodically save Q-table
         if np.random.random() < 0.1:  # 10% chance to save

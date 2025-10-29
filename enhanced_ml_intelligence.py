@@ -461,12 +461,17 @@ class ReinforcementLearningStrategy:
         self.discount_factor = discount_factor
         
         # Q-table: state -> action -> Q-value
-        # States: market regime (5 types) + volatility level (3 levels) = 15 states
+        # States: market regime (7 types) + volatility level (3 levels) = 21 states
         # Actions: 4 strategies
         self.q_table = {}
         
-        # Initialize Q-table
-        regimes = ['bull', 'bear', 'neutral', 'high_vol', 'low_vol']
+        # Initialize Q-table with ALL possible regimes from both detection methods
+        # advanced_risk_2026: 'bull', 'bear', 'neutral', 'high_vol', 'low_vol'
+        # signals.py: 'trending', 'ranging', 'neutral'
+        # 'neutral' appears in both lists; deduplication is intentional.
+        regimes_source1 = ['bull', 'bear', 'neutral', 'high_vol', 'low_vol']
+        regimes_source2 = ['trending', 'ranging', 'neutral']
+        regimes = list(set(regimes_source1 + regimes_source2))
         vol_levels = ['low', 'medium', 'high']
         strategies = ['trend_following', 'mean_reversion', 'breakout', 'momentum']
         
@@ -480,8 +485,25 @@ class ReinforcementLearningStrategy:
         self.epsilon_decay = 0.995
         self.min_epsilon = 0.05
     
+    def _normalize_regime(self, market_regime: str) -> str:
+        """
+        Normalize market regime to ensure compatibility with Q-table
+        Maps similar regimes to consistent values for better learning
+        """
+        # Regime is already in Q-table, use as-is
+        regime_lower = market_regime.lower()
+        if regime_lower in ['bull', 'bear', 'neutral', 'high_vol', 'low_vol', 'trending', 'ranging']:
+            return regime_lower
+        
+        # Map unknown regimes to neutral as fallback
+        self.logger.warning(f"Unknown market regime '{market_regime}', mapping to 'neutral'")
+        return 'neutral'
+    
     def get_state(self, market_regime: str, volatility: float) -> str:
         """Convert market conditions to state string"""
+        # Normalize regime first
+        normalized_regime = self._normalize_regime(market_regime)
+        
         if volatility > 0.06:
             vol_level = 'high'
         elif volatility > 0.03:
@@ -489,7 +511,7 @@ class ReinforcementLearningStrategy:
         else:
             vol_level = 'low'
         
-        return f"{market_regime}_{vol_level}"
+        return f"{normalized_regime}_{vol_level}"
     
     def select_strategy(self, market_regime: str, volatility: float) -> str:
         """
@@ -522,21 +544,38 @@ class ReinforcementLearningStrategy:
                       market_regime: str, 
                       volatility: float, 
                       strategy: str, 
-                      reward: float):
+                      reward: float,
+                      next_market_regime: Optional[str] = None,
+                      next_volatility: Optional[float] = None):
         """
-        Update Q-value based on trade outcome
+        Update Q-value based on trade outcome using proper Q-learning formula
         
         Args:
             market_regime: Market regime when trade was taken
             volatility: Volatility when trade was taken
             strategy: Strategy used
             reward: Reward (profit/loss)
+            next_market_regime: Market regime after action (optional)
+            next_volatility: Volatility after action (optional)
         """
         state = self.get_state(market_regime, volatility)
         
         # Q-learning update
         current_q = self.q_table[state][strategy]
-        max_future_q = max(self.q_table[state].values())
+        
+        # Proper Q-learning: use max Q-value from NEXT state
+        if next_market_regime is not None and next_volatility is not None:
+            next_state = self.get_state(next_market_regime, next_volatility)
+            max_future_q = max(self.q_table[next_state].values())
+        else:
+            # If next state not available, we assume a terminal state (max_future_q = 0).
+            # WARNING: This disables temporal difference learning and may lead to suboptimal Q-values
+            # unless the next state is truly terminal. Use with caution.
+            self.logger.warning(
+                "Next state unavailable in Q-learning update; assuming terminal state (max_future_q = 0). "
+                "This disables temporal difference learning and may lead to suboptimal Q-values."
+            )
+            max_future_q = 0.0
         
         new_q = current_q + self.learning_rate * (
             reward + self.discount_factor * max_future_q - current_q
@@ -549,7 +588,7 @@ class ReinforcementLearningStrategy:
         
         self.logger.debug(
             f"Updated Q-value: {state} -> {strategy}: "
-            f"{current_q:.3f} -> {new_q:.3f} (reward: {reward:.3f})"
+            f"{current_q:.3f} -> {new_q:.3f} (reward: {reward:.3f}, max_future: {max_future_q:.3f})"
         )
     
     def save_q_table(self, path: str = 'models/q_table.pkl'):
