@@ -1175,6 +1175,14 @@ class TradingBot:
                         break
                     time.sleep(1)
                     
+            except RuntimeError as e:
+                # Handle graceful shutdown - interpreter is shutting down
+                if "cannot schedule new futures after interpreter shutdown" in str(e):
+                    self.logger.info("🔍 [Background] Scanner stopping due to shutdown")
+                    break
+                else:
+                    self.logger.error(f"❌ Runtime error in background scanner: {e}", exc_info=True)
+                    time.sleep(10)
             except Exception as e:
                 self.logger.error(f"❌ Error in background scanner: {e}", exc_info=True)
                 # Sleep briefly and continue
