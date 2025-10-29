@@ -45,8 +45,9 @@ from dca_strategy import DCAStrategy
 from hedging_strategy import HedgingStrategy
 # Dashboard
 from dashboard import TradingDashboard, FLASK_AVAILABLE
-# Production-grade validation
+# Production-grade validation and monitoring
 from data_validator import DataValidator
+from production_monitor import ProductionMonitor
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -186,8 +187,9 @@ class TradingBot:
         self.dca_strategy = DCAStrategy()
         self.hedging_strategy = HedgingStrategy()
         
-        # Production-grade data validator
+        # Production-grade data validator and monitoring
         self.data_validator = DataValidator()
+        self.prod_monitor = ProductionMonitor()
         
         self.logger.info("🚀 2026 Advanced Features Activated:")
         self.logger.info("   ✅ Advanced Risk Manager (Regime-aware Kelly)")
@@ -221,6 +223,12 @@ class TradingBot:
         self.logger.info("💰 DCA & HEDGING STRATEGIES Activated:")
         self.logger.info("   ✅ DCA Strategy (Entry, Accumulation, Range)")
         self.logger.info("   ✅ Hedging Strategy (Portfolio protection)")
+        
+        self.logger.info("🔒 PRODUCTION-GRADE SAFETY Activated:")
+        self.logger.info("   ✅ Comprehensive Data Validation")
+        self.logger.info("   ✅ Production Health Monitoring")
+        self.logger.info("   ✅ Position State Persistence")
+        self.logger.info("   ✅ Automatic Crash Recovery")
         
         # State
         self.running = False
@@ -1171,6 +1179,14 @@ class TradingBot:
                             })
                         except Exception as e:
                             self.logger.debug(f"Error updating dashboard with trade: {e}")
+                    
+                    # PRODUCTION: Record trade in production monitor
+                    try:
+                        balance = self.client.get_balance()
+                        current_balance = float(balance.get('free', {}).get('USDT', 0)) if balance else 0
+                        self.prod_monitor.record_trade(pnl, current_balance)
+                    except Exception as e:
+                        self.logger.debug(f"Error recording trade in production monitor: {e}")
                 
                 except Exception as e:
                     self.logger.error(f"Error recording closed position {symbol}: {e}", exc_info=True)
@@ -1178,6 +1194,8 @@ class TradingBot:
             # Generator-level exception (e.g., API error fetching positions)
             # Log and continue - position monitor will retry on next cycle
             self.logger.error(f"Error during position update iteration: {e}", exc_info=True)
+            # PRODUCTION: Record position update failure
+            self.prod_monitor.record_position_update_failure()
     
     def _background_scanner(self):
         """Background thread that continuously scans for opportunities"""
@@ -1207,8 +1225,12 @@ class TradingBot:
                 
                 if opportunities:
                     self.logger.info(f"✅ [Background] Found {len(opportunities)} opportunities (scan took {scan_duration:.1f}s)")
+                    # PRODUCTION: Record successful scan
+                    self.prod_monitor.record_scan_success()
                 else:
                     self.logger.debug("[Background] No opportunities found in this scan")
+                    # Still consider it a success if no error occurred
+                    self.prod_monitor.record_scan_success()
                 
                 # Report performance periodically
                 if (datetime.now() - self.last_performance_report).total_seconds() >= 900:  # Every 15 minutes
@@ -1219,6 +1241,9 @@ class TradingBot:
                     is_healthy, reason = self.perf_monitor.check_health()
                     if not is_healthy:
                         self.logger.warning(f"⚠️  PERFORMANCE WARNING: {reason}")
+                    
+                    # PRODUCTION: Print production monitor status
+                    self.prod_monitor.print_status()
                 
                 # Sleep for the configured scan interval before next scan
                 # Check periodically if we should stop - yield control more frequently
@@ -1229,6 +1254,8 @@ class TradingBot:
                     
             except Exception as e:
                 self.logger.error(f"❌ Error in background scanner: {e}", exc_info=True)
+                # PRODUCTION: Record scan failure
+                self.prod_monitor.record_scan_failure()
                 # Sleep briefly and continue
                 time.sleep(10)
         
@@ -1252,6 +1279,8 @@ class TradingBot:
                         # Thread-safe update of timing variable
                         with self._position_monitor_lock:
                             self._last_position_check = datetime.now()
+                        # PRODUCTION: Record successful position update
+                        self.prod_monitor.record_position_update_success()
                 
                 # Short sleep to avoid CPU hogging but stay responsive
                 time.sleep(Config.LIVE_LOOP_INTERVAL)  # Use config constant for consistency
@@ -2063,6 +2092,13 @@ class TradingBot:
             self.logger.info("💾 Position manager state saved successfully")
         except Exception as e:
             self.logger.error(f"Error saving position manager state: {e}")
+        
+        # PRODUCTION: Save production monitor state
+        try:
+            self.prod_monitor.save_state()
+            self.logger.info("💾 Production monitor state saved successfully")
+        except Exception as e:
+            self.logger.error(f"Error saving production monitor state: {e}")
         
         # Close WebSocket and API connections
         try:
