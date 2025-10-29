@@ -19,7 +19,6 @@ import pandas as pd
 from typing import Dict, Tuple, List, Optional
 from datetime import datetime
 from logger import Logger
-from config import Config
 
 # Import all advanced ML components
 from enhanced_ml_intelligence import (
