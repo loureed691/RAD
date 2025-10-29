@@ -9,7 +9,6 @@ import unittest
 import os
 import pandas as pd
 import numpy as np
-from datetime import datetime
 
 # Set environment
 os.environ['LOG_LEVEL'] = 'ERROR'
