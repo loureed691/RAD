@@ -1,0 +1,30 @@
+
+================================================================================
+STRESS TEST SUMMARY REPORT
+================================================================================
+
+Test Configuration:
+  Total Scenarios: 5
+  Passed: 5 (100.0%)
+  Failed: 0 (0.0%)
+
+Performance Metrics (Successful Runs):
+  Average Return: 0.00%
+  Average Sharpe Ratio: 0.00
+  Average Sortino Ratio: 0.00
+  Average Max Drawdown: 0.00%
+  Average Profit Factor: 0.00
+  Average Win Rate: 0.0%
+
+Profitability Targets:
+  Profitable Scenarios: 0/0 (0.0%)
+  Profit Factor ≥ 1.2: 0/0 (0.0%)
+  Sharpe ≥ 1.0: 0/0 (0.0%)
+  Sortino ≥ 1.5: 0/0 (0.0%)
+  Max DD ≤ 15%: 0/0 (0.0%)
+  Win Rate ≥ 45%: 0/0 (0.0%)
+
+Failure Analysis:
+  No failures detected!
+
+================================================================================

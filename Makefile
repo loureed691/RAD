@@ -25,6 +25,7 @@ help:
 	@echo "  make test-unit       - Run unit tests only"
 	@echo "  make test-integration - Run integration tests"
 	@echo "  make test-coverage   - Run tests with coverage report"
+	@echo "  make stress          - Run 500-scenario stress test suite"
 	@echo ""
 	@echo "Trading Operations:"
 	@echo "  make validate-config - Validate configuration"
@@ -118,6 +119,10 @@ validate-config:
 backtest:
 	@echo "📊 Running backtesting engine..."
 	python example_backtest.py
+
+stress:
+	@echo "⚡ Running 500-scenario stress test suite..."
+	python scenario_stress_engine.py
 
 optimize:
 	@echo "🎯 Running hyperparameter optimization..."

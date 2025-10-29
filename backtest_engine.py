@@ -113,12 +113,27 @@ class BacktestEngine:
                 signal = strategy_func(row, self.balance, self.positions)
                 
                 # AUDIT FIX: Queue signal for next bar execution (realistic latency)
-                if signal and signal != 'HOLD':
-                    if use_next_bar_execution:
-                        pending_signals.append(signal)
-                    else:
-                        # Immediate execution (less realistic)
-                        self.execute_signal(signal, row)
+                # Handle both dict and string signals
+                if signal:
+                    # Convert string signals to dict format
+                    if isinstance(signal, str) and signal.upper() not in ['HOLD', 'NONE', '']:
+                        # Simple string signal, convert to dict
+                        close_price = row['close']
+                        amount = self.balance * 0.1 / close_price  # 10% of balance
+                        signal = {
+                            'side': signal.lower(),
+                            'amount': amount,
+                            'leverage': 5,
+                            'stop_loss': close_price * 0.97 if signal.lower() == 'long' else close_price * 1.03,
+                            'take_profit': close_price * 1.05 if signal.lower() == 'long' else close_price * 0.95
+                        }
+                    
+                    if isinstance(signal, dict):
+                        if use_next_bar_execution:
+                            pending_signals.append(signal)
+                        else:
+                            # Immediate execution (less realistic)
+                            self.execute_signal(signal, row)
             
             # Close any remaining positions at end
             if self.positions:
@@ -473,10 +488,22 @@ class BacktestEngine:
                     'total_pnl_pct': 0,
                     'win_rate': 0,
                     'sharpe_ratio': 0,
+                    'sortino_ratio': 0,
+                    'max_drawdown': 0,
+                    'max_drawdown_pct': 0,
+                    'profit_factor': 0,
                     'total_trading_fees': 0,
                     'total_funding_fees': 0,
                     'total_slippage': 0,
-                    'total_fees': 0
+                    'total_fees': 0,
+                    'fee_impact_pct': 0,
+                    'gross_pnl': 0,
+                    'winning_trades': 0,
+                    'losing_trades': 0,
+                    'final_balance': self.balance,
+                    'total_return_pct': 0,
+                    'trades': [],
+                    'equity_curve': self.equity_curve
                 }
             
             total_trades = len(self.closed_trades)
@@ -494,14 +521,28 @@ class BacktestEngine:
             
             win_rate = winning_trades / total_trades if total_trades > 0 else 0
             
+            # Calculate profit factor
+            total_profit = sum(t.get('net_pnl', 0) for t in self.closed_trades if t.get('net_pnl', 0) > 0)
+            total_loss = abs(sum(t.get('net_pnl', 0) for t in self.closed_trades if t.get('net_pnl', 0) < 0))
+            profit_factor = total_profit / total_loss if total_loss > 0 else 0
+            
             # Calculate Sharpe ratio using net PnL percentages
             returns = [t['pnl_pct'] for t in self.closed_trades]
             if len(returns) > 1:
                 avg_return = np.mean(returns)
                 std_return = np.std(returns)
                 sharpe_ratio = (avg_return / std_return * np.sqrt(252)) if std_return > 0 else 0
+                
+                # Calculate Sortino ratio (downside deviation only)
+                downside_returns = [r for r in returns if r < 0]
+                if downside_returns:
+                    downside_std = np.std(downside_returns)
+                    sortino_ratio = (avg_return / downside_std * np.sqrt(252)) if downside_std > 0 else 0
+                else:
+                    sortino_ratio = sharpe_ratio  # No downside, use Sharpe
             else:
                 sharpe_ratio = 0
+                sortino_ratio = 0
             
             # Calculate max drawdown
             max_drawdown = 0
@@ -520,12 +561,16 @@ class BacktestEngine:
                 'winning_trades': winning_trades,
                 'losing_trades': losing_trades,
                 'win_rate': win_rate,
+                'profit_factor': profit_factor,
                 'total_pnl': total_pnl,  # Net PnL (after fees)
                 'gross_pnl': gross_pnl,  # Gross PnL (before fees)
                 'total_pnl_pct': total_pnl_pct,
+                'total_return_pct': total_pnl_pct * 100,  # As percentage
                 'final_balance': self.balance,
                 'sharpe_ratio': sharpe_ratio,
+                'sortino_ratio': sortino_ratio,
                 'max_drawdown': max_drawdown,
+                'max_drawdown_pct': max_drawdown * 100,
                 # PRIORITY 1: Fee metrics
                 'total_trading_fees': self.total_trading_fees,
                 'total_funding_fees': self.total_funding_fees,
