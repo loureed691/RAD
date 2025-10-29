@@ -1545,10 +1545,10 @@ class TradingBot:
                     getattr(pos, 'amount', 0) * getattr(pos, 'entry_price', 0)
                     for pos in self.position_manager.positions.values()
                 ),
-                'sharpe_ratio': getattr(self.performance_2026, 'get_sharpe_ratio', lambda: 0)(),
-                'sortino_ratio': getattr(self.performance_2026, 'get_sortino_ratio', lambda: 0)(),
-                'calmar_ratio': getattr(self.performance_2026, 'get_calmar_ratio', lambda: 0)(),
-                'profit_factor': metrics.get('profit_factor', 0)
+                'sharpe_ratio': getattr(self.performance_2026, 'calculate_sharpe_ratio', lambda: 0)(),
+                'sortino_ratio': getattr(self.performance_2026, 'calculate_sortino_ratio', lambda: 0)(),
+                'calmar_ratio': getattr(self.performance_2026, 'calculate_calmar_ratio', lambda: 0)(),
+                'profit_factor': getattr(self.performance_2026, 'calculate_profit_factor', lambda: 0)()
             })
             
             # Update open positions
