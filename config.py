@@ -68,6 +68,19 @@ class Config:
     CACHE_DURATION = int(os.getenv('CACHE_DURATION', '300'))  # Cache duration in seconds (default: 5 minutes)
     STALE_DATA_MULTIPLIER = int(os.getenv('STALE_DATA_MULTIPLIER', '2'))  # Multiplier for CHECK_INTERVAL to determine max age for opportunity data
     
+    # DCA Strategy Configuration
+    ENABLE_DCA = os.getenv('ENABLE_DCA', 'true').lower() in ('true', '1', 'yes')
+    DCA_ENTRY_ENABLED = os.getenv('DCA_ENTRY_ENABLED', 'true').lower() in ('true', '1', 'yes')
+    DCA_ACCUMULATION_ENABLED = os.getenv('DCA_ACCUMULATION_ENABLED', 'true').lower() in ('true', '1', 'yes')
+    DCA_NUM_ENTRIES = int(os.getenv('DCA_NUM_ENTRIES', '3'))  # Number of DCA entries
+    DCA_CONFIDENCE_THRESHOLD = float(os.getenv('DCA_CONFIDENCE_THRESHOLD', '0.70'))  # Use DCA for signals below this confidence (smarter: 70%)
+    
+    # Hedging Strategy Configuration
+    ENABLE_HEDGING = os.getenv('ENABLE_HEDGING', 'true').lower() in ('true', '1', 'yes')
+    HEDGE_DRAWDOWN_THRESHOLD = float(os.getenv('HEDGE_DRAWDOWN_THRESHOLD', '0.10'))  # Hedge at 10% drawdown
+    HEDGE_VOLATILITY_THRESHOLD = float(os.getenv('HEDGE_VOLATILITY_THRESHOLD', '0.08'))  # Hedge at 8% volatility
+    HEDGE_CORRELATION_THRESHOLD = float(os.getenv('HEDGE_CORRELATION_THRESHOLD', '0.70'))  # Hedge at 70% concentration
+    
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     LOG_FILE = os.getenv('LOG_FILE', 'logs/bot.log')
