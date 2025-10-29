@@ -565,8 +565,13 @@ class ReinforcementLearningStrategy:
             next_state = self.get_state(next_market_regime, next_volatility)
             max_future_q = max(self.q_table[next_state].values())
         else:
-            # If next state not available, assume terminal state (max_future_q = 0)
-            # This simplifies to immediate reward-based learning
+            # If next state not available, we assume a terminal state (max_future_q = 0).
+            # WARNING: This disables temporal difference learning and may lead to suboptimal Q-values
+            # unless the next state is truly terminal. Use with caution.
+            self.logger.warning(
+                "Next state unavailable in Q-learning update; assuming terminal state (max_future_q = 0). "
+                "This disables temporal difference learning and may lead to suboptimal Q-values."
+            )
             max_future_q = 0.0
         
         new_q = current_q + self.learning_rate * (
