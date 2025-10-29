@@ -77,6 +77,18 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 - Strategy performance tracking
 - Automatic regime-based selection
 
+#### 💰 **DCA & Hedging Strategies** 🆕
+- **DCA (Dollar Cost Averaging)**:
+  - Entry DCA: Split entries into 2-4 orders for better prices
+  - Accumulation DCA: Add to winning positions during pullbacks
+  - Range DCA: Build positions in sideways markets
+  - Confidence-based entry sizing
+- **Portfolio Hedging**:
+  - Drawdown protection (hedge at 10% drawdown)
+  - Volatility protection (hedge during extreme volatility)
+  - Correlation protection (balance one-sided portfolios)
+  - Event protection (pre-hedge known risk events)
+
 #### 📈 **Professional Performance Metrics**
 - Sharpe Ratio (risk-adjusted returns)
 - Sortino Ratio (downside risk)
@@ -110,8 +122,10 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 - **WebSocket Integration**: Real-time market data with REST API fallback
 - **Truly Live Monitoring**: 100ms loop checks, 1-5s position updates
 - **Advanced Order Types**: Post-only, reduce-only, stop-limit orders
-- **Position Scaling**: Scale in/out for DCA and profit-taking strategies
+- **Position Scaling**: Scale in/out for DCA and profit-taking strategies 🆕
 - **Sophisticated Exit Strategies**: 8 intelligent exit methods
+- **DCA Strategy**: 3 modes (Entry, Accumulation, Range) for better position building 🆕
+- **Hedging Strategy**: Portfolio-level protection during high-risk periods 🆕
 
 ### 🛡️ Reliability & Production
 - **Comprehensive API Error Handling**: Automatic retries with exponential backoff

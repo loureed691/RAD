@@ -40,6 +40,9 @@ from enhanced_ml_intelligence import (
     DeepLearningSignalPredictor, MultiTimeframeSignalFusion,
     AdaptiveExitStrategy, ReinforcementLearningStrategy
 )
+# DCA and Hedging Strategies
+from dca_strategy import DCAStrategy
+from hedging_strategy import HedgingStrategy
 # Dashboard
 from dashboard import TradingDashboard, FLASK_AVAILABLE
 
@@ -177,6 +180,10 @@ class TradingBot:
         # Load saved Q-table if available
         self.rl_strategy.load_q_table()
         
+        # DCA and Hedging Strategies
+        self.dca_strategy = DCAStrategy()
+        self.hedging_strategy = HedgingStrategy()
+        
         self.logger.info("🚀 2026 Advanced Features Activated:")
         self.logger.info("   ✅ Advanced Risk Manager (Regime-aware Kelly)")
         self.logger.info("   ✅ Market Microstructure (Order flow analysis)")
@@ -205,6 +212,10 @@ class TradingBot:
         self.logger.info("   ✅ Multi-Timeframe Signal Fusion (Weighted voting)")
         self.logger.info("   ✅ Adaptive Exit Strategy (Dynamic targets)")
         self.logger.info("   ✅ Reinforcement Learning Strategy Selector (Q-learning)")
+        
+        self.logger.info("💰 DCA & HEDGING STRATEGIES Activated:")
+        self.logger.info("   ✅ DCA Strategy (Entry, Accumulation, Range)")
+        self.logger.info("   ✅ Hedging Strategy (Portfolio protection)")
         
         # State
         self.running = False
