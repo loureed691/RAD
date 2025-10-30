@@ -1,6 +1,6 @@
 # RAD Trading Bot - Documentation Index
 
-**Last Updated:** October 25, 2025
+**Last Updated:** October 30, 2025
 
 This directory contains comprehensive documentation about the RAD KuCoin Futures Trading Bot. Start here to find the right document for your needs.
 
@@ -24,6 +24,8 @@ This directory contains comprehensive documentation about the RAD KuCoin Futures
 - **API_SETUP.md** - API configuration and troubleshooting
 - **DEPLOYMENT.md** - Production deployment guide
 - **CHANGELOG.md** - Version history and changes
+- **UPGRADE_GUIDE_3.2.md** - Comprehensive upgrade guide for v3.2.0 🆕
+- **UPGRADE_SUMMARY.md** - Quick upgrade summary 🆕
 - **DEVELOPER_GUIDE.md** - Developer documentation
 
 ### Configuration
@@ -67,6 +69,9 @@ This directory contains comprehensive documentation about the RAD KuCoin Futures
 #### ...get started quickly
 → Read `QUICKSTART.md`, `2025_AI_QUICKSTART.md`, and `API_SETUP.md`
 
+#### ...upgrade from v3.1 to v3.2
+→ Read `UPGRADE_SUMMARY.md` for quick overview, `UPGRADE_GUIDE_3.2.md` for details
+
 #### ...understand the AI features
 → Read `README.md`, `2025_AI_ENHANCEMENTS.md`, and `2026_ENHANCEMENTS.md`
 
@@ -105,11 +110,12 @@ This directory contains comprehensive documentation about the RAD KuCoin Futures
 
 ## 📈 Repository Statistics
 
-- **Markdown Files:** 26 focused documentation files (reduced from 62)
+- **Markdown Files:** 28 focused documentation files
 - **Python Files:** 96 core modules and tests
 - **Documentation:** Well-organized and consolidated
 - **Test Coverage:** Comprehensive test suite
 - **Status:** ✅ Production Ready
+- **Version:** 3.2.0 (October 30, 2025)
 
 ---
 
@@ -124,5 +130,6 @@ This directory contains comprehensive documentation about the RAD KuCoin Futures
 ---
 
 **Repository:** https://github.com/loureed691/RAD  
-**Last Updated:** October 25, 2025  
+**Last Updated:** October 30, 2025  
+**Version:** 3.2.0  
 **Status:** ✅ Active Development
