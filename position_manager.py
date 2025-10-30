@@ -696,21 +696,24 @@ class Position:
         
         # Profit velocity check - protect against momentum loss and retracements
         # This catches situations where we had good profit but it's eroding
+        # Use tolerance for floating point comparisons (e.g., 0.30 becomes 0.299 to handle precision)
+        DRAWDOWN_TOLERANCE = 0.001
+        
         if current_pnl > 0 and self.max_favorable_excursion > 0:
             profit_drawdown = self.max_favorable_excursion - current_pnl
             
-            # WIN PROTECTION: If we had significant profit (10%+) and gave back 50%+, exit immediately
+            # WIN PROTECTION: If we had significant profit (10% or greater) and gave back 50%+, exit immediately
             if self.max_favorable_excursion >= 0.10:
                 drawdown_pct = profit_drawdown / self.max_favorable_excursion
                 
                 # Gave back 50%+ of peak profit - major retracement
-                # Use 0.499 to handle floating point precision
-                if drawdown_pct >= 0.499 and current_pnl >= 0.01:
+                # Use tolerance to handle floating point precision
+                if drawdown_pct >= (0.50 - DRAWDOWN_TOLERANCE) and current_pnl >= 0.01:
                     return True, 'win_protection_major_retracement'
                 
                 # Gave back 30%+ of peak profit in 3-15% range - momentum loss
-                # Use 0.299 to handle floating point precision  
-                if drawdown_pct >= 0.299 and 0.03 <= current_pnl < 0.15:
+                # Use tolerance to handle floating point precision  
+                if drawdown_pct >= (0.30 - DRAWDOWN_TOLERANCE) and 0.03 <= current_pnl < 0.15:
                     return True, 'win_protection_momentum_loss'
             
             # For moderate profits (5-10%), also protect against 30%+ drawdowns
@@ -718,8 +721,8 @@ class Position:
                 drawdown_pct = profit_drawdown / self.max_favorable_excursion
                 
                 # Gave back 30%+ of moderate profit (5-10% range)
-                # Use 0.299 to handle floating point precision
-                if drawdown_pct >= 0.299 and 0.03 <= current_pnl < 0.10:
+                # Use tolerance to handle floating point precision
+                if drawdown_pct >= (0.30 - DRAWDOWN_TOLERANCE) and 0.03 <= current_pnl < 0.10:
                     return True, 'win_protection_profit_erosion'
         
         # Standard stop loss and take profit checks (primary logic)
