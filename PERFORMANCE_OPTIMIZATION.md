@@ -235,8 +235,8 @@ The bot now implements intelligent caching for OHLCV (candlestick) data to signi
 The cache is automatically configured with sensible defaults:
 
 ```python
-# In kucoin_client.py
-_ohlcv_cache_ttl = 3600  # Cache expires after 1 hour
+# In KuCoinClient.__init__()
+self._ohlcv_cache_ttl = 3600  # Cache expires after 1 hour
 ```
 
 **Cache Behavior:**
