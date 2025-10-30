@@ -163,10 +163,20 @@ class Config:
         logger = Logger.get_logger()
         
         # Apply user overrides if provided, otherwise calculate smart defaults
-        # Check if LEVERAGE was already successfully parsed from env (not None)
-        if cls.LEVERAGE is not None:
-            logger.info(f"📌 Using user-defined LEVERAGE: {cls.LEVERAGE}x")
-        else:
+        # Check if user provided an override in .env (using the cached _OVERRIDE variable)
+        # This allows auto_configure to be called multiple times when balance changes
+        if cls._LEVERAGE_OVERRIDE:
+            # Parse safely - if already parsed during init, use that value; otherwise parse now
+            if cls.LEVERAGE is None:
+                cls.LEVERAGE = _safe_parse_int(cls._LEVERAGE_OVERRIDE, 'LEVERAGE')
+            if cls.LEVERAGE is not None:
+                logger.info(f"📌 Using user-defined LEVERAGE: {cls.LEVERAGE}x")
+            else:
+                # Parsing failed, fall back to auto-configuration
+                logger.warning(f"⚠️  Invalid LEVERAGE value in .env, using auto-configuration")
+        
+        # If no valid override, auto-configure based on balance
+        if not cls._LEVERAGE_OVERRIDE or cls.LEVERAGE is None:
             # Smart leverage based on balance - MORE CONSERVATIVE (smaller accounts = lower leverage for safety)
             if available_balance < 100:
                 cls.LEVERAGE = 4  # Micro account - very conservative (was 5)
@@ -180,9 +190,15 @@ class Config:
                 cls.LEVERAGE = 12  # Very large account - moderate-aggressive (was 15)
             logger.info(f"🤖 Auto-configured LEVERAGE: {cls.LEVERAGE}x (balance: ${available_balance:.2f})")
         
-        if cls.MAX_POSITION_SIZE is not None:
-            logger.info(f"📌 Using user-defined MAX_POSITION_SIZE: ${cls.MAX_POSITION_SIZE:.2f}")
-        else:
+        if cls._MAX_POSITION_SIZE_OVERRIDE:
+            if cls.MAX_POSITION_SIZE is None:
+                cls.MAX_POSITION_SIZE = _safe_parse_float(cls._MAX_POSITION_SIZE_OVERRIDE, 'MAX_POSITION_SIZE')
+            if cls.MAX_POSITION_SIZE is not None:
+                logger.info(f"📌 Using user-defined MAX_POSITION_SIZE: ${cls.MAX_POSITION_SIZE:.2f}")
+            else:
+                logger.warning(f"⚠️  Invalid MAX_POSITION_SIZE value in .env, using auto-configuration")
+        
+        if not cls._MAX_POSITION_SIZE_OVERRIDE or cls.MAX_POSITION_SIZE is None:
             # Max position size as percentage of balance
             # Smaller accounts use smaller percentage to preserve capital
             if available_balance < 100:
@@ -198,9 +214,15 @@ class Config:
             cls.MAX_POSITION_SIZE = max(10, min(cls.MAX_POSITION_SIZE, 50000))
             logger.info(f"🤖 Auto-configured MAX_POSITION_SIZE: ${cls.MAX_POSITION_SIZE:.2f} (balance: ${available_balance:.2f})")
         
-        if cls.RISK_PER_TRADE is not None:
-            logger.info(f"📌 Using user-defined RISK_PER_TRADE: {cls.RISK_PER_TRADE:.2%}")
-        else:
+        if cls._RISK_PER_TRADE_OVERRIDE:
+            if cls.RISK_PER_TRADE is None:
+                cls.RISK_PER_TRADE = _safe_parse_float(cls._RISK_PER_TRADE_OVERRIDE, 'RISK_PER_TRADE')
+            if cls.RISK_PER_TRADE is not None:
+                logger.info(f"📌 Using user-defined RISK_PER_TRADE: {cls.RISK_PER_TRADE:.2%}")
+            else:
+                logger.warning(f"⚠️  Invalid RISK_PER_TRADE value in .env, using auto-configuration")
+        
+        if not cls._RISK_PER_TRADE_OVERRIDE or cls.RISK_PER_TRADE is None:
             # Risk per trade - smaller for larger accounts (relative risk management)
             if available_balance < 100:
                 cls.RISK_PER_TRADE = 0.01  # 1% risk for micro accounts (be very careful)
@@ -214,9 +236,15 @@ class Config:
                 cls.RISK_PER_TRADE = 0.03  # 3% risk for very large accounts
             logger.info(f"🤖 Auto-configured RISK_PER_TRADE: {cls.RISK_PER_TRADE:.2%} (balance: ${available_balance:.2f})")
         
-        if cls.MIN_PROFIT_THRESHOLD is not None:
-            logger.info(f"📌 Using user-defined MIN_PROFIT_THRESHOLD: {cls.MIN_PROFIT_THRESHOLD:.2%}")
-        else:
+        if cls._MIN_PROFIT_THRESHOLD_OVERRIDE:
+            if cls.MIN_PROFIT_THRESHOLD is None:
+                cls.MIN_PROFIT_THRESHOLD = _safe_parse_float(cls._MIN_PROFIT_THRESHOLD_OVERRIDE, 'MIN_PROFIT_THRESHOLD')
+            if cls.MIN_PROFIT_THRESHOLD is not None:
+                logger.info(f"📌 Using user-defined MIN_PROFIT_THRESHOLD: {cls.MIN_PROFIT_THRESHOLD:.2%}")
+            else:
+                logger.warning(f"⚠️  Invalid MIN_PROFIT_THRESHOLD value in .env, using auto-configuration")
+        
+        if not cls._MIN_PROFIT_THRESHOLD_OVERRIDE or cls.MIN_PROFIT_THRESHOLD is None:
             # Min profit threshold - must cover trading fees (maker 0.02% + taker 0.06% = ~0.08-0.12% round-trip)
             # Plus provide meaningful profit after fees
             # Typical round-trip trading cost: ~0.1% (0.001)
