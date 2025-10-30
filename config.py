@@ -67,17 +67,17 @@ class Config:
     DASHBOARD_PORT = int(os.getenv('DASHBOARD_PORT', '5000'))
     DASHBOARD_HOST = os.getenv('DASHBOARD_HOST', '127.0.0.1')  # Localhost by default for security
     
-    # Trading Configuration - will be auto-configured if not set in .env
-    LEVERAGE = None  # Will be set by auto_configure_from_balance()
-    MAX_POSITION_SIZE = None  # Will be set by auto_configure_from_balance()
-    RISK_PER_TRADE = None  # Will be set by auto_configure_from_balance()
-    MIN_PROFIT_THRESHOLD = None  # Will be set by auto_configure_from_balance()
-    
     # Store user overrides from environment if provided
     _LEVERAGE_OVERRIDE = os.getenv('LEVERAGE')
     _MAX_POSITION_SIZE_OVERRIDE = os.getenv('MAX_POSITION_SIZE')
     _RISK_PER_TRADE_OVERRIDE = os.getenv('RISK_PER_TRADE')
     _MIN_PROFIT_THRESHOLD_OVERRIDE = os.getenv('MIN_PROFIT_THRESHOLD')
+    
+    # Trading Configuration - apply user overrides immediately if provided, otherwise will be auto-configured
+    LEVERAGE = int(_LEVERAGE_OVERRIDE) if _LEVERAGE_OVERRIDE else None
+    MAX_POSITION_SIZE = float(_MAX_POSITION_SIZE_OVERRIDE) if _MAX_POSITION_SIZE_OVERRIDE else None
+    RISK_PER_TRADE = float(_RISK_PER_TRADE_OVERRIDE) if _RISK_PER_TRADE_OVERRIDE else None
+    MIN_PROFIT_THRESHOLD = float(_MIN_PROFIT_THRESHOLD_OVERRIDE) if _MIN_PROFIT_THRESHOLD_OVERRIDE else None
     
     # Bot Parameters - Optimal defaults for best performance and safety
     CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '60'))  # 60s = optimal balance (not too fast to avoid rate limits, not too slow to miss opportunities)
