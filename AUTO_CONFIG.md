@@ -29,7 +29,10 @@ When the bot starts, it:
 
 ### ⚙️ Trading Parameters (Balance-Based)
 These are automatically set based on your account balance:
-- **LEVERAGE**: 4-12x dynamically adjusted (smaller accounts = lower leverage for safety, further adjusted by market volatility and conditions)
+- **LEVERAGE**: Dynamically adjusted between 4-12x
+  - Base leverage depends on account size (smaller accounts = lower leverage)
+  - Further adjusted by market volatility, trend strength, and trading performance
+  - Provides adaptive safety based on current market conditions
 - **MAX_POSITION_SIZE**: 30-60% of balance (scaled appropriately)
 - **RISK_PER_TRADE**: 1-3% (conservative for small, aggressive for large)
 - **MIN_PROFIT_THRESHOLD**: 0.62-0.92% (includes trading fees + profit)
