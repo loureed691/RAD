@@ -16,6 +16,7 @@ All notable changes to the RAD KuCoin Futures Trading Bot will be documented in 
     - scikit-learn: 1.5.0 → 1.7.2 (latest ML algorithms)
     - tensorflow: 2.18.0 → 2.19.0 (latest deep learning framework)
     - xgboost: 2.1.0 → 2.1.3 (gradient boosting improvements)
+    - lightgbm: 4.5.0 → 4.6.0 (security patch for RCE vulnerability)
     - catboost: 1.2.0 → 1.2.7 (enhanced categorical handling)
     - optuna: 4.0.0 → 4.1.0 (better hyperparameter optimization)
   - **Web & API**:
