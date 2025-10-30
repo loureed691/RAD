@@ -384,58 +384,62 @@ class Position:
             new_take_profit = self.entry_price * (1 + new_distance)
             # Only move take profit up (more favorable)
             if new_take_profit > self.take_profit:
-                # Critical fix: Don't move TP further away when price is approaching it
-                # For LONG: TP is above current price, so check if price is getting close
-                # Edge case: if current_price == take_profit, allow extension
-                if current_price == self.take_profit:
-                    # At take profit exactly - allow extension if beneficial
-                    self.take_profit = new_take_profit
-                elif current_price < self.take_profit:
-                    # Price hasn't reached TP yet
-                    # Calculate how close: be very conservative to prevent TP from moving away
-                    distance_to_tp = self.take_profit - current_price
-                    progress_pct = (current_price - self.entry_price) / (self.take_profit - self.entry_price) if self.take_profit > self.entry_price else 0
-                    
-                    if progress_pct < 0.7:  # Less than 70% of way to TP - allow extension
-                        self.take_profit = new_take_profit
-                    else:
-                        # Close to TP (70%+) - don't allow extension to prevent moving TP away
-                        # This is the critical fix for "bot doesn't sell" issue
-                        pass  # Keep TP at current value
+                # CRITICAL FIX: Prevent TP from moving away when price is close
+                # Use BOTH relative progress AND absolute distance checks
+                distance_to_current_tp = self.take_profit - current_price
+                distance_pct_of_entry = distance_to_current_tp / self.entry_price
+                
+                # Calculate progress toward current TP
+                if self.take_profit > self.entry_price and current_price > self.entry_price:
+                    progress_pct = (current_price - self.entry_price) / (self.take_profit - self.entry_price)
                 else:
-                    # Price at or past TP - only allow if new TP brings it closer
-                    old_distance_to_tp = abs(current_price - self.take_profit)
-                    new_distance_to_tp = abs(current_price - new_take_profit)
-                    if new_distance_to_tp <= old_distance_to_tp:
-                        self.take_profit = new_take_profit
+                    progress_pct = 0
+                
+                # Don't extend TP if:
+                # 1. We're within 1% (absolute) of current TP, OR
+                # 2. We've made 60%+ progress toward current TP AND TP is within 2% of current price
+                if distance_pct_of_entry <= 0.01:
+                    # Very close to TP (within 1% of entry price) - never extend
+                    pass
+                elif progress_pct >= 0.6 and distance_pct_of_entry <= 0.02:
+                    # Made good progress (60%+) and TP is close (within 2%) - don't extend
+                    pass
+                elif progress_pct >= 0.8:
+                    # Made significant progress (80%+) - don't extend further to ensure close
+                    pass
+                else:
+                    # Safe to extend - price is far enough from TP
+                    self.take_profit = new_take_profit
         else:  # short
             new_take_profit = self.entry_price * (1 - new_distance)
             # Only move take profit down (more favorable)
             if new_take_profit < self.take_profit:
-                # Critical fix: Don't move TP further away when price is approaching it
-                # For SHORT: TP is below current price, so check if price is getting close
-                # Edge case: if current_price == take_profit, allow extension
-                if current_price == self.take_profit:
-                    # At take profit exactly - allow extension if beneficial
-                    self.take_profit = new_take_profit
-                elif current_price > self.take_profit:
-                    # Price hasn't reached TP yet
-                    # Calculate how close: be very conservative to prevent TP from moving away
-                    distance_to_tp = current_price - self.take_profit
-                    progress_pct = (self.entry_price - current_price) / (self.entry_price - self.take_profit) if self.entry_price > self.take_profit else 0
-                    
-                    if progress_pct < 0.7:  # Less than 70% of way to TP - allow extension
-                        self.take_profit = new_take_profit
-                    else:
-                        # Close to TP (70%+) - don't allow extension to prevent moving TP away
-                        # This is the critical fix for "bot doesn't sell" issue
-                        pass  # Keep TP at current value
+                # CRITICAL FIX: Prevent TP from moving away when price is close
+                # Use BOTH relative progress AND absolute distance checks
+                distance_to_current_tp = current_price - self.take_profit
+                distance_pct_of_entry = distance_to_current_tp / self.entry_price
+                
+                # Calculate progress toward current TP
+                if self.entry_price > self.take_profit and current_price < self.entry_price:
+                    progress_pct = (self.entry_price - current_price) / (self.entry_price - self.take_profit)
                 else:
-                    # Price at or past TP - only allow if new TP brings it closer
-                    old_distance_to_tp = abs(current_price - self.take_profit)
-                    new_distance_to_tp = abs(current_price - new_take_profit)
-                    if new_distance_to_tp <= old_distance_to_tp:
-                        self.take_profit = new_take_profit
+                    progress_pct = 0
+                
+                # Don't extend TP if:
+                # 1. We're within 1% (absolute) of current TP, OR
+                # 2. We've made 60%+ progress toward current TP AND TP is within 2% of current price
+                if distance_pct_of_entry <= 0.01:
+                    # Very close to TP (within 1% of entry price) - never extend
+                    pass
+                elif progress_pct >= 0.6 and distance_pct_of_entry <= 0.02:
+                    # Made good progress (60%+) and TP is close (within 2%) - don't extend
+                    pass
+                elif progress_pct >= 0.8:
+                    # Made significant progress (80%+) - don't extend further to ensure close
+                    pass
+                else:
+                    # Safe to extend - price is far enough from TP
+                    self.take_profit = new_take_profit
     
     def calculate_intelligent_targets(self, current_price: float, support_resistance: Dict, 
                                      side: str) -> Tuple[float, float]:
@@ -646,6 +650,7 @@ class Position:
         
         # Intelligent profit taking - take profits at key ROI levels when TP is far away
         # This prevents scenarios where TP gets extended too far and price retraces
+        # WIN PROTECTION: Also take profits at key milestones regardless of TP distance
         if current_pnl > 0 and self.take_profit:
             # Calculate distance to take profit
             if self.side == 'long':
@@ -653,48 +658,64 @@ class Position:
             else:  # short
                 distance_to_tp = (current_price - self.take_profit) / current_price
             
-            # Exceptional profit levels - always take profit (no override)
-            if current_pnl >= 0.20:  # 20% price movement
-                return True, 'take_profit_20pct_exceptional'
+            # WIN PROTECTION: Exceptional profit levels - ALWAYS take profit to protect gains
+            if current_pnl >= 0.25:  # 25% ROI - exceptional profit
+                return True, 'win_protection_25pct'
+            if current_pnl >= 0.20:  # 20% ROI - very high profit
+                return True, 'win_protection_20pct'
+            if current_pnl >= 0.15:  # 15% ROI - high profit
+                return True, 'win_protection_15pct'
             
-            # Very high profit - take if TP is far (>2%)
-            if current_pnl >= 0.15:
+            # Aggressive profit taking when TP is far away
+            # 12% profit - take if TP is >1.5% away
+            if current_pnl >= 0.12:
+                if distance_to_tp > 0.015:
+                    return True, 'take_profit_12pct_far_tp'
+            
+            # 10% profit - take if TP is >1.5% away (was 2%)
+            if current_pnl >= 0.10:
+                if distance_to_tp > 0.015:
+                    return True, 'take_profit_10pct_far_tp'
+            
+            # 8% profit - take if TP is >2% away (was 3%)
+            if current_pnl >= 0.08:
                 if distance_to_tp > 0.02:
-                    return True, 'take_profit_15pct_far_tp'
+                    return True, 'take_profit_8pct_far_tp'
             
-            # Profit velocity check - take profit if we're losing momentum
-            # Check this at various profit levels to catch retracements early
-            # This takes priority over flat ROI thresholds when losing significant momentum
-            if self.max_favorable_excursion >= 0.10:  # Had at least 10% profit (significant)
-                profit_drawdown = self.max_favorable_excursion - current_pnl
+            # 6% profit - take if TP is >2.5% away
+            if current_pnl >= 0.06:
+                if distance_to_tp > 0.025:
+                    return True, 'take_profit_6pct_far_tp'
+            
+            # 5% profit - take if TP is >3% away (was 5%)
+            if current_pnl >= 0.05:
+                if distance_to_tp > 0.03:
+                    return True, 'take_profit_5pct_far_tp'
+        
+        # Profit velocity check - protect against momentum loss and retracements
+        # This catches situations where we had good profit but it's eroding
+        if current_pnl > 0 and self.max_favorable_excursion > 0:
+            profit_drawdown = self.max_favorable_excursion - current_pnl
+            
+            # WIN PROTECTION: If we had significant profit (8%+) and gave back 40%+, exit immediately
+            if self.max_favorable_excursion >= 0.08:
                 drawdown_pct = profit_drawdown / self.max_favorable_excursion
                 
-                # If we've given back ~50% of peak profit and still above breakeven
-                # This is checked FIRST as it's more critical than 30% drawdown
-                # Use 0.499 to handle floating point precision issues
-                if drawdown_pct >= 0.499 and current_pnl >= 0.01:
-                    return True, 'take_profit_major_retracement'
+                # Gave back 50%+ of peak profit - major retracement
+                if drawdown_pct >= 0.50 and current_pnl >= 0.01:
+                    return True, 'win_protection_major_retracement'
                 
-                # If we've given back ~30% of peak profit and in 3-15% ROI range
-                # Exit before hitting other thresholds to protect profits from further decline
-                # Use 0.299 to handle floating point precision issues
-                if drawdown_pct >= 0.299 and 0.03 <= current_pnl < 0.15:
-                    return True, 'take_profit_momentum_loss'
+                # Gave back 40%+ of peak profit - significant retracement
+                if drawdown_pct >= 0.40 and current_pnl >= 0.02:
+                    return True, 'win_protection_momentum_loss'
             
-            # 10% price movement - take profit if TP is >2% away
-            if current_pnl >= 0.10:
-                if distance_to_tp > 0.02:
-                    return True, 'take_profit_10pct'
-            
-            # 8% price movement - take profit if TP is >3% away
-            if current_pnl >= 0.08:
-                if distance_to_tp > 0.03:
-                    return True, 'take_profit_8pct'
-            
-            # 5% price movement - take profit if TP is >5% away
-            if current_pnl >= 0.05:
-                if distance_to_tp > 0.05:
-                    return True, 'take_profit_5pct'
+            # For moderate profits (5-8%), be more cautious about retracements
+            if self.max_favorable_excursion >= 0.05:
+                drawdown_pct = profit_drawdown / self.max_favorable_excursion
+                
+                # Gave back 35%+ of moderate profit
+                if drawdown_pct >= 0.35 and 0.03 <= current_pnl < 0.08:
+                    return True, 'win_protection_profit_erosion'
         
         # Standard stop loss and take profit checks (primary logic)
         if self.side == 'long':
