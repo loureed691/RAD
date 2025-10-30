@@ -377,9 +377,12 @@ class TradingBot:
         # Estimate position value (we'll refine this after calculating actual position size)
         # Use a conservative estimate (4% of balance) to pass the 5% guardrail check
         # The actual position size will be calculated later based on stop loss distance
+        # Calculate dynamic max position size based on current balance
+        dynamic_max_pos = self.risk_manager._calculate_max_position_size_for_balance(available_balance)
+        
         estimated_position_value = min(
             available_balance * 0.04,  # Conservative estimate under 5% guardrail
-            Config.MAX_POSITION_SIZE
+            dynamic_max_pos
         )
         
         # Check all guardrails (kill switch, daily loss, max positions, per-trade risk)
