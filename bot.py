@@ -771,10 +771,17 @@ class TradingBot:
                 stop_loss_price = entry_price * (1 + stop_loss_percentage)
         
         # Calculate safe leverage with enhanced multi-factor analysis
-        leverage = self.risk_manager.get_max_leverage(
-            volatility, confidence, momentum, trend_strength, market_regime
-        )
-        leverage = min(leverage, Config.LEVERAGE)
+        # If user explicitly set LEVERAGE in .env, use that value directly
+        # Otherwise, use dynamic calculation capped by auto-configured maximum
+        if Config._LEVERAGE_OVERRIDE:
+            leverage = Config.LEVERAGE
+        else:
+            leverage = self.risk_manager.get_max_leverage(
+                volatility, confidence, momentum, trend_strength, market_regime
+            )
+            if Config.LEVERAGE is not None:
+                leverage = min(leverage, Config.LEVERAGE)
+            # If Config.LEVERAGE is None, use the calculated leverage directly
         
         # Get Kelly Criterion fraction from risk_manager (uses performance history with adaptive logic)
         # Get performance metrics from risk_manager

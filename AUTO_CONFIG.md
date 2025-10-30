@@ -29,7 +29,10 @@ When the bot starts, it:
 
 ### ⚙️ Trading Parameters (Balance-Based)
 These are automatically set based on your account balance:
-- **LEVERAGE**: 4-12x (smaller accounts = lower leverage for safety)
+- **LEVERAGE**: Dynamically adjusted between 4-12x
+  - Base leverage depends on account size (smaller accounts = lower leverage)
+  - Further adjusted by market volatility, trend strength, and trading performance
+  - Provides adaptive safety based on current market conditions
 - **MAX_POSITION_SIZE**: 30-60% of balance (scaled appropriately)
 - **RISK_PER_TRADE**: 1-3% (conservative for small, aggressive for large)
 - **MIN_PROFIT_THRESHOLD**: 0.62-0.92% (includes trading fees + profit)
@@ -164,14 +167,20 @@ KUCOIN_API_SECRET=your_api_secret_here
 KUCOIN_API_PASSPHRASE=your_api_passphrase_here
 
 # Optional: Override any auto-configured value
-LEVERAGE=8                   # Use 8x instead of auto (4-12x)
+LEVERAGE=12                  # Use EXACTLY 12x for ALL trades (bypasses dynamic calculation)
 RISK_PER_TRADE=0.015        # Use 1.5% risk instead of auto (1-3%)
 MAX_OPEN_POSITIONS=5        # Allow 5 positions instead of 3
 ENABLE_DASHBOARD=false      # Disable the web dashboard
 ```
 
+**Important Note on LEVERAGE:**
+- When you set `LEVERAGE=12` in .env, that **exact value is used for ALL trades**
+- The bot will NOT use its dynamic leverage calculation (which adjusts based on market conditions)
+- This gives you full control but removes the safety of adaptive leverage
+- If you DON'T set LEVERAGE, the bot intelligently calculates it (4-12x based on balance and market volatility)
+
 The bot will:
-- ✅ Use your custom value for overridden parameters
+- ✅ Use your custom value EXACTLY as specified for overridden parameters
 - ✅ Auto-configure all remaining parameters
 - ✅ Log which settings are user-defined vs auto-configured
 
@@ -349,7 +358,7 @@ A: Yes! All advanced features are enabled with optimal settings.
 ### Customization Questions
 
 **Q: What if I want more aggressive settings?**  
-A: Set your preferred values in `.env` to override. Example: `LEVERAGE=15` for 15x leverage.
+A: Set your preferred values in `.env` to override auto-configuration. When you set `LEVERAGE=15`, that exact value (15x) will be used for ALL trades, ignoring the dynamic calculation. This gives you full control.
 
 **Q: Can I disable the dashboard?**  
 A: Yes: `ENABLE_DASHBOARD=false` in `.env`
