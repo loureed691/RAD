@@ -76,6 +76,12 @@ class KuCoinClient:
         self._metadata_refresh_interval = 3600  # Refresh every hour
         self._metadata_lock = threading.Lock()
         
+        # PERFORMANCE: OHLCV data cache for incremental updates
+        # Cache structure: {(symbol, timeframe): {'candles': [...], 'last_update': timestamp}}
+        self._ohlcv_cache = {}
+        self._ohlcv_cache_lock = threading.Lock()
+        self._ohlcv_cache_ttl = 3600  # Cache expires after 1 hour
+        
         # PRIORITY 1 SAFETY: Clock sync tracking
         self._server_time_offset = 0  # Milliseconds difference between local and server
         self._last_sync_check = None
@@ -599,9 +605,10 @@ class KuCoinClient:
         return self._execute_with_priority(_fetch, priority, f'get_ticker({symbol})')
     
     def get_ohlcv(self, symbol: str, timeframe: str = '1h', limit: int = 100) -> List:
-        """Get OHLCV data for a symbol with retry logic
+        """Get OHLCV data for a symbol with retry logic and incremental caching
         
-        Uses WebSocket data if available, falls back to REST API.
+        Uses WebSocket data if available, falls back to REST API with smart caching.
+        Implements incremental updates to fetch only new candles when possible.
         This is typically used for SCANNING, so uses NORMAL priority by default.
         Will wait for critical trading operations to complete first.
         
@@ -645,15 +652,118 @@ class KuCoinClient:
                     else:
                         self.logger.debug(f"No WebSocket data for {symbol} {timeframe}, using REST API")
         
-        # Fallback to REST API
+        # Fallback to REST API with incremental caching
         def _fetch():
+            cache_key = (symbol, timeframe)
+            current_time = time.time()
+            
+            # Check cache first
+            with self._ohlcv_cache_lock:
+                if cache_key in self._ohlcv_cache:
+                    cached = self._ohlcv_cache[cache_key]
+                    cache_age = current_time - cached['last_update']
+                    
+                    # If cache is still valid and has enough data, try incremental update
+                    if cache_age < self._ohlcv_cache_ttl and len(cached['candles']) >= limit:
+                        cached_candles = cached['candles']
+                        last_timestamp = cached_candles[-1][0] if cached_candles else None
+                        
+                        # Fetch only new candles since last timestamp
+                        if last_timestamp:
+                            # Release lock before making API call
+                            pass  # Lock will be released at end of with block
+            
+            # Make incremental fetch outside of lock to avoid blocking
+            needs_incremental = False
+            last_timestamp = None
+            
+            with self._ohlcv_cache_lock:
+                if cache_key in self._ohlcv_cache:
+                    cached = self._ohlcv_cache[cache_key]
+                    cache_age = current_time - cached['last_update']
+                    if cache_age < self._ohlcv_cache_ttl and len(cached['candles']) >= limit:
+                        needs_incremental = True
+                        cached_candles = cached['candles'].copy()
+                        last_timestamp = cached_candles[-1][0] if cached_candles else None
+                        
+                        # If cache is very recent, just return it
+                        if cache_age < 60:  # Less than 1 minute old
+                            self.logger.debug(f"Using recent cache for {symbol} {timeframe} (age: {cache_age:.1f}s)")
+                            return cached_candles[-limit:] if len(cached_candles) > limit else cached_candles
+            
+            # Perform incremental fetch if needed
+            if needs_incremental and last_timestamp:
+                def _fetch_incremental():
+                    # Fetch a small batch of recent candles to get updates
+                    new_ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=20)
+                    if not new_ohlcv:
+                        return []
+                    
+                    # Filter for candles newer than our last cached timestamp
+                    new_candles = [c for c in new_ohlcv if c[0] > last_timestamp]
+                    
+                    if new_candles:
+                        self.logger.debug(f"Fetched {len(new_candles)} new candles for {symbol} {timeframe} (incremental)")
+                    else:
+                        # Also check if the last candle was updated (same timestamp, different values)
+                        if new_ohlcv and new_ohlcv[-1][0] == last_timestamp:
+                            # Mark the last candle for update
+                            self.logger.debug(f"Last candle updated for {symbol} {timeframe}")
+                            return [new_ohlcv[-1]]  # Return as list to update the last candle
+                        else:
+                            self.logger.debug(f"No new candles for {symbol} {timeframe}, using cache")
+                    
+                    return new_candles
+                
+                # Use error handling with retries for incremental fetch
+                new_candles = self._handle_api_error(
+                    _fetch_incremental,
+                    max_retries=3,
+                    exponential_backoff=True,
+                    operation_name=f"get_ohlcv_incremental({symbol})"
+                )
+                
+                if new_candles is not None:
+                    # Append new candles to cache
+                    with self._ohlcv_cache_lock:
+                        if cache_key in self._ohlcv_cache:
+                            cached = self._ohlcv_cache[cache_key]
+                            
+                            # Check if we need to update the last candle or append new ones
+                            if new_candles and new_candles[0][0] == last_timestamp:
+                                # Update last candle
+                                cached['candles'][-1] = new_candles[0]
+                                if len(new_candles) > 1:
+                                    cached['candles'].extend(new_candles[1:])
+                            else:
+                                # Append new candles
+                                cached['candles'].extend(new_candles)
+                            
+                            # Keep only the most recent 'limit * 2' candles to prevent unbounded growth
+                            if len(cached['candles']) > limit * 2:
+                                cached['candles'] = cached['candles'][-(limit * 2):]
+                            cached['last_update'] = current_time
+                            
+                            # Return the requested number of most recent candles
+                            result = cached['candles'][-limit:] if len(cached['candles']) > limit else cached['candles'].copy()
+                            return result
+            
+            # No cache or cache is stale, fetch full data
             def _fetch_ohlcv():
                 ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
                 if not ohlcv:
                     self.logger.warning(f"Empty OHLCV data returned for {symbol}")
                     return []
                 
-                self.logger.debug(f"Fetched {len(ohlcv)} candles for {symbol} from REST API")
+                self.logger.debug(f"Fetched {len(ohlcv)} candles for {symbol} {timeframe} from REST API (full)")
+                
+                # Update cache
+                with self._ohlcv_cache_lock:
+                    self._ohlcv_cache[cache_key] = {
+                        'candles': ohlcv.copy(),
+                        'last_update': current_time
+                    }
+                
                 return ohlcv
             
             # Use error handling with retries
@@ -1986,6 +2096,10 @@ class KuCoinClient:
                 self.logger.warning(f"Error disconnecting WebSocket: {e}")
             finally:
                 self.websocket = None
+        
+        # Clear OHLCV cache
+        with self._ohlcv_cache_lock:
+            self._ohlcv_cache.clear()
         
         # Mark the exchange as closed to prevent further API calls
         if hasattr(self, 'exchange'):
