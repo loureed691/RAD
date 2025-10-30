@@ -779,7 +779,9 @@ class TradingBot:
             leverage = self.risk_manager.get_max_leverage(
                 volatility, confidence, momentum, trend_strength, market_regime
             )
-            leverage = min(leverage, Config.LEVERAGE)
+            if Config.LEVERAGE is not None:
+                leverage = min(leverage, Config.LEVERAGE)
+            # If Config.LEVERAGE is None, use the calculated leverage directly
         
         # Get Kelly Criterion fraction from risk_manager (uses performance history with adaptive logic)
         # Get performance metrics from risk_manager
