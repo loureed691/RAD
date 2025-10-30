@@ -2,6 +2,49 @@
 
 All notable changes to the RAD KuCoin Futures Trading Bot will be documented in this file.
 
+## [3.2.0] - 2025-10-30
+
+### Changed
+
+#### Dependency Upgrades (2025-10-30)
+- **Upgraded All Dependencies**: Updated all Python packages to their latest stable versions
+  - **Core Libraries**:
+    - ccxt: 4.5.0 → 4.5.12 (latest cryptocurrency exchange API)
+    - numpy: 1.26.0 → 2.3.4 (major version upgrade with better performance)
+    - pandas: 2.2.0 → 2.3.3 (improved data processing)
+  - **Machine Learning**:
+    - scikit-learn: 1.5.0 → 1.7.2 (latest ML algorithms)
+    - tensorflow: 2.18.0 → 2.19.0 (latest deep learning framework)
+    - xgboost: 2.1.0 → 2.1.3 (gradient boosting improvements)
+    - catboost: 1.2.0 → 1.2.7 (enhanced categorical handling)
+    - optuna: 4.0.0 → 4.1.0 (better hyperparameter optimization)
+  - **Web & API**:
+    - requests: 2.32.0 → 2.32.3 (security and bug fixes)
+    - flask: 3.1.0 → 3.1.0 (web dashboard)
+    - plotly: 5.24.0 → 5.24.1 (visualization improvements)
+  - **Database & Dev Tools**:
+    - psycopg2-binary: 2.9.9 → 2.9.10 (PostgreSQL connector)
+    - python-dateutil: 2.8.0 → 2.9.0 (date/time handling)
+    - joblib: 1.4.0 → 1.4.2 (parallel processing)
+    - flake8: 7.0.0 → 7.1.0 (code linting)
+    - black: 24.0.0 → 24.10.0 (code formatting)
+    - mypy: 1.11.0 → 1.13.0 (type checking)
+    - pytest: 8.0.0 → 8.3.0 (testing framework)
+    - pytest-cov: 5.0.0 → 6.0.0 (coverage reporting)
+  - **Impact**: 
+    - Improved performance with numpy 2.x optimizations
+    - Enhanced ML capabilities with latest scikit-learn and tensorflow
+    - Better security with updated dependencies
+    - Full compatibility with Python 3.11, 3.12, and 3.13
+  - **Files**: `requirements.txt`, `pyproject.toml`
+  - **Version**: Bumped to 3.2.0 to reflect major dependency upgrades
+
+### Added
+- **Python 3.13 Support**: Added support for latest Python version
+  - Updated classifiers and build targets
+  - Tested compatibility with Python 3.11, 3.12, and 3.13
+  - **Files**: `pyproject.toml`
+
 ## [Unreleased]
 
 ### Changed

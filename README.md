@@ -1,7 +1,7 @@
 # RAD - KuCoin Futures Trading Bot
 
-**Last Updated:** October 14, 2025  
-**Version:** 3.1 (2025 AI Edition)
+**Last Updated:** October 30, 2025  
+**Version:** 3.2 (2025 AI Edition - Upgraded Dependencies)
 
 A production-grade, fully automated, self-learning KuCoin Futures trading bot with **cutting-edge 2025 AI features** for maximum profitability. Features institutional-grade risk management, market microstructure analysis, adaptive strategy selection, advanced performance metrics, and research-backed AI enhancements.
 
