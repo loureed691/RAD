@@ -75,6 +75,43 @@ class RiskManager:
         # Load existing state if available
         self.load_state()
     
+    def _calculate_max_position_size_for_balance(self, balance: float) -> float:
+        """
+        Calculate dynamic max position size based on current available balance.
+        Uses the same logic as Config.auto_configure_from_balance() but applies it dynamically.
+        
+        If user has set a fixed MAX_POSITION_SIZE override, that value is always used.
+        Otherwise, calculates percentage-based position size from current balance.
+        
+        Args:
+            balance: Current available balance in USDT
+            
+        Returns:
+            Maximum position size in USDT for current balance
+        """
+        # Import here to avoid circular dependency
+        from config import Config
+        
+        # If user has overridden MAX_POSITION_SIZE, always use that fixed value
+        if Config._MAX_POSITION_SIZE_OVERRIDE:
+            return float(Config._MAX_POSITION_SIZE_OVERRIDE)
+        
+        # Otherwise, calculate dynamically based on current balance
+        # Same percentage tiers as in Config.auto_configure_from_balance()
+        if balance < 100:
+            max_pos = balance * 0.3  # 30% max for micro accounts
+        elif balance < 1000:
+            max_pos = balance * 0.4  # 40% max for small accounts
+        elif balance < 10000:
+            max_pos = balance * 0.5  # 50% max for medium accounts
+        else:
+            max_pos = balance * 0.6  # 60% max for large accounts
+        
+        # Ensure reasonable min/max bounds
+        max_pos = max(10, min(max_pos, 50000))
+        
+        return max_pos
+    
     def record_trade_outcome(self, pnl: float):
         """
         Record trade outcome to track win/loss streaks and performance metrics
@@ -425,7 +462,7 @@ class RiskManager:
         Calculate safe position size based on risk management with optional Kelly Criterion
         
         Args:
-            balance: Account balance in USDT
+            balance: Account balance in USDT (current available balance)
             entry_price: Entry price for the trade
             stop_loss_price: Stop loss price
             leverage: Leverage to use
@@ -471,23 +508,28 @@ class RiskManager:
         # Calculate price distance to stop loss
         price_distance = abs(entry_price - stop_loss_price) / entry_price
         
+        # Calculate dynamic max position size based on current available balance
+        # This ensures we always use current balance, not a fixed amount from initialization
+        dynamic_max_position_size = self._calculate_max_position_size_for_balance(balance)
+        
         # Calculate position size based on risk
         # Risk = Position_Value * Price_Distance (leverage doesn't affect risk calculation)
         # Position_Value = Risk / Price_Distance
         if price_distance > 0:
             position_value = risk_amount / price_distance
         else:
-            position_value = self.max_position_size
+            position_value = dynamic_max_position_size
         
-        # Cap at maximum position size
-        position_value = min(position_value, self.max_position_size)
+        # Cap at maximum position size (dynamic based on current balance)
+        position_value = min(position_value, dynamic_max_position_size)
         
         # Convert to contracts (entry_price already validated above)
         position_size = position_value / entry_price
         
         self.logger.debug(
             f"Calculated position size: {position_size:.4f} contracts "
-            f"(${position_value:.2f} value) for risk ${risk_amount:.2f} ({risk:.2%})"
+            f"(${position_value:.2f} value) for risk ${risk_amount:.2f} ({risk:.2%}), "
+            f"max position size: ${dynamic_max_position_size:.2f}"
         )
         
         return position_size
