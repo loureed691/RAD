@@ -664,8 +664,16 @@ class KuCoinClient:
         with self._candle_cache_lock:
             if cache_key in self._candle_cache:
                 cached_candles = list(self._candle_cache[cache_key])  # Make a copy
+                # Validate cached candles are well-formed before using them
                 if cached_candles and len(cached_candles) >= limit:
-                    last_timestamp = cached_candles[-1][0]  # First element is timestamp
+                    # Check if last candle is well-formed (has at least timestamp)
+                    if cached_candles[-1] and len(cached_candles[-1]) > 0:
+                        last_timestamp = cached_candles[-1][0]  # First element is timestamp
+                    else:
+                        # Cache has malformed data, clear it
+                        self.logger.warning(f"Malformed candle data in cache for {symbol} {timeframe}, clearing cache")
+                        del self._candle_cache[cache_key]
+                        cached_candles = None
         
         # If we have enough cached candles, fetch only new ones
         if cached_candles and last_timestamp is not None:
@@ -703,13 +711,19 @@ class KuCoinClient:
                     updated_candles = list(cached_candles)  # Use our local copy
                     
                     for candle in new_candles:
+                        # Validate candle is well-formed before accessing
+                        if not candle or len(candle) == 0:
+                            self.logger.warning(f"Skipping malformed candle in API response for {symbol} {timeframe}")
+                            continue
+                        
                         candle_timestamp = candle[0]
                         # Only add candles that are newer than our last cached candle
                         # or update the last candle if it's the same timestamp
                         if candle_timestamp > last_timestamp:
                             updated_candles.append(candle)
-                        elif candle_timestamp == last_timestamp:
+                        elif candle_timestamp == last_timestamp and updated_candles:
                             # Update the last candle (it may have changed if it's still forming)
+                            # Only if we have candles in the list
                             updated_candles[-1] = candle
                     
                     # Keep only the most recent candles up to our max limit
@@ -2106,10 +2120,21 @@ class KuCoinClient:
             }
             for (symbol, timeframe), candles in self._candle_cache.items():
                 key = f"{symbol}:{timeframe}"
+                # Validate candle data before accessing indices
+                oldest_ts = None
+                newest_ts = None
+                if candles:
+                    # Check if first candle is well-formed
+                    if candles[0] and len(candles[0]) > 0:
+                        oldest_ts = candles[0][0]
+                    # Check if last candle is well-formed
+                    if candles[-1] and len(candles[-1]) > 0:
+                        newest_ts = candles[-1][0]
+                
                 stats['entries'][key] = {
                     'candle_count': len(candles),
-                    'oldest_timestamp': candles[0][0] if candles else None,
-                    'newest_timestamp': candles[-1][0] if candles else None
+                    'oldest_timestamp': oldest_ts,
+                    'newest_timestamp': newest_ts
                 }
             return stats
     
