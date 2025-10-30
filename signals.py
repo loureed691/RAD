@@ -569,15 +569,15 @@ class SignalGenerator:
                 confidence *= mtf_analysis['confidence_multiplier']
                 confidence = min(confidence, 0.99)  # Cap at 99%
                 reasons['mtf_boost'] = f"+{(mtf_analysis['confidence_multiplier']-1)*100:.0f}%"
-            # FIX BUG 3: Adjust min_confidence proportionally when reducing confidence for MTF conflict
+            # MTF conflict handling: When higher timeframes disagree, be more conservative
             elif (signal == 'BUY' and mtf_analysis['trend_alignment'] == 'bearish') or \
                  (signal == 'SELL' and mtf_analysis['trend_alignment'] == 'bullish'):
                 confidence *= 0.7  # Penalize conflicting signals
-                adjusted_min_confidence = min_confidence * 0.7  # Also reduce threshold proportionally
+                # Keep original threshold - don't make it easier to pass when there's conflict
                 reasons['mtf_conflict'] = 'warning'
-                if confidence < adjusted_min_confidence:
+                if confidence < min_confidence:
                     signal = 'HOLD'
-                    reasons['confidence'] = f'too low after MTF adjustment ({confidence:.2f} < {adjusted_min_confidence:.2f})'
+                    reasons['confidence'] = f'too low after MTF adjustment ({confidence:.2f} < {min_confidence:.2f})'
         
         self.logger.debug(f"Signal: {signal}, Confidence: {confidence:.2f}, Regime: {self.market_regime}, Buy: {buy_signals:.1f}/{total_signals:.1f}, Sell: {sell_signals:.1f}/{total_signals:.1f}")
         
