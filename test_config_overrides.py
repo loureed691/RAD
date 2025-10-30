@@ -14,6 +14,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 class TestConfigOverrides(unittest.TestCase):
     """Test configuration override functionality"""
     
+    def _reload_config(self):
+        """Helper method to reload config modules for clean test state"""
+        if 'config' in sys.modules:
+            del sys.modules['config']
+        if 'logger' in sys.modules:
+            del sys.modules['logger']
+    
     def setUp(self):
         """Set up test environment with API credentials"""
         os.environ['KUCOIN_API_KEY'] = 'test_key'
@@ -25,20 +32,14 @@ class TestConfigOverrides(unittest.TestCase):
             os.environ.pop(key, None)
         
         # Reload config to get fresh state
-        if 'config' in sys.modules:
-            del sys.modules['config']
-        if 'logger' in sys.modules:
-            del sys.modules['logger']
+        self._reload_config()
     
     def test_leverage_override_from_env(self):
         """Test that LEVERAGE from .env overrides auto-configuration"""
         os.environ['LEVERAGE'] = '15'
         
         # Reload config
-        if 'config' in sys.modules:
-            del sys.modules['config']
-        if 'logger' in sys.modules:
-            del sys.modules['logger']
+        self._reload_config()
         
         from config import Config
         
@@ -49,10 +50,12 @@ class TestConfigOverrides(unittest.TestCase):
         Config.auto_configure_from_balance(1000)
         self.assertEqual(Config.LEVERAGE, 15, "LEVERAGE should remain user-defined after auto_configure")
         
-        # Should remain when fallback is used (balance fetch fails)
-        if Config.LEVERAGE is None:  # This shouldn't happen now
+        # Verify fallback logic respects user override (balance fetch failure scenario)
+        # The fallback only sets LEVERAGE if it's None, which it shouldn't be with user override
+        leverage_before = Config.LEVERAGE
+        if Config.LEVERAGE is None:
             Config.LEVERAGE = 10
-        self.assertEqual(Config.LEVERAGE, 15, "LEVERAGE should remain user-defined after fallback")
+        self.assertEqual(Config.LEVERAGE, leverage_before, "LEVERAGE should remain unchanged after fallback check")
     
     def test_all_overrides_from_env(self):
         """Test that all config overrides work"""
@@ -62,10 +65,7 @@ class TestConfigOverrides(unittest.TestCase):
         os.environ['MIN_PROFIT_THRESHOLD'] = '0.01'
         
         # Reload config
-        if 'config' in sys.modules:
-            del sys.modules['config']
-        if 'logger' in sys.modules:
-            del sys.modules['logger']
+        self._reload_config()
         
         from config import Config
         
@@ -133,10 +133,7 @@ class TestConfigOverrides(unittest.TestCase):
         os.environ['LEVERAGE'] = '12'
         
         # Reload config
-        if 'config' in sys.modules:
-            del sys.modules['config']
-        if 'logger' in sys.modules:
-            del sys.modules['logger']
+        self._reload_config()
         
         from config import Config
         
