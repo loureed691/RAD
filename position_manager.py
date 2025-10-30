@@ -598,7 +598,7 @@ class Position:
 
 
     def should_close(self, current_price: float, volatility: float = None, 
-                     current_drawdown: float = 0.0, portfolio_correlation: float = 0.5) -> tuple[bool, str]:
+                     current_drawdown: float = 0.0, portfolio_correlation: float = 0.5) -> Tuple[bool, str]:
         """Check if position should be closed with adaptive emergency thresholds
         
         Args:
@@ -1750,7 +1750,7 @@ class PositionManager:
             return dict(self.positions)
     
     def validate_position_parameters(self, symbol: str, amount: float, 
-                                    leverage: int, stop_loss_percentage: float) -> tuple[bool, str]:
+                                    leverage: int, stop_loss_percentage: float) -> Tuple[bool, str]:
         """Validate position parameters before opening
         
         Args:
