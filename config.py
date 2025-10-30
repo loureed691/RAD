@@ -15,6 +15,32 @@ RANDOM_SEED = int(os.getenv('RANDOM_SEED', '42'))
 random.seed(RANDOM_SEED)
 np.random.seed(RANDOM_SEED)
 
+# Helper functions for safely parsing environment variables
+def _safe_parse_int(value: str, param_name: str):
+    """Safely parse string to int, handling floats and invalid values"""
+    if not value or not value.strip():
+        return None
+    try:
+        # Try converting via float first to handle values like "10.5"
+        return int(float(value.strip()))
+    except (ValueError, TypeError):
+        # Log warning but don't crash - will use auto-configuration instead
+        import sys
+        print(f"Warning: Invalid {param_name} value '{value}' in .env, will use auto-configuration", file=sys.stderr)
+        return None
+
+def _safe_parse_float(value: str, param_name: str):
+    """Safely parse string to float, handling invalid values"""
+    if not value or not value.strip():
+        return None
+    try:
+        return float(value.strip())
+    except (ValueError, TypeError):
+        # Log warning but don't crash - will use auto-configuration instead
+        import sys
+        print(f"Warning: Invalid {param_name} value '{value}' in .env, will use auto-configuration", file=sys.stderr)
+        return None
+
 # Set TensorFlow seed for reproducibility (if TensorFlow is used)
 try:
     import tensorflow as tf
@@ -74,10 +100,10 @@ class Config:
     _MIN_PROFIT_THRESHOLD_OVERRIDE = os.getenv('MIN_PROFIT_THRESHOLD')
     
     # Trading Configuration - apply user overrides immediately if provided, otherwise will be auto-configured
-    LEVERAGE = int(_LEVERAGE_OVERRIDE) if _LEVERAGE_OVERRIDE else None
-    MAX_POSITION_SIZE = float(_MAX_POSITION_SIZE_OVERRIDE) if _MAX_POSITION_SIZE_OVERRIDE else None
-    RISK_PER_TRADE = float(_RISK_PER_TRADE_OVERRIDE) if _RISK_PER_TRADE_OVERRIDE else None
-    MIN_PROFIT_THRESHOLD = float(_MIN_PROFIT_THRESHOLD_OVERRIDE) if _MIN_PROFIT_THRESHOLD_OVERRIDE else None
+    LEVERAGE = _safe_parse_int(_LEVERAGE_OVERRIDE, 'LEVERAGE') if _LEVERAGE_OVERRIDE else None
+    MAX_POSITION_SIZE = _safe_parse_float(_MAX_POSITION_SIZE_OVERRIDE, 'MAX_POSITION_SIZE') if _MAX_POSITION_SIZE_OVERRIDE else None
+    RISK_PER_TRADE = _safe_parse_float(_RISK_PER_TRADE_OVERRIDE, 'RISK_PER_TRADE') if _RISK_PER_TRADE_OVERRIDE else None
+    MIN_PROFIT_THRESHOLD = _safe_parse_float(_MIN_PROFIT_THRESHOLD_OVERRIDE, 'MIN_PROFIT_THRESHOLD') if _MIN_PROFIT_THRESHOLD_OVERRIDE else None
     
     # Bot Parameters - Optimal defaults for best performance and safety
     CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '60'))  # 60s = optimal balance (not too fast to avoid rate limits, not too slow to miss opportunities)
@@ -137,8 +163,8 @@ class Config:
         logger = Logger.get_logger()
         
         # Apply user overrides if provided, otherwise calculate smart defaults
-        if cls._LEVERAGE_OVERRIDE:
-            cls.LEVERAGE = int(cls._LEVERAGE_OVERRIDE)
+        # Check if LEVERAGE was already successfully parsed from env (not None)
+        if cls.LEVERAGE is not None:
             logger.info(f"📌 Using user-defined LEVERAGE: {cls.LEVERAGE}x")
         else:
             # Smart leverage based on balance - MORE CONSERVATIVE (smaller accounts = lower leverage for safety)
@@ -154,8 +180,7 @@ class Config:
                 cls.LEVERAGE = 12  # Very large account - moderate-aggressive (was 15)
             logger.info(f"🤖 Auto-configured LEVERAGE: {cls.LEVERAGE}x (balance: ${available_balance:.2f})")
         
-        if cls._MAX_POSITION_SIZE_OVERRIDE:
-            cls.MAX_POSITION_SIZE = float(cls._MAX_POSITION_SIZE_OVERRIDE)
+        if cls.MAX_POSITION_SIZE is not None:
             logger.info(f"📌 Using user-defined MAX_POSITION_SIZE: ${cls.MAX_POSITION_SIZE:.2f}")
         else:
             # Max position size as percentage of balance
@@ -173,8 +198,7 @@ class Config:
             cls.MAX_POSITION_SIZE = max(10, min(cls.MAX_POSITION_SIZE, 50000))
             logger.info(f"🤖 Auto-configured MAX_POSITION_SIZE: ${cls.MAX_POSITION_SIZE:.2f} (balance: ${available_balance:.2f})")
         
-        if cls._RISK_PER_TRADE_OVERRIDE:
-            cls.RISK_PER_TRADE = float(cls._RISK_PER_TRADE_OVERRIDE)
+        if cls.RISK_PER_TRADE is not None:
             logger.info(f"📌 Using user-defined RISK_PER_TRADE: {cls.RISK_PER_TRADE:.2%}")
         else:
             # Risk per trade - smaller for larger accounts (relative risk management)
@@ -190,8 +214,7 @@ class Config:
                 cls.RISK_PER_TRADE = 0.03  # 3% risk for very large accounts
             logger.info(f"🤖 Auto-configured RISK_PER_TRADE: {cls.RISK_PER_TRADE:.2%} (balance: ${available_balance:.2f})")
         
-        if cls._MIN_PROFIT_THRESHOLD_OVERRIDE:
-            cls.MIN_PROFIT_THRESHOLD = float(cls._MIN_PROFIT_THRESHOLD_OVERRIDE)
+        if cls.MIN_PROFIT_THRESHOLD is not None:
             logger.info(f"📌 Using user-defined MIN_PROFIT_THRESHOLD: {cls.MIN_PROFIT_THRESHOLD:.2%}")
         else:
             # Min profit threshold - must cover trading fees (maker 0.02% + taker 0.06% = ~0.08-0.12% round-trip)
