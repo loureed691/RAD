@@ -731,27 +731,28 @@ class TradingBot:
         # 2026 FEATURE: Enhanced stop loss with ATR and support/resistance
         try:
             atr = indicators.get('atr', entry_price * 0.02)  # Fallback to 2% if no ATR
-            support_level = None
+            # Use proper variable naming: support_or_resistance_level
+            support_or_resistance_level = None
             if signal == 'BUY' and 'support' in support_resistance:
                 # Get the strongest support level (first in list)
                 support_list = support_resistance['support']
                 if support_list and len(support_list) > 0:
-                    support_level = support_list[0]['price'] if isinstance(support_list[0], dict) else support_list[0]
+                    support_or_resistance_level = support_list[0]['price'] if isinstance(support_list[0], dict) else support_list[0]
             elif signal == 'SELL' and 'resistance' in support_resistance:
                 # Get the strongest resistance level (first in list)
                 resistance_list = support_resistance['resistance']
                 if resistance_list and len(resistance_list) > 0:
                     # If the first resistance is a dict, extract its price; otherwise, assume it's a numeric value.
                     if isinstance(resistance_list[0], dict):
-                        support_level = resistance_list[0]['price']
+                        support_or_resistance_level = resistance_list[0]['price']
                     elif isinstance(resistance_list[0], (float, int)):
-                        support_level = resistance_list[0]
+                        support_or_resistance_level = resistance_list[0]
                     else:
-                        self.logger.warning(f"Unexpected type for resistance_list[0]: {type(resistance_list[0])}. Expected dict or numeric. Setting support_level to None.")
-                        support_level = None
+                        self.logger.warning(f"Unexpected type for resistance_list[0]: {type(resistance_list[0])}. Expected dict or numeric. Setting to None.")
+                        support_or_resistance_level = None
             
             dynamic_stop = self.advanced_risk_2026.calculate_dynamic_stop_loss(
-                entry_price, atr, support_level, market_regime,
+                entry_price, atr, support_or_resistance_level, market_regime,
                 'long' if signal == 'BUY' else 'short'
             )
             
