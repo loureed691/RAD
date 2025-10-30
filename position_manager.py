@@ -397,15 +397,16 @@ class Position:
                 
                 # Don't extend TP if:
                 # 1. We're within 1% (absolute) of current TP, OR
-                # 2. We've made 60%+ progress toward current TP AND TP is within 2% of current price
+                # 2. We've made 70%+ progress toward current TP (block all extensions to ensure close)
+                # 3. We've made 60%+ progress AND TP is within 2% of current price
                 if distance_pct_of_entry <= 0.01:
                     # Very close to TP (within 1% of entry price) - never extend
                     pass
-                elif progress_pct >= 0.6 and distance_pct_of_entry <= 0.02:
-                    # Made good progress (60%+) and TP is close (within 2%) - don't extend
+                elif progress_pct >= 0.70:
+                    # Made 70%+ progress - freeze TP to ensure position closes
                     pass
-                elif progress_pct >= 0.8:
-                    # Made significant progress (80%+) - don't extend further to ensure close
+                elif progress_pct >= 0.60 and distance_pct_of_entry <= 0.02:
+                    # Made good progress (60%+) and TP is close (within 2%) - don't extend
                     pass
                 else:
                     # Safe to extend - price is far enough from TP
@@ -427,15 +428,16 @@ class Position:
                 
                 # Don't extend TP if:
                 # 1. We're within 1% (absolute) of current TP, OR
-                # 2. We've made 60%+ progress toward current TP AND TP is within 2% of current price
+                # 2. We've made 70%+ progress toward current TP (block all extensions to ensure close)
+                # 3. We've made 60%+ progress AND TP is within 2% of current price
                 if distance_pct_of_entry <= 0.01:
                     # Very close to TP (within 1% of entry price) - never extend
                     pass
-                elif progress_pct >= 0.6 and distance_pct_of_entry <= 0.02:
-                    # Made good progress (60%+) and TP is close (within 2%) - don't extend
+                elif progress_pct >= 0.70:
+                    # Made 70%+ progress - freeze TP to ensure position closes
                     pass
-                elif progress_pct >= 0.8:
-                    # Made significant progress (80%+) - don't extend further to ensure close
+                elif progress_pct >= 0.60 and distance_pct_of_entry <= 0.02:
+                    # Made good progress (60%+) and TP is close (within 2%) - don't extend
                     pass
                 else:
                     # Safe to extend - price is far enough from TP
@@ -697,24 +699,27 @@ class Position:
         if current_pnl > 0 and self.max_favorable_excursion > 0:
             profit_drawdown = self.max_favorable_excursion - current_pnl
             
-            # WIN PROTECTION: If we had significant profit (8%+) and gave back 40%+, exit immediately
-            if self.max_favorable_excursion >= 0.08:
+            # WIN PROTECTION: If we had significant profit (10%+) and gave back 50%+, exit immediately
+            if self.max_favorable_excursion >= 0.10:
                 drawdown_pct = profit_drawdown / self.max_favorable_excursion
                 
                 # Gave back 50%+ of peak profit - major retracement
-                if drawdown_pct >= 0.50 and current_pnl >= 0.01:
+                # Use 0.499 to handle floating point precision
+                if drawdown_pct >= 0.499 and current_pnl >= 0.01:
                     return True, 'win_protection_major_retracement'
                 
-                # Gave back 40%+ of peak profit - significant retracement
-                if drawdown_pct >= 0.40 and current_pnl >= 0.02:
+                # Gave back 30%+ of peak profit in 3-15% range - momentum loss
+                # Use 0.299 to handle floating point precision  
+                if drawdown_pct >= 0.299 and 0.03 <= current_pnl < 0.15:
                     return True, 'win_protection_momentum_loss'
             
-            # For moderate profits (5-8%), be more cautious about retracements
-            if self.max_favorable_excursion >= 0.05:
+            # For moderate profits (5-10%), also protect against 30%+ drawdowns
+            elif self.max_favorable_excursion >= 0.05:
                 drawdown_pct = profit_drawdown / self.max_favorable_excursion
                 
-                # Gave back 35%+ of moderate profit
-                if drawdown_pct >= 0.35 and 0.03 <= current_pnl < 0.08:
+                # Gave back 30%+ of moderate profit (5-10% range)
+                # Use 0.299 to handle floating point precision
+                if drawdown_pct >= 0.299 and 0.03 <= current_pnl < 0.10:
                     return True, 'win_protection_profit_erosion'
         
         # Standard stop loss and take profit checks (primary logic)
