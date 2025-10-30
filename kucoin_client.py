@@ -82,6 +82,12 @@ class KuCoinClient:
         self._max_time_drift_ms = 5000  # Max 5 seconds drift allowed
         self._sync_check_interval = 3600  # Check every hour
         
+        # PERFORMANCE: OHLCV candle cache to avoid refetching all historical data
+        # Stores candles by (symbol, timeframe) key to minimize API calls
+        self._candle_cache = {}  # {(symbol, timeframe): list of candles}
+        self._candle_cache_lock = threading.Lock()
+        self._max_cached_candles = 500  # Keep up to 500 candles per symbol/timeframe
+        
         try:
             self.exchange = ccxt.kucoinfutures({
                 'apiKey': api_key,
@@ -599,9 +605,12 @@ class KuCoinClient:
         return self._execute_with_priority(_fetch, priority, f'get_ticker({symbol})')
     
     def get_ohlcv(self, symbol: str, timeframe: str = '1h', limit: int = 100) -> List:
-        """Get OHLCV data for a symbol with retry logic
+        """Get OHLCV data for a symbol with caching and incremental updates
         
-        Uses WebSocket data if available, falls back to REST API.
+        Uses WebSocket data if available, falls back to REST API with caching.
+        Caches candles and only fetches new ones since the last timestamp,
+        reducing API calls and improving performance.
+        
         This is typically used for SCANNING, so uses NORMAL priority by default.
         Will wait for critical trading operations to complete first.
         
@@ -645,7 +654,82 @@ class KuCoinClient:
                     else:
                         self.logger.debug(f"No WebSocket data for {symbol} {timeframe}, using REST API")
         
-        # Fallback to REST API
+        # Fallback to REST API with caching
+        cache_key = (symbol, timeframe)
+        
+        # Check if we have cached candles (without holding lock for too long)
+        cached_candles = None
+        last_timestamp = None
+        
+        with self._candle_cache_lock:
+            if cache_key in self._candle_cache:
+                cached_candles = list(self._candle_cache[cache_key])  # Make a copy
+                if cached_candles and len(cached_candles) >= limit:
+                    last_timestamp = cached_candles[-1][0]  # First element is timestamp
+        
+        # If we have enough cached candles, fetch only new ones
+        if cached_candles and last_timestamp is not None:
+            # Calculate how many new candles we might need (estimate)
+            # This is a heuristic - we fetch a small number of recent candles
+            # to catch up with any new data since last fetch
+            fetch_limit = 10  # Fetch only the last 10 candles to check for updates
+            
+            def _fetch_new():
+                def _fetch_ohlcv():
+                    # Fetch only recent candles
+                    ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=fetch_limit)
+                    if not ohlcv:
+                        return []
+                    
+                    self.logger.debug(f"Fetched {len(ohlcv)} recent candles for {symbol} from REST API")
+                    return ohlcv
+                
+                # Use error handling with retries
+                result = self._handle_api_error(
+                    _fetch_ohlcv,
+                    max_retries=3,
+                    exponential_backoff=True,
+                    operation_name=f"get_ohlcv({symbol})"
+                )
+                
+                return result if result is not None else []
+            
+            # Execute with NORMAL priority to fetch new candles (outside of lock)
+            new_candles = self._execute_with_priority(_fetch_new, APICallPriority.NORMAL, f'get_ohlcv({symbol})')
+            
+            if new_candles:
+                # Merge new candles with cached ones
+                with self._candle_cache_lock:
+                    updated_candles = list(cached_candles)  # Use our local copy
+                    
+                    for candle in new_candles:
+                        candle_timestamp = candle[0]
+                        # Only add candles that are newer than our last cached candle
+                        # or update the last candle if it's the same timestamp
+                        if candle_timestamp > last_timestamp:
+                            updated_candles.append(candle)
+                        elif candle_timestamp == last_timestamp:
+                            # Update the last candle (it may have changed if it's still forming)
+                            updated_candles[-1] = candle
+                    
+                    # Keep only the most recent candles up to our max limit
+                    if len(updated_candles) > self._max_cached_candles:
+                        updated_candles = updated_candles[-self._max_cached_candles:]
+                    
+                    # Update cache
+                    self._candle_cache[cache_key] = updated_candles
+                    
+                    # Return the requested number of candles
+                    result = updated_candles[-limit:] if len(updated_candles) > limit else updated_candles
+                    self.logger.debug(f"Returned {len(result)} cached+updated candles for {symbol} {timeframe}")
+                    return result
+            else:
+                # No new candles fetched, return cached data
+                result = cached_candles[-limit:] if len(cached_candles) > limit else cached_candles
+                self.logger.debug(f"Returned {len(result)} cached candles for {symbol} {timeframe}")
+                return result
+        
+        # No cache or insufficient cached data - fetch full dataset
         def _fetch():
             def _fetch_ohlcv():
                 ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
@@ -663,6 +747,12 @@ class KuCoinClient:
                 exponential_backoff=True,
                 operation_name=f"get_ohlcv({symbol})"
             )
+            
+            if result:
+                # Cache the fetched candles
+                with self._candle_cache_lock:
+                    self._candle_cache[cache_key] = result
+                    self.logger.debug(f"Cached {len(result)} candles for {symbol} {timeframe}")
             
             return result if result is not None else []
         
@@ -1975,6 +2065,53 @@ class KuCoinClient:
             self.logger.error(f"Error validating order locally: {e}")
             # Fail safe - allow order but log error
             return True, f"validation_error: {str(e)}"
+    
+    def clear_candle_cache(self, symbol: str = None, timeframe: str = None):
+        """
+        Clear cached candles for a specific symbol/timeframe or all caches
+        
+        Args:
+            symbol: Optional symbol to clear cache for. If None, clears all.
+            timeframe: Optional timeframe to clear cache for. Required if symbol is provided.
+        """
+        with self._candle_cache_lock:
+            if symbol and timeframe:
+                # Clear specific cache entry
+                cache_key = (symbol, timeframe)
+                if cache_key in self._candle_cache:
+                    del self._candle_cache[cache_key]
+                    self.logger.debug(f"Cleared candle cache for {symbol} {timeframe}")
+            elif symbol:
+                # Clear all timeframes for a symbol
+                keys_to_delete = [key for key in self._candle_cache if key[0] == symbol]
+                for key in keys_to_delete:
+                    del self._candle_cache[key]
+                self.logger.debug(f"Cleared all candle caches for {symbol}")
+            else:
+                # Clear all caches
+                self._candle_cache.clear()
+                self.logger.info("Cleared all candle caches")
+    
+    def get_cache_stats(self) -> Dict:
+        """
+        Get statistics about the candle cache
+        
+        Returns:
+            Dictionary with cache statistics
+        """
+        with self._candle_cache_lock:
+            stats = {
+                'total_entries': len(self._candle_cache),
+                'entries': {}
+            }
+            for (symbol, timeframe), candles in self._candle_cache.items():
+                key = f"{symbol}:{timeframe}"
+                stats['entries'][key] = {
+                    'candle_count': len(candles),
+                    'oldest_timestamp': candles[0][0] if candles else None,
+                    'newest_timestamp': candles[-1][0] if candles else None
+                }
+            return stats
     
     def close(self):
         """Close connections and cleanup resources"""
