@@ -490,14 +490,14 @@ class RiskManager:
         # CRITICAL FIX: Account for leverage when sizing positions to fit available margin
         # The margin requirement is position_value / leverage, and this must fit within balance
         # Reserve 10% of balance for fees and safety margin
-        if leverage > 0:
-            max_position_value_by_margin = balance * 0.90 * leverage
-            if position_value > max_position_value_by_margin:
-                self.logger.debug(
-                    f"Position value ${position_value:.2f} capped by available margin: "
-                    f"${balance:.2f} * {leverage}x = ${max_position_value_by_margin:.2f}"
-                )
-                position_value = max_position_value_by_margin
+        # Note: leverage is already validated above to be > 0
+        max_position_value_by_margin = balance * 0.90 * leverage
+        if position_value > max_position_value_by_margin:
+            self.logger.debug(
+                f"Position value ${position_value:.2f} capped by available margin: "
+                f"${balance:.2f} * {leverage}x = ${max_position_value_by_margin:.2f}"
+            )
+            position_value = max_position_value_by_margin
         
         # Convert to contracts (entry_price already validated above)
         position_size = position_value / entry_price

@@ -26,7 +26,7 @@ def test_position_size_respects_margin_with_leverage():
     balance = 16.65
     # Using realistic price and tight stop loss that would cause large positions
     entry_price = 8.71
-    stop_loss_price = entry_price * 0.988  # 1.2% stop loss (tight stop)
+    stop_loss_price = entry_price * 0.988  # Stop loss distance: 1.2% below entry
     leverage = 12
     
     size = manager.calculate_position_size(balance, entry_price, stop_loss_price, leverage)
