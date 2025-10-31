@@ -103,8 +103,13 @@ class TradingBot:
         # Check if balance fetch was successful by checking for expected structure
         if balance and 'free' in balance:
             available_balance = float(balance.get('free', {}).get('USDT', 0))
-            self.logger.info(f"💰 Available balance: ${available_balance:.2f} USDT")
-            Config.auto_configure_from_balance(available_balance)
+            total_equity = float(balance.get('total', {}).get('USDT', 0))
+            self.logger.info(f"💰 Available margin: ${available_balance:.2f} USDT")
+            if total_equity > 0:
+                self.logger.info(f"💰 Total account equity: ${total_equity:.2f} USDT (includes positions & unrealized PnL)")
+            # Use total equity for auto-config if available, otherwise use available balance
+            config_balance = total_equity if total_equity > 0 else available_balance
+            Config.auto_configure_from_balance(config_balance)
         else:
             self.logger.warning("⚠️  Could not fetch balance, using default configuration")
             # Set defaults if balance fetch fails
@@ -323,10 +328,25 @@ class TradingBot:
             self.logger.error("Failed to fetch balance from exchange")
             return False
         
+        # For futures trading, use total equity for position sizing (includes unrealized PnL and positions)
+        # but use free balance for margin availability checks
+        total_equity = float(balance.get('total', {}).get('USDT', 0))
         available_balance = float(balance.get('free', {}).get('USDT', 0))
         
-        if available_balance <= 0:
-            self.logger.warning("💰 No available balance")
+        # Use total equity if available, otherwise fall back to available balance
+        portfolio_balance = total_equity if total_equity > 0 else available_balance
+        
+        # Log balance info for transparency
+        if total_equity > available_balance:
+            self.logger.debug(
+                f"💰 Portfolio balance: ${portfolio_balance:.2f} (equity), "
+                f"Available margin: ${available_balance:.2f}"
+            )
+        else:
+            self.logger.debug(f"💰 Portfolio balance: ${portfolio_balance:.2f}")
+        
+        if portfolio_balance <= 0:
+            self.logger.warning("💰 No portfolio balance")
             return False
         
         # Check portfolio diversification
@@ -350,9 +370,10 @@ class TradingBot:
         )
         
         # Check if we should open a position
+        # Use portfolio_balance for sizing decisions, but available_balance for margin checks
         current_positions = self.position_manager.get_open_positions_count()
         should_open, reason = self.risk_manager.should_open_position(
-            current_positions, available_balance
+            current_positions, portfolio_balance
         )
         
         if not should_open:
@@ -378,13 +399,13 @@ class TradingBot:
         # Use a conservative estimate (4% of balance) to pass the 5% guardrail check
         # The actual position size will be calculated later based on stop loss distance
         estimated_position_value = min(
-            available_balance * 0.04,  # Conservative estimate under 5% guardrail
+            portfolio_balance * 0.04,  # Conservative estimate under 5% guardrail
             Config.MAX_POSITION_SIZE
         )
         
         # Check all guardrails (kill switch, daily loss, max positions, per-trade risk)
         is_allowed, block_reason = self.risk_manager.validate_trade_guardrails(
-            balance=available_balance,
+            balance=portfolio_balance,
             position_value=estimated_position_value,
             current_positions=current_positions,
             is_exit=False
@@ -797,7 +818,7 @@ class TradingBot:
             try:
                 if total_trades >= 30:  # Need more trades for Bayesian to be effective
                     bayesian_sizing = self.bayesian_kelly.calculate_optimal_position_size(
-                        balance=available_balance,
+                        balance=portfolio_balance,
                         confidence=confidence,
                         market_volatility=volatility,
                         use_recent_window=True
@@ -828,12 +849,13 @@ class TradingBot:
         else:
             self.logger.debug(f"Insufficient trade history ({total_trades} trades), using default risk")
         
-        # Check drawdown and adjust risk
-        risk_adjustment = self.risk_manager.update_drawdown(available_balance)
+        # Check drawdown and adjust risk using portfolio balance
+        risk_adjustment = self.risk_manager.update_drawdown(portfolio_balance)
         
-        # Calculate position size with Kelly Criterion if available
+        # Calculate position size using total portfolio balance, not just free margin
+        # This ensures position sizing reflects the full account equity
         position_size = self.risk_manager.calculate_position_size(
-            available_balance, entry_price, stop_loss_price, leverage, 
+            portfolio_balance, entry_price, stop_loss_price, leverage, 
             kelly_fraction=kelly_fraction * risk_adjustment if kelly_fraction is not None else None
         )
         
@@ -854,10 +876,9 @@ class TradingBot:
                 })
             
             if existing_positions:
-                # CRITICAL FIX: Calculate total portfolio value (existing positions + available balance)
-                # This prevents absurdly high concentration percentages when balance is low
-                total_position_value = sum(pos['value'] for pos in existing_positions)
-                total_portfolio_value = total_position_value + available_balance
+                # Use portfolio_balance directly as it already includes positions and unrealized PnL
+                # No need to add position values separately
+                total_portfolio_value = portfolio_balance
                 
                 # Check category concentration limits
                 is_allowed, concentration_reason = self.position_correlation.check_category_concentration(
@@ -1298,13 +1319,18 @@ class TradingBot:
         
         # Record current equity for analytics
         balance = self.client.get_balance()
-        if balance and 'free' in balance:
+        if balance and 'total' in balance:
+            # Use total equity (includes positions and unrealized PnL) for accurate tracking
+            total_equity = float(balance.get('total', {}).get('USDT', 0))
             available_balance = float(balance.get('free', {}).get('USDT', 0))
-            self.analytics.record_equity(available_balance)
+            
+            # Use total equity for analytics if available, otherwise fall back to available
+            equity_to_record = total_equity if total_equity > 0 else available_balance
+            self.analytics.record_equity(equity_to_record)
             
             # 2026 FEATURE: Record equity for performance metrics
             try:
-                self.performance_2026.record_equity(available_balance)
+                self.performance_2026.record_equity(equity_to_record)
             except Exception as e:
                 self.logger.debug(f"Error recording 2026 equity: {e}")
         
@@ -1432,15 +1458,13 @@ class TradingBot:
             try:
                 # Get current portfolio state
                 balance = self.client.get_balance()
-                if balance and 'free' in balance:
+                if balance and 'total' in balance:
+                    # Use total equity directly as it already includes positions
+                    total_equity = float(balance.get('total', {}).get('USDT', 0))
                     available_balance = float(balance.get('free', {}).get('USDT', 0))
                     
-                    # Calculate total portfolio value
-                    position_value = sum(
-                        getattr(pos, 'amount', 0) * getattr(pos, 'entry_price', 0)
-                        for pos in self.position_manager.positions.values()
-                    )
-                    portfolio_value = available_balance + position_value
+                    # Use total equity for portfolio value if available
+                    portfolio_value = total_equity if total_equity > 0 else available_balance
                     
                     if portfolio_value > 0:
                         # Check drawdown hedge trigger
