@@ -65,7 +65,7 @@ signal, confidence = predictor.predict(features)
 # Returns: ('BUY', 0.85)
 
 # Save model
-predictor.save()  # Saves to models/deep_signal_model.h5
+predictor.save()  # Saves to models/deep_signal_model.keras
 ```
 
 **Performance Impact:**

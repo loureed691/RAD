@@ -21,7 +21,7 @@ except ImportError:
 class NeuralNetworkModel:
     """Deep learning model for trading signal prediction"""
     
-    def __init__(self, model_path: str = 'models/neural_network_model.h5'):
+    def __init__(self, model_path: str = 'models/neural_network_model.keras'):
         self.model_path = model_path
         self.model = None
         self.logger = Logger.get_logger()

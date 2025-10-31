@@ -25,7 +25,7 @@ The trading bot now includes comprehensive state persistence to ensure all impor
 - **Feature Importance**: Which features matter most
 - **Performance Metrics**: Win rate, average profit, total trades
 
-### 4. Deep Learning Model (`models/deep_signal_model.h5`)
+### 4. Deep Learning Model (`models/deep_signal_model.keras`)
 - **Neural Network Weights**: LSTM and dense layer weights
 - **Architecture**: Model structure for temporal pattern recognition
 
@@ -99,7 +99,7 @@ models/
 ├── analytics_state.pkl          # Trade history and equity curve
 ├── risk_manager_state.pkl       # Performance metrics and drawdown
 ├── signal_model.pkl             # ML model and training data
-├── deep_signal_model.h5         # Deep learning neural network
+├── deep_signal_model.keras      # Deep learning neural network
 ├── q_table.pkl                  # RL strategy selection Q-table
 └── attention_weights.npy        # Feature importance weights
 ```
