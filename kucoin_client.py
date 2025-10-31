@@ -1034,13 +1034,14 @@ class KuCoinClient:
                 adjusted_leverage = max(1, min(adjusted_leverage, leverage))
                 
                 self.logger.warning(
-                    f"Reducing leverage from {leverage}x to {adjusted_leverage}x to fit available margin"
+                    f"Reducing leverage from {leverage}x to {adjusted_leverage}x to fit available margin "
+                    f"(${available_margin:.2f} available, ${usable_margin:.2f} usable after 10% reserve)"
                 )
                 return adjusted_amount, adjusted_leverage
             
             self.logger.warning(
                 f"Reducing position size from {amount:.4f} to {adjusted_amount:.4f} contracts "
-                f"to fit available margin (${usable_margin:.2f})"
+                f"to fit available margin (${available_margin:.2f} available, ${usable_margin:.2f} usable after 10% reserve)"
             )
             
             return adjusted_amount, leverage
