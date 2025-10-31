@@ -471,6 +471,11 @@ class RiskManager:
         # Calculate price distance to stop loss
         price_distance = abs(entry_price - stop_loss_price) / entry_price
         
+        # Validate leverage to prevent division by zero
+        if leverage <= 0:
+            self.logger.error(f"Invalid leverage: {leverage}. Must be positive.")
+            return 0.0
+        
         # Calculate position size based on risk
         # Risk = Position_Value * Price_Distance (leverage doesn't affect risk calculation)
         # Position_Value = Risk / Price_Distance
@@ -486,7 +491,7 @@ class RiskManager:
         # With leverage, required margin = position_value / leverage
         # We need to ensure: position_value / leverage <= balance * safety_factor
         # This prevents opening positions far larger than the balance allows
-        required_margin = position_value / leverage if leverage > 0 else position_value
+        required_margin = position_value / leverage
         safety_factor = 0.95  # Use 95% of balance max to leave room for fees
         max_affordable_margin = balance * safety_factor
         
@@ -502,9 +507,9 @@ class RiskManager:
         # Convert to contracts (entry_price already validated above)
         position_size = position_value / entry_price
         
-        # Final validation: position value should not exceed balance * leverage * safety_factor
+        # Log final position details
         final_position_value = position_size * entry_price
-        final_required_margin = final_position_value / leverage if leverage > 0 else final_position_value
+        final_required_margin = final_position_value / leverage
         
         self.logger.debug(
             f"Calculated position size: {position_size:.4f} contracts "
