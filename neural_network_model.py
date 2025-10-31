@@ -9,6 +9,9 @@ from logger import Logger
 
 try:
     import tensorflow as tf
+    # Enable eager execution for compatibility
+    if not tf.executing_eagerly():
+        tf.config.run_functions_eagerly(True)
     from tensorflow import keras
     from tensorflow.keras import layers, models, callbacks
     TENSORFLOW_AVAILABLE = True

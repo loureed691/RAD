@@ -28,6 +28,13 @@ def test_neural_network():
             print("⚠️  TensorFlow not available - skipping neural network tests")
             return True
         
+        # Clean up any existing test model files to avoid caching issues
+        import os
+        for ext in ['.h5', '.keras']:
+            test_model_path = f'models/test_nn{ext}'
+            if os.path.exists(test_model_path):
+                os.remove(test_model_path)
+        
         # Create model
         nn_model = NeuralNetworkModel('models/test_nn.h5')
         print("✓ Neural network model initialized")
