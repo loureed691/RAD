@@ -35,7 +35,7 @@ class DeepLearningSignalPredictor:
         self.model = None
         self.scaler = None
         self.feature_buffer = deque(maxlen=sequence_length)
-        self.model_path = 'models/deep_signal_model.h5'
+        self.model_path = 'models/deep_signal_model.keras'
         
         if not TENSORFLOW_AVAILABLE:
             self.logger.warning("TensorFlow not available, DeepLearningSignalPredictor disabled")
