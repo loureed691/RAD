@@ -12,6 +12,7 @@ from datetime import datetime
 
 # Test configuration: (name, file, expected_test_count)
 TEST_SUITES = [
+    ("Bot Startup Smoke Test", "test_bot_startup_smoke.py", 8),
     ("Core Components", "test_bot.py", 12),
     ("Strategy Optimizations", "test_strategy_optimizations.py", 5),
     ("Adaptive Stops", "test_adaptive_stops.py", 9),
@@ -47,12 +48,15 @@ def run_test_suite(name, file, expected_count):
     Returns:
         tuple: (success: bool, test_count: int)
     """
+    # Set longer timeout for comprehensive advanced tests (neural network training)
+    timeout = 180 if 'comprehensive' in file.lower() else 60
+    
     try:
         result = subprocess.run(
             [sys.executable, file],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=timeout,
             cwd=os.path.dirname(os.path.abspath(__file__))
         )
         
@@ -66,7 +70,7 @@ def run_test_suite(name, file, expected_count):
             return False, 0
             
     except subprocess.TimeoutExpired:
-        print(f"\n   ⚠️  Test timed out after 60 seconds")
+        print(f"\n   ⚠️  Test timed out after {timeout} seconds")
         return False, 0
     except Exception as e:
         print(f"\n   ❌ Error: {e}")

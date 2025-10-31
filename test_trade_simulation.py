@@ -424,6 +424,10 @@ class TradeSimulationTester:
             mock_client = Mock()
             mock_client.get_ticker = Mock(return_value={'last': 110.0})  # Profitable close
             mock_client.close_position = Mock(return_value=True)
+            # Mock get_open_positions to return the position exists
+            mock_client.get_open_positions = Mock(return_value=[
+                {'symbol': 'BTC/USDT:USDT', 'side': 'long'}
+            ])
             
             # Create position manager with a position
             pm = PositionManager(mock_client, trailing_stop_percentage=0.02)
@@ -547,6 +551,11 @@ class TradeSimulationTester:
             mock_client.create_market_order = Mock(return_value={'id': '12345'})
             mock_client.close_position = Mock(return_value=True)
             mock_client.get_ohlcv = Mock(return_value=self._create_sample_ohlcv(current_price))
+            # Mock get_open_positions to return positions exist
+            mock_client.get_open_positions = Mock(return_value=[
+                {'symbol': 'BTC/USDT:USDT', 'side': 'long'},
+                {'symbol': 'ETH/USDT:USDT', 'side': 'short'}
+            ])
             
             # Create managers
             pm = PositionManager(mock_client, trailing_stop_percentage=0.02)
