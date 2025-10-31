@@ -482,12 +482,34 @@ class RiskManager:
         # Cap at maximum position size
         position_value = min(position_value, self.max_position_size)
         
+        # CRITICAL FIX: Ensure required margin doesn't exceed available balance
+        # With leverage, required margin = position_value / leverage
+        # We need to ensure: position_value / leverage <= balance * safety_factor
+        # This prevents opening positions far larger than the balance allows
+        required_margin = position_value / leverage if leverage > 0 else position_value
+        safety_factor = 0.95  # Use 95% of balance max to leave room for fees
+        max_affordable_margin = balance * safety_factor
+        
+        if required_margin > max_affordable_margin:
+            # Position is too large for available balance, scale it down
+            position_value = max_affordable_margin * leverage
+            self.logger.debug(
+                f"Position scaled down: required margin ${required_margin:.2f} > "
+                f"affordable ${max_affordable_margin:.2f}, "
+                f"adjusted position value to ${position_value:.2f}"
+            )
+        
         # Convert to contracts (entry_price already validated above)
         position_size = position_value / entry_price
         
+        # Final validation: position value should not exceed balance * leverage * safety_factor
+        final_position_value = position_size * entry_price
+        final_required_margin = final_position_value / leverage if leverage > 0 else final_position_value
+        
         self.logger.debug(
             f"Calculated position size: {position_size:.4f} contracts "
-            f"(${position_value:.2f} value) for risk ${risk_amount:.2f} ({risk:.2%})"
+            f"(${final_position_value:.2f} value, ${final_required_margin:.2f} margin required) "
+            f"for risk ${risk_amount:.2f} ({risk:.2%}) with {leverage}x leverage"
         )
         
         return position_size
