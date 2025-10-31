@@ -49,6 +49,9 @@ class RiskManager:
         self.max_risk_per_trade_pct = 0.05  # Max 5% of equity per trade
         self.kill_switch_reason = ""  # Reason for kill switch activation
         
+        # Balance buffer for position sizing (reserve for fees and safety)
+        self.balance_buffer_pct = 0.10  # Reserve 10% of balance
+        
         # Performance streak tracking for adaptive leverage
         self.win_streak = 0
         self.loss_streak = 0
@@ -484,8 +487,8 @@ class RiskManager:
         
         # CRITICAL FIX: Ensure position value doesn't exceed what we can afford with available balance
         # The position requires (position_value / leverage) in margin
-        # Reserve 10% of balance for fees and safety buffer
-        usable_balance = balance * 0.90
+        # Reserve buffer percentage of balance for fees and safety
+        usable_balance = balance * (1 - self.balance_buffer_pct)
         max_affordable_position_value = usable_balance * leverage
         
         if position_value > max_affordable_position_value:
