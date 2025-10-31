@@ -3,6 +3,9 @@ Test to verify position size calculation accounts for leverage and margin constr
 """
 from risk_manager import RiskManager
 
+# Constants
+FEE_BUFFER = 1.05  # 5% buffer for fees and safety margin
+
 
 def test_position_size_respects_margin_with_leverage():
     """Test that position sizing accounts for leverage to prevent margin check failures"""
@@ -21,14 +24,15 @@ def test_position_size_respects_margin_with_leverage():
     print("\n📊 Test Case 1: Small balance ($16.65) with 12x leverage")
     print("="*70)
     balance = 16.65
-    entry_price = 8.71  # Approximate price based on position value $915.29 / 105.0569 contracts
+    # Using realistic price and tight stop loss that would cause large positions
+    entry_price = 8.71
     stop_loss_price = entry_price * 0.988  # 1.2% stop loss (tight stop)
     leverage = 12
     
     size = manager.calculate_position_size(balance, entry_price, stop_loss_price, leverage)
     position_value = size * entry_price
     required_margin = position_value / leverage
-    required_margin_with_buffer = required_margin * 1.05  # 5% buffer for fees
+    required_margin_with_buffer = required_margin * FEE_BUFFER
     
     print(f"  Balance: ${balance:.2f}")
     print(f"  Entry Price: ${entry_price:.2f}")
@@ -52,7 +56,7 @@ def test_position_size_respects_margin_with_leverage():
     size = manager.calculate_position_size(balance, entry_price, stop_loss_price, leverage)
     position_value = size * entry_price
     required_margin = position_value / leverage
-    required_margin_with_buffer = required_margin * 1.05
+    required_margin_with_buffer = required_margin * FEE_BUFFER
     
     print(f"  Balance: ${balance:.2f}")
     print(f"  Leverage: {leverage}x")
@@ -77,7 +81,7 @@ def test_position_size_respects_margin_with_leverage():
     size = manager.calculate_position_size(balance, entry_price, stop_loss_price, leverage)
     position_value = size * entry_price
     required_margin = position_value / leverage
-    required_margin_with_buffer = required_margin * 1.05
+    required_margin_with_buffer = required_margin * FEE_BUFFER
     
     print(f"  Balance: ${balance:.2f}")
     print(f"  Entry Price: ${entry_price:.2f}")
@@ -104,7 +108,7 @@ def test_position_size_respects_margin_with_leverage():
     size = manager.calculate_position_size(balance, entry_price, stop_loss_price, leverage)
     position_value = size * entry_price
     required_margin = position_value / leverage
-    required_margin_with_buffer = required_margin * 1.05
+    required_margin_with_buffer = required_margin * FEE_BUFFER
     
     print(f"  Balance: ${balance:.2f}")
     print(f"  Entry Price: ${entry_price:.2f}")

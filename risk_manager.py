@@ -440,6 +440,11 @@ class RiskManager:
             self.logger.error(f"Invalid balance: {balance}. Cannot calculate position size.")
             return 0.0
         
+        # Validate leverage
+        if leverage <= 0:
+            self.logger.error(f"Invalid leverage: {leverage}. Cannot calculate position size.")
+            return 0.0
+        
         # Use Kelly Criterion if provided and valid, otherwise use standard risk
         if kelly_fraction is not None and kelly_fraction > 0:
             # Kelly suggests optimal fraction of capital to risk
