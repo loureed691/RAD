@@ -482,12 +482,30 @@ class RiskManager:
         # Cap at maximum position size
         position_value = min(position_value, self.max_position_size)
         
+        # CRITICAL FIX: Ensure position value doesn't exceed what we can afford with available balance
+        # The position requires (position_value / leverage) in margin
+        # Reserve 10% of balance for fees and safety buffer
+        usable_balance = balance * 0.90
+        max_affordable_position_value = usable_balance * leverage
+        
+        if position_value > max_affordable_position_value:
+            self.logger.warning(
+                f"Position value ${position_value:.2f} exceeds affordable limit "
+                f"${max_affordable_position_value:.2f} with balance ${balance:.2f} and {leverage}x leverage. "
+                f"Reducing to affordable size."
+            )
+            position_value = max_affordable_position_value
+        
         # Convert to contracts (entry_price already validated above)
         position_size = position_value / entry_price
         
+        # Calculate required margin for logging
+        required_margin = position_value / leverage
+        
         self.logger.debug(
             f"Calculated position size: {position_size:.4f} contracts "
-            f"(${position_value:.2f} value) for risk ${risk_amount:.2f} ({risk:.2%})"
+            f"(${position_value:.2f} value, ${required_margin:.2f} margin required) "
+            f"for risk ${risk_amount:.2f} ({risk:.2%}) with balance ${balance:.2f}"
         )
         
         return position_size
