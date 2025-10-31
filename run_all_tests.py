@@ -12,6 +12,7 @@ from datetime import datetime
 
 # Test configuration: (name, file, expected_test_count)
 TEST_SUITES = [
+    ("Bot Startup Smoke Test", "test_bot_startup_smoke.py", 8),
     ("Core Components", "test_bot.py", 12),
     ("Strategy Optimizations", "test_strategy_optimizations.py", 5),
     ("Adaptive Stops", "test_adaptive_stops.py", 9),
