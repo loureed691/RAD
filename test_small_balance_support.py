@@ -113,11 +113,11 @@ def test_position_sizing_small_balances():
         position_value = size * entry_price
         print(f"  ✓ Tight stop: Position size = {size:.6f} contracts (${position_value:.2f} value)")
         
-        # Test edge case: stop loss equals entry (should handle gracefully)
+        # Test edge case: stop loss equals entry (should return 0 as it's invalid)
         print("\n  Testing edge case: stop loss equals entry price...")
         size = manager.calculate_position_size(balance, entry_price, entry_price, leverage)
-        assert size > 0, f"Should handle zero price distance gracefully, got {size}"
-        print(f"  ✓ Zero distance handled: Position size = {size:.6f} contracts")
+        assert size == 0, f"Should return 0 for zero price distance, got {size}"
+        print(f"  ✓ Zero distance handled correctly: Position size = {size:.6f} contracts")
         
         print("\n✓ Position sizing works correctly with small balances")
         return True
