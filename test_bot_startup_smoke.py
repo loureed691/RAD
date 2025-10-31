@@ -15,6 +15,10 @@ from datetime import datetime
 class TestBotStartupSmoke(unittest.TestCase):
     """Test bot initialization and feature activation"""
     
+    # Test configuration constants
+    MIN_COMPONENT_IMPORT_RATE = 0.9  # Require 90% of components to import
+    MIN_STARTUP_PHASE_SUCCESS_RATE = 0.75  # Require 75% of startup phases to succeed
+    
     def setUp(self):
         """Set up test environment"""
         # Set minimal required environment variables
@@ -99,9 +103,10 @@ class TestBotStartupSmoke(unittest.TestCase):
         
         print(f"\n✓ Imported {imported_count}/{len(components)} components")
         
-        # Should import at least 90% of components
-        self.assertGreater(imported_count, len(components) * 0.9, 
-                          f"Only {imported_count}/{len(components)} components imported")
+        # Should import at least MIN_COMPONENT_IMPORT_RATE of components
+        min_required = int(len(components) * self.MIN_COMPONENT_IMPORT_RATE)
+        self.assertGreater(imported_count, min_required, 
+                          f"Only {imported_count}/{len(components)} components imported, need >{min_required}")
     
     @patch('kucoin_client.KuCoinClient.get_balance')
     @patch('kucoin_client.KuCoinClient.__init__')
@@ -319,9 +324,10 @@ class TestBotStartupSmoke(unittest.TestCase):
         
         print(f"\n✓ {passed}/{len(startup_phases)} startup phases validated")
         
-        # Should pass at least 75% of phases
-        self.assertGreater(passed, len(startup_phases) * 0.75,
-                          f"Only {passed}/{len(startup_phases)} phases passed")
+        # Should pass at least MIN_STARTUP_PHASE_SUCCESS_RATE of phases
+        min_required = int(len(startup_phases) * self.MIN_STARTUP_PHASE_SUCCESS_RATE)
+        self.assertGreater(passed, min_required,
+                          f"Only {passed}/{len(startup_phases)} phases passed, need >{min_required}")
     
     def test_08_graceful_degradation(self):
         """Test that bot can handle missing optional components"""
