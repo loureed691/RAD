@@ -349,9 +349,7 @@ class MLModel:
             X_train_scaled = self.scaler.fit_transform(X_train)
             X_test_scaled = self.scaler.transform(X_test)
             
-            # Convert back to DataFrame after scaling to preserve feature names
-            X_train_scaled = pd.DataFrame(X_train_scaled, columns=self.FEATURE_NAMES, index=X_train.index)
-            X_test_scaled = pd.DataFrame(X_test_scaled, columns=self.FEATURE_NAMES, index=X_test.index)
+            # Scaled data already preserves DataFrame structure in modern sklearn; no need to convert back
             
             # Create ensemble model with modern gradient boosting algorithms
             # XGBoost: Fastest and most accurate gradient boosting with GPU support
