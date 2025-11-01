@@ -243,11 +243,10 @@ class MLModel:
             features_df = pd.DataFrame(features, columns=self.FEATURE_NAMES)
             features_scaled = self.scaler.transform(features_df)
             
-            # Convert scaled features back to DataFrame to preserve feature names
-            features_scaled_df = pd.DataFrame(features_scaled, columns=self.FEATURE_NAMES)
+            # Pass scaled numpy array directly to model prediction (avoid unnecessary DataFrame creation)
             
-            prediction = self.model.predict(features_scaled_df)[0]
-            probabilities = self.model.predict_proba(features_scaled_df)[0]
+            prediction = self.model.predict(features_scaled)[0]
+            probabilities = self.model.predict_proba(features_scaled)[0]
             confidence = max(probabilities)
             
             signal_map = {0: 'HOLD', 1: 'BUY', 2: 'SELL'}
