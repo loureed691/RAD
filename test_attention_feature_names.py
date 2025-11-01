@@ -23,7 +23,7 @@ def test_with_attention_weighting():
     model = MLModel(model_path='models/test_attention_model.pkl')
     
     # Initialize attention selector (2025 AI Enhancement)
-    attention_selector = AttentionFeatureSelector(n_features=31, learning_rate=0.01)
+    attention_selector = AttentionFeatureSelector(n_features=len(MLModel.FEATURE_NAMES), learning_rate=0.01)
     model.attention_selector = attention_selector
     
     print("\n1. Generating training data with attention selector...")
