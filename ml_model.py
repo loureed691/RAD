@@ -28,6 +28,17 @@ from logger import Logger
 class MLModel:
     """Self-learning ML model for optimizing trading signals with modern gradient boosting ensemble (XGBoost/LightGBM/CatBoost)"""
     
+    # Feature names for ML model - used for training and prediction
+    FEATURE_NAMES = [
+        'rsi', 'macd', 'macd_signal', 'macd_diff', 'stoch_k', 'stoch_d',
+        'bb_width', 'volume_ratio', 'momentum', 'roc', 'atr',
+        'rsi_strength', 'macd_strength', 'stoch_momentum', 'volume_surge',
+        'volatility_norm', 'rsi_zone', 'macd_bullish', 'momentum_flag',
+        'bb_position', 'price_to_ema12', 'price_to_ema26', 'ema_separation',
+        'rsi_momentum', 'volume_trend', 'volatility_regime', 'sentiment_score',
+        'momentum_accel', 'mtf_trend', 'breakout_potential', 'mean_reversion'
+    ]
+    
     def __init__(self, model_path: str = 'models/signal_model.pkl'):
         self.model_path = model_path
         self.model = None
@@ -219,23 +230,16 @@ class MLModel:
                 except Exception as e:
                     self.logger.debug(f"Attention feature weighting error: {e}, using standard features")
             
-            # Feature names for consistency with training
-            feature_names = [
-                'rsi', 'macd', 'macd_signal', 'macd_diff', 'stoch_k', 'stoch_d',
-                'bb_width', 'volume_ratio', 'momentum', 'roc', 'atr',
-                'rsi_strength', 'macd_strength', 'stoch_momentum', 'volume_surge',
-                'volatility_norm', 'rsi_zone', 'macd_bullish', 'momentum_flag',
-                'bb_position', 'price_to_ema12', 'price_to_ema26', 'ema_separation',
-                'rsi_momentum', 'volume_trend', 'volatility_regime', 'sentiment_score',
-                'momentum_accel', 'mtf_trend', 'breakout_potential', 'mean_reversion'
-            ]
+            # Ensure features are 2D for DataFrame creation
+            if features.ndim == 1:
+                features = features.reshape(1, -1)
             
             # Convert features to DataFrame with feature names
-            features_df = pd.DataFrame(features, columns=feature_names)
+            features_df = pd.DataFrame(features, columns=self.FEATURE_NAMES)
             features_scaled = self.scaler.transform(features_df)
             
             # Convert scaled features back to DataFrame to preserve feature names
-            features_scaled_df = pd.DataFrame(features_scaled, columns=feature_names)
+            features_scaled_df = pd.DataFrame(features_scaled, columns=self.FEATURE_NAMES)
             
             prediction = self.model.predict(features_scaled_df)[0]
             probabilities = self.model.predict_proba(features_scaled_df)[0]
@@ -320,19 +324,8 @@ class MLModel:
         try:
             self.logger.info(f"Training modern gradient boosting ensemble with {len(self.training_data)} samples...")
             
-            # Feature names for better interpretability and to avoid sklearn warnings
-            feature_names = [
-                'rsi', 'macd', 'macd_signal', 'macd_diff', 'stoch_k', 'stoch_d',
-                'bb_width', 'volume_ratio', 'momentum', 'roc', 'atr',
-                'rsi_strength', 'macd_strength', 'stoch_momentum', 'volume_surge',
-                'volatility_norm', 'rsi_zone', 'macd_bullish', 'momentum_flag',
-                'bb_position', 'price_to_ema12', 'price_to_ema26', 'ema_separation',
-                'rsi_momentum', 'volume_trend', 'volatility_regime', 'sentiment_score',
-                'momentum_accel', 'mtf_trend', 'breakout_potential', 'mean_reversion'
-            ]
-            
             # Prepare data as DataFrame with feature names
-            X = pd.DataFrame([d['features'] for d in self.training_data], columns=feature_names)
+            X = pd.DataFrame([d['features'] for d in self.training_data], columns=self.FEATURE_NAMES)
             y = np.array([d['label'] for d in self.training_data])
             
             # Split data
@@ -345,8 +338,8 @@ class MLModel:
             X_test_scaled = self.scaler.transform(X_test)
             
             # Convert back to DataFrame after scaling to preserve feature names
-            X_train_scaled = pd.DataFrame(X_train_scaled, columns=feature_names, index=X_train.index)
-            X_test_scaled = pd.DataFrame(X_test_scaled, columns=feature_names, index=X_test.index)
+            X_train_scaled = pd.DataFrame(X_train_scaled, columns=self.FEATURE_NAMES, index=X_train.index)
+            X_test_scaled = pd.DataFrame(X_test_scaled, columns=self.FEATURE_NAMES, index=X_test.index)
             
             # Create ensemble model with modern gradient boosting algorithms
             # XGBoost: Fastest and most accurate gradient boosting with GPU support
@@ -412,7 +405,7 @@ class MLModel:
                 base_estimator = self.model.calibrated_classifiers_[0].estimator.estimators_[0]  # Get fitted XGBoost from VotingClassifier inside CalibratedClassifierCV
                 if hasattr(base_estimator, 'feature_importances_'):
                     importances = base_estimator.feature_importances_
-                    self.feature_importance = {name: float(imp) for name, imp in zip(feature_names, importances)}
+                    self.feature_importance = {name: float(imp) for name, imp in zip(self.FEATURE_NAMES, importances)}
                     
                     # Log top 5 features
                     top_features = sorted(self.feature_importance.items(), key=lambda x: x[1], reverse=True)[:5]

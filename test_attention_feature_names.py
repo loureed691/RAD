@@ -1,5 +1,6 @@
 """
-Test to verify that LGBMClassifier feature names warning is fixed
+Test to verify that LGBMClassifier feature names warning is fixed with attention-based feature weighting
+This test simulates the scenario from the problem statement
 """
 import sys
 import os
@@ -10,17 +11,22 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from ml_model import MLModel
+from attention_features_2025 import AttentionFeatureSelector
 
-def test_no_feature_name_warnings():
-    """Test that no feature name warnings are raised during training and prediction"""
+def test_with_attention_weighting():
+    """Test that no feature name warnings are raised when using attention-based feature weighting"""
     print("\n" + "="*70)
-    print("Testing Feature Names Warning Fix")
+    print("Testing Feature Names Warning Fix with Attention Weighting")
     print("="*70)
     
     # Create ML model instance
-    model = MLModel(model_path='models/test_feature_names_model.pkl')
+    model = MLModel(model_path='models/test_attention_model.pkl')
     
-    print("\n1. Generating training data...")
+    # Initialize attention selector (2025 AI Enhancement)
+    attention_selector = AttentionFeatureSelector(n_features=31, learning_rate=0.01)
+    model.attention_selector = attention_selector
+    
+    print("\n1. Generating training data with attention selector...")
     np.random.seed(42)
     
     # Generate 150 samples for training
@@ -53,8 +59,9 @@ def test_no_feature_name_warnings():
         model.record_outcome(indicators, signal, profit_loss)
     
     print(f"   ✓ Generated {len(model.training_data)} training samples")
+    print(f"   ✓ Attention selector initialized with {attention_selector.n_features} features")
     
-    print("\n2. Training model and checking for warnings...")
+    print("\n2. Training model with attention selector...")
     
     # Capture warnings during training
     with warnings.catch_warnings(record=True) as w:
@@ -80,7 +87,7 @@ def test_no_feature_name_warnings():
         else:
             print("   ✓ No feature name warnings during training")
     
-    print("\n3. Making predictions and checking for warnings...")
+    print("\n3. Making predictions with attention-based feature weighting...")
     
     # Test prediction with multiple samples
     test_indicators_list = [
@@ -128,9 +135,9 @@ def test_no_feature_name_warnings():
                 print(f"      - {warning.message}")
             return False
         else:
-            print("   ✓ No feature name warnings during prediction")
+            print("   ✓ No feature name warnings during prediction with attention weighting")
     
-    print("\n4. Verifying predictions...")
+    print("\n4. Verifying predictions with attention-based feature weighting...")
     for i, (signal, confidence) in enumerate(predictions, 1):
         print(f"   Sample {i}: Signal={signal}, Confidence={confidence:.3f}")
         if signal not in ['BUY', 'SELL', 'HOLD']:
@@ -139,27 +146,36 @@ def test_no_feature_name_warnings():
         if confidence < 0 or confidence > 1:
             print(f"   ✗ Invalid confidence: {confidence}")
             return False
-    print("   ✓ All predictions valid")
+    print("   ✓ All predictions valid with attention weighting")
+    
+    print("\n5. Verifying attention mechanism is working...")
+    top_features = attention_selector.get_top_features(5)
+    if top_features:
+        print("   ✓ Top attention features:")
+        for i, (feature, weight) in enumerate(top_features[:5], 1):
+            print(f"      {i}. {feature}: {weight:.6f}")
+    else:
+        print("   ⚠ Attention features not yet populated (expected for new model)")
     
     # Cleanup
-    if os.path.exists('models/test_feature_names_model.pkl'):
-        os.remove('models/test_feature_names_model.pkl')
+    if os.path.exists('models/test_attention_model.pkl'):
+        os.remove('models/test_attention_model.pkl')
         print("\n   ✓ Cleaned up test model file")
     
     print("\n" + "="*70)
-    print("✓ Feature Names Warning Fix Verified!")
+    print("✓ Feature Names Warning Fix Verified with Attention Weighting!")
     print("="*70)
     return True
 
 if __name__ == '__main__':
     print("\n" + "="*70)
-    print("Feature Names Warning Fix Test Suite")
+    print("Feature Names Warning Fix Test with Attention Weighting")
     print("="*70)
     
-    success = test_no_feature_name_warnings()
+    success = test_with_attention_weighting()
     
     if success:
-        print("\n✓ TEST PASSED: No feature name warnings detected")
+        print("\n✓ TEST PASSED: No feature name warnings with attention weighting")
         sys.exit(0)
     else:
         print("\n✗ TEST FAILED: Feature name warnings still present")
