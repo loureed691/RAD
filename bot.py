@@ -1530,7 +1530,6 @@ class TradingBot:
             metrics = self.ml_model.get_performance_metrics()
             
             # Calculate total P&L from analytics
-            total_pnl = 0
             initial_balance = 10000  # Default, will be updated if available
             if hasattr(self.analytics, 'equity_history') and len(self.analytics.equity_history) > 0:
                 eq0 = self.analytics.equity_history[0]
@@ -1538,7 +1537,7 @@ class TradingBot:
                     initial_balance = eq0[1]
                 else:
                     initial_balance = 10000
-                total_pnl = current_balance - initial_balance
+            total_pnl = current_balance - initial_balance
             
             # Update performance stats
             self.dashboard.update_stats({
