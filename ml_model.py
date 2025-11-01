@@ -28,6 +28,17 @@ from logger import Logger
 class MLModel:
     """Self-learning ML model for optimizing trading signals with modern gradient boosting ensemble (XGBoost/LightGBM/CatBoost)"""
     
+    # Feature names for ML model - used for training and prediction
+    FEATURE_NAMES = [
+        'rsi', 'macd', 'macd_signal', 'macd_diff', 'stoch_k', 'stoch_d',
+        'bb_width', 'volume_ratio', 'momentum', 'roc', 'atr',
+        'rsi_strength', 'macd_strength', 'stoch_momentum', 'volume_surge',
+        'volatility_norm', 'rsi_zone', 'macd_bullish', 'momentum_flag',
+        'bb_position', 'price_to_ema12', 'price_to_ema26', 'ema_separation',
+        'rsi_momentum', 'volume_trend', 'volatility_regime', 'sentiment_score',
+        'momentum_accel', 'mtf_trend', 'breakout_potential', 'mean_reversion'
+    ]
+    
     def __init__(self, model_path: str = 'models/signal_model.pkl'):
         self.model_path = model_path
         self.model = None
@@ -219,7 +230,20 @@ class MLModel:
                 except Exception as e:
                     self.logger.debug(f"Attention feature weighting error: {e}, using standard features")
             
-            features_scaled = self.scaler.transform(features)
+            # Ensure features are 2D for DataFrame creation
+            if features.ndim == 1:
+                features = features.reshape(1, -1)
+            
+            # Validate feature length matches expected
+            if features.shape[1] != len(self.FEATURE_NAMES):
+                self.logger.warning(f"Feature length mismatch: expected {len(self.FEATURE_NAMES)}, got {features.shape[1]}")
+                return 'HOLD', 0.0
+            
+            # Convert features to DataFrame with feature names
+            features_df = pd.DataFrame(features, columns=self.FEATURE_NAMES)
+            features_scaled = self.scaler.transform(features_df)
+            
+            # Pass scaled numpy array directly to model prediction (avoid unnecessary DataFrame creation)
             
             prediction = self.model.predict(features_scaled)[0]
             probabilities = self.model.predict_proba(features_scaled)[0]
@@ -304,8 +328,16 @@ class MLModel:
         try:
             self.logger.info(f"Training modern gradient boosting ensemble with {len(self.training_data)} samples...")
             
-            # Prepare data
-            X = np.array([d['features'] for d in self.training_data])
+            # Validate feature consistency
+            expected_features = len(self.FEATURE_NAMES)
+            if self.training_data:
+                actual_features = len(self.training_data[0]['features'])
+                if actual_features != expected_features:
+                    self.logger.error(f"Feature length mismatch: expected {expected_features}, got {actual_features}")
+                    return False
+            
+            # Prepare data as DataFrame with feature names
+            X = pd.DataFrame([d['features'] for d in self.training_data], columns=self.FEATURE_NAMES)
             y = np.array([d['label'] for d in self.training_data])
             
             # Split data
@@ -313,9 +345,11 @@ class MLModel:
                 X, y, test_size=0.2, random_state=42, stratify=y if len(np.unique(y)) > 1 else None
             )
             
-            # Scale features
+            # Scale features (scaler handles DataFrames)
             X_train_scaled = self.scaler.fit_transform(X_train)
             X_test_scaled = self.scaler.transform(X_test)
+            
+            # Scaled data already preserves DataFrame structure in modern sklearn; no need to convert back
             
             # Create ensemble model with modern gradient boosting algorithms
             # XGBoost: Fastest and most accurate gradient boosting with GPU support
@@ -380,17 +414,8 @@ class MLModel:
                 # Access the base estimator through CalibratedClassifierCV
                 base_estimator = self.model.calibrated_classifiers_[0].estimator.estimators_[0]  # Get fitted XGBoost from VotingClassifier inside CalibratedClassifierCV
                 if hasattr(base_estimator, 'feature_importances_'):
-                    feature_names = [
-                        'rsi', 'macd', 'macd_signal', 'macd_diff', 'stoch_k', 'stoch_d',
-                        'bb_width', 'volume_ratio', 'momentum', 'roc', 'atr',
-                        'rsi_strength', 'macd_strength', 'stoch_momentum', 'volume_surge',
-                        'volatility_norm', 'rsi_zone', 'macd_bullish', 'momentum_flag',
-                        'bb_position', 'price_to_ema12', 'price_to_ema26', 'ema_separation',
-                        'rsi_momentum', 'volume_trend', 'volatility_regime', 'sentiment_score',
-                        'momentum_accel', 'mtf_trend', 'breakout_potential', 'mean_reversion'
-                    ]
                     importances = base_estimator.feature_importances_
-                    self.feature_importance = {name: float(imp) for name, imp in zip(feature_names, importances)}
+                    self.feature_importance = {name: float(imp) for name, imp in zip(self.FEATURE_NAMES, importances)}
                     
                     # Log top 5 features
                     top_features = sorted(self.feature_importance.items(), key=lambda x: x[1], reverse=True)[:5]
