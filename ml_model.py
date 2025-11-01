@@ -219,10 +219,26 @@ class MLModel:
                 except Exception as e:
                     self.logger.debug(f"Attention feature weighting error: {e}, using standard features")
             
-            features_scaled = self.scaler.transform(features)
+            # Feature names for consistency with training
+            feature_names = [
+                'rsi', 'macd', 'macd_signal', 'macd_diff', 'stoch_k', 'stoch_d',
+                'bb_width', 'volume_ratio', 'momentum', 'roc', 'atr',
+                'rsi_strength', 'macd_strength', 'stoch_momentum', 'volume_surge',
+                'volatility_norm', 'rsi_zone', 'macd_bullish', 'momentum_flag',
+                'bb_position', 'price_to_ema12', 'price_to_ema26', 'ema_separation',
+                'rsi_momentum', 'volume_trend', 'volatility_regime', 'sentiment_score',
+                'momentum_accel', 'mtf_trend', 'breakout_potential', 'mean_reversion'
+            ]
             
-            prediction = self.model.predict(features_scaled)[0]
-            probabilities = self.model.predict_proba(features_scaled)[0]
+            # Convert features to DataFrame with feature names
+            features_df = pd.DataFrame(features, columns=feature_names)
+            features_scaled = self.scaler.transform(features_df)
+            
+            # Convert scaled features back to DataFrame to preserve feature names
+            features_scaled_df = pd.DataFrame(features_scaled, columns=feature_names)
+            
+            prediction = self.model.predict(features_scaled_df)[0]
+            probabilities = self.model.predict_proba(features_scaled_df)[0]
             confidence = max(probabilities)
             
             signal_map = {0: 'HOLD', 1: 'BUY', 2: 'SELL'}
@@ -304,8 +320,19 @@ class MLModel:
         try:
             self.logger.info(f"Training modern gradient boosting ensemble with {len(self.training_data)} samples...")
             
-            # Prepare data
-            X = np.array([d['features'] for d in self.training_data])
+            # Feature names for better interpretability and to avoid sklearn warnings
+            feature_names = [
+                'rsi', 'macd', 'macd_signal', 'macd_diff', 'stoch_k', 'stoch_d',
+                'bb_width', 'volume_ratio', 'momentum', 'roc', 'atr',
+                'rsi_strength', 'macd_strength', 'stoch_momentum', 'volume_surge',
+                'volatility_norm', 'rsi_zone', 'macd_bullish', 'momentum_flag',
+                'bb_position', 'price_to_ema12', 'price_to_ema26', 'ema_separation',
+                'rsi_momentum', 'volume_trend', 'volatility_regime', 'sentiment_score',
+                'momentum_accel', 'mtf_trend', 'breakout_potential', 'mean_reversion'
+            ]
+            
+            # Prepare data as DataFrame with feature names
+            X = pd.DataFrame([d['features'] for d in self.training_data], columns=feature_names)
             y = np.array([d['label'] for d in self.training_data])
             
             # Split data
@@ -313,9 +340,13 @@ class MLModel:
                 X, y, test_size=0.2, random_state=42, stratify=y if len(np.unique(y)) > 1 else None
             )
             
-            # Scale features
+            # Scale features (scaler handles DataFrames)
             X_train_scaled = self.scaler.fit_transform(X_train)
             X_test_scaled = self.scaler.transform(X_test)
+            
+            # Convert back to DataFrame after scaling to preserve feature names
+            X_train_scaled = pd.DataFrame(X_train_scaled, columns=feature_names, index=X_train.index)
+            X_test_scaled = pd.DataFrame(X_test_scaled, columns=feature_names, index=X_test.index)
             
             # Create ensemble model with modern gradient boosting algorithms
             # XGBoost: Fastest and most accurate gradient boosting with GPU support
@@ -380,15 +411,6 @@ class MLModel:
                 # Access the base estimator through CalibratedClassifierCV
                 base_estimator = self.model.calibrated_classifiers_[0].estimator.estimators_[0]  # Get fitted XGBoost from VotingClassifier inside CalibratedClassifierCV
                 if hasattr(base_estimator, 'feature_importances_'):
-                    feature_names = [
-                        'rsi', 'macd', 'macd_signal', 'macd_diff', 'stoch_k', 'stoch_d',
-                        'bb_width', 'volume_ratio', 'momentum', 'roc', 'atr',
-                        'rsi_strength', 'macd_strength', 'stoch_momentum', 'volume_surge',
-                        'volatility_norm', 'rsi_zone', 'macd_bullish', 'momentum_flag',
-                        'bb_position', 'price_to_ema12', 'price_to_ema26', 'ema_separation',
-                        'rsi_momentum', 'volume_trend', 'volatility_regime', 'sentiment_score',
-                        'momentum_accel', 'mtf_trend', 'breakout_potential', 'mean_reversion'
-                    ]
                     importances = base_estimator.feature_importances_
                     self.feature_importance = {name: float(imp) for name, imp in zip(feature_names, importances)}
                     
