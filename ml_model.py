@@ -234,6 +234,11 @@ class MLModel:
             if features.ndim == 1:
                 features = features.reshape(1, -1)
             
+            # Validate feature length matches expected
+            if features.shape[1] != len(self.FEATURE_NAMES):
+                self.logger.warning(f"Feature length mismatch: expected {len(self.FEATURE_NAMES)}, got {features.shape[1]}")
+                return 'HOLD', 0.0
+            
             # Convert features to DataFrame with feature names
             features_df = pd.DataFrame(features, columns=self.FEATURE_NAMES)
             features_scaled = self.scaler.transform(features_df)
@@ -323,6 +328,14 @@ class MLModel:
         
         try:
             self.logger.info(f"Training modern gradient boosting ensemble with {len(self.training_data)} samples...")
+            
+            # Validate feature consistency
+            expected_features = len(self.FEATURE_NAMES)
+            if self.training_data:
+                actual_features = len(self.training_data[0]['features'])
+                if actual_features != expected_features:
+                    self.logger.error(f"Feature length mismatch: expected {expected_features}, got {actual_features}")
+                    return False
             
             # Prepare data as DataFrame with feature names
             X = pd.DataFrame([d['features'] for d in self.training_data], columns=self.FEATURE_NAMES)
