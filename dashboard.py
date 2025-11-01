@@ -292,7 +292,7 @@ class TradingDashboard:
                             <div class="stat-subvalue">Initial: ${{ stats.initial_balance|default(0)|round(2) }}</div>
                         </div>
                         <div class="stat-card">
-                            <div class="stat-label">Total P&L</div>
+                            <div class="stat-label">Total P/L</div>
                             <div class="stat-value {% if stats.total_pnl|default(0) < 0 %}negative{% endif %}">
                                 ${{ stats.total_pnl|default(0)|round(2) }}
                             </div>
@@ -358,8 +358,8 @@ class TradingDashboard:
                                 <th>Current Price</th>
                                 <th>Amount</th>
                                 <th>Leverage</th>
-                                <th>Unrealized P&L</th>
-                                <th>P&L %</th>
+                                <th>Unrealized P/L</th>
+                                <th>P/L %</th>
                                 <th>Stop Loss</th>
                                 <th>Take Profit</th>
                                 <th>Duration</th>
@@ -419,7 +419,7 @@ class TradingDashboard:
                             <div class="info-value">${{ risk_metrics.total_exposure|default(0)|round(2) }}</div>
                             <div class="info-label">Available Capital:</div>
                             <div class="info-value">${{ risk_metrics.available_capital|default(0)|round(2) }}</div>
-                            <div class="info-label">Daily P&L:</div>
+                            <div class="info-label">Daily P/L:</div>
                             <div class="info-value">
                                 <span class="{% if risk_metrics.daily_pnl|default(0) >= 0 %}profit{% else %}loss{% endif %}">
                                     ${{ risk_metrics.daily_pnl|default(0)|round(2) }}
@@ -478,8 +478,8 @@ class TradingDashboard:
                                 <th>Entry Price</th>
                                 <th>Exit Price</th>
                                 <th>Amount</th>
-                                <th>P&L</th>
-                                <th>P&L %</th>
+                                <th>P/L</th>
+                                <th>P/L %</th>
                                 <th>Duration</th>
                             </tr>
                         </thead>

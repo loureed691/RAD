@@ -1530,15 +1530,14 @@ class TradingBot:
             metrics = self.ml_model.get_performance_metrics()
             
             # Calculate total P&L from analytics
-            total_pnl = 0
             initial_balance = 10000  # Default, will be updated if available
-            if hasattr(self.analytics, 'equity_history') and len(self.analytics.equity_history) > 0:
-                eq0 = self.analytics.equity_history[0]
-                if (isinstance(eq0, (list, tuple)) and len(eq0) > 1 and isinstance(eq0[1], (int, float)) and eq0[1] > 0):
-                    initial_balance = eq0[1]
+            if hasattr(self.analytics, 'equity_curve') and len(self.analytics.equity_curve) > 0:
+                eq0 = self.analytics.equity_curve[0]
+                if isinstance(eq0, dict) and 'balance' in eq0 and isinstance(eq0['balance'], (int, float)) and eq0['balance'] > 0:
+                    initial_balance = eq0['balance']
                 else:
                     initial_balance = 10000
-                total_pnl = current_balance - initial_balance
+            total_pnl = current_balance - initial_balance
             
             # Update performance stats
             self.dashboard.update_stats({
@@ -1831,13 +1830,13 @@ class TradingBot:
             # Clean up analytics old equity records (keep last 7 days)
             from datetime import timedelta
             cutoff_time = datetime.now() - timedelta(days=7)
-            if hasattr(self.analytics, 'equity_history'):
-                original_len = len(self.analytics.equity_history)
-                self.analytics.equity_history = [
-                    (ts, equity) for ts, equity in self.analytics.equity_history
-                    if ts > cutoff_time
+            if hasattr(self.analytics, 'equity_curve'):
+                original_len = len(self.analytics.equity_curve)
+                self.analytics.equity_curve = [
+                    eq for eq in self.analytics.equity_curve
+                    if eq.get('timestamp', datetime.min) > cutoff_time
                 ]
-                cleaned = original_len - len(self.analytics.equity_history)
+                cleaned = original_len - len(self.analytics.equity_curve)
                 if cleaned > 0:
                     self.logger.debug(f"Cleaned analytics history: removed {cleaned} old records")
             
