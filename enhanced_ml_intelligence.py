@@ -511,7 +511,16 @@ class ReinforcementLearningStrategy:
         else:
             vol_level = 'low'
         
-        return f"{normalized_regime}_{vol_level}"
+        state = f"{normalized_regime}_{vol_level}"
+        
+        # CRITICAL FIX: Ensure state exists in Q-table before returning
+        # If state doesn't exist, initialize it with default Q-values
+        if state not in self.q_table:
+            self.logger.warning(f"State '{state}' not in Q-table, initializing with default values")
+            strategies = ['trend_following', 'mean_reversion', 'breakout', 'momentum']
+            self.q_table[state] = {strategy: 0.0 for strategy in strategies}
+        
+        return state
     
     def select_strategy(self, market_regime: str, volatility: float) -> str:
         """
@@ -524,21 +533,26 @@ class ReinforcementLearningStrategy:
         Returns:
             Selected strategy name
         """
-        state = self.get_state(market_regime, volatility)
-        
-        # Epsilon-greedy strategy selection
-        if np.random.random() < self.epsilon:
-            # Explore: random strategy
-            strategies = list(self.q_table[state].keys())
-            strategy = np.random.choice(strategies)
-            self.logger.debug(f"Exploring: selected {strategy}")
-        else:
-            # Exploit: best strategy
-            q_values = self.q_table[state]
-            strategy = max(q_values, key=q_values.get)
-            self.logger.debug(f"Exploiting: selected {strategy} (Q={q_values[strategy]:.2f})")
-        
-        return strategy
+        try:
+            state = self.get_state(market_regime, volatility)
+            
+            # Epsilon-greedy strategy selection
+            if np.random.random() < self.epsilon:
+                # Explore: random strategy
+                strategies = list(self.q_table[state].keys())
+                strategy = np.random.choice(strategies)
+                self.logger.debug(f"Exploring: selected {strategy}")
+            else:
+                # Exploit: best strategy
+                q_values = self.q_table[state]
+                strategy = max(q_values, key=q_values.get)
+                self.logger.debug(f"Exploiting: selected {strategy} (Q={q_values[strategy]:.2f})")
+            
+            return strategy
+        except Exception as e:
+            self.logger.error(f"Error selecting strategy for regime={market_regime}, vol={volatility}: {e}")
+            # Fallback to trend_following as default safe strategy
+            return 'trend_following'
     
     def update_q_value(self, 
                       market_regime: str, 
@@ -548,48 +562,56 @@ class ReinforcementLearningStrategy:
                       next_market_regime: Optional[str] = None,
                       next_volatility: Optional[float] = None):
         """
-        Update Q-value based on trade outcome using proper Q-learning formula
+        Update Q-value using Q-learning update rule
         
         Args:
-            market_regime: Market regime when trade was taken
-            volatility: Volatility when trade was taken
-            strategy: Strategy used
-            reward: Reward (profit/loss)
-            next_market_regime: Market regime after action (optional)
-            next_volatility: Volatility after action (optional)
+            market_regime: Current market regime
+            volatility: Current volatility
+            strategy: Strategy that was used
+            reward: Reward received (normalized profit)
+            next_market_regime: Next market regime (optional)
+            next_volatility: Next volatility (optional)
         """
-        state = self.get_state(market_regime, volatility)
+        try:
+            state = self.get_state(market_regime, volatility)
+            
+            # DEFENSIVE: Ensure state exists (should always exist after get_state fix, but double-check)
+            if state not in self.q_table:
+                self.logger.error(f"State '{state}' missing from Q-table during update")
+                return
+            
+            # DEFENSIVE: Ensure strategy exists in state
+            if strategy not in self.q_table[state]:
+                self.logger.error(f"Strategy '{strategy}' not found in Q-table for state '{state}'")
+                return
+            
+            current_q = self.q_table[state][strategy]
+            
+            # If next state provided, use it for TD update
+            if next_market_regime is not None and next_volatility is not None:
+                next_state = self.get_state(next_market_regime, next_volatility)
+                # DEFENSIVE: Check next state exists
+                if next_state in self.q_table:
+                    max_next_q = max(self.q_table[next_state].values())
+                    new_q = current_q + self.learning_rate * (
+                        reward + self.discount_factor * max_next_q - current_q
+                    )
+                else:
+                    # Fallback to simple update if next state invalid
+                    new_q = current_q + self.learning_rate * (reward - current_q)
+            else:
+                # Simple update without next state
+                new_q = current_q + self.learning_rate * (reward - current_q)
+            
+            self.q_table[state][strategy] = new_q
+            
+            # Decay exploration rate
+            self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
+            
+            self.logger.debug(f"Updated Q({state}, {strategy}): {current_q:.3f} -> {new_q:.3f}")
         
-        # Q-learning update
-        current_q = self.q_table[state][strategy]
-        
-        # Proper Q-learning: use max Q-value from NEXT state
-        if next_market_regime is not None and next_volatility is not None:
-            next_state = self.get_state(next_market_regime, next_volatility)
-            max_future_q = max(self.q_table[next_state].values())
-        else:
-            # If next state not available, we assume a terminal state (max_future_q = 0).
-            # WARNING: This disables temporal difference learning and may lead to suboptimal Q-values
-            # unless the next state is truly terminal. Use with caution.
-            self.logger.warning(
-                "Next state unavailable in Q-learning update; assuming terminal state (max_future_q = 0). "
-                "This disables temporal difference learning and may lead to suboptimal Q-values."
-            )
-            max_future_q = 0.0
-        
-        new_q = current_q + self.learning_rate * (
-            reward + self.discount_factor * max_future_q - current_q
-        )
-        
-        self.q_table[state][strategy] = new_q
-        
-        # Decay exploration rate
-        self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
-        
-        self.logger.debug(
-            f"Updated Q-value: {state} -> {strategy}: "
-            f"{current_q:.3f} -> {new_q:.3f} (reward: {reward:.3f}, max_future: {max_future_q:.3f})"
-        )
+        except Exception as e:
+            self.logger.error(f"Error updating Q-value for regime={market_regime}, strategy={strategy}: {e}", exc_info=True)
     
     def save_q_table(self, path: str = 'models/q_table.pkl'):
         """Save Q-table to disk"""

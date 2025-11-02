@@ -281,8 +281,17 @@ class MarketScanner:
             # Add 0.1s delay between each submission to spread out initial requests
             future_to_symbol = {}
             for symbol in filtered_symbols:
-                future_to_symbol[executor.submit(self.scan_pair, symbol)] = symbol
-                time.sleep(0.1)  # Small delay to stagger API requests
+                try:
+                    future_to_symbol[executor.submit(self.scan_pair, symbol)] = symbol
+                    time.sleep(0.1)  # Small delay to stagger API requests
+                except RuntimeError as e:
+                    # CRITICAL FIX: Handle "cannot schedule new futures after interpreter shutdown"
+                    # This occurs when bot is shutting down while scanning is in progress
+                    if "cannot schedule new futures" in str(e):
+                        self.logger.warning("Interpreter shutdown detected, stopping market scan early")
+                        break
+                    else:
+                        raise
             
             try:
                 for future in as_completed(future_to_symbol, timeout=overall_timeout):
