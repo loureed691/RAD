@@ -72,6 +72,15 @@ class RiskManager:
             'exchange': ['BNB', 'OKB', 'FTT']
         }
         
+        # PERFORMANCE OPTIMIZATION: Build reverse lookup map for O(1) asset to group lookup
+        # This eliminates the need for nested loops when checking correlations
+        # Note: We only store exact matches here. Symbol base assets should match exactly
+        # after removing 'USDT'/'USD' suffixes (e.g., 'BTC' from 'BTC/USDT:USDT')
+        self._asset_to_group = {}
+        for group, assets in self.correlation_groups.items():
+            for asset in assets:
+                self._asset_to_group[asset] = group
+        
         # Load existing state if available
         self.load_state()
     
@@ -257,27 +266,22 @@ class RiskManager:
         # Extract base asset from symbol
         base_asset = symbol.split('/')[0].replace('USDT', '').replace('USD', '')
         
-        # Find which group this asset belongs to
-        asset_group = None
-        for group, assets in self.correlation_groups.items():
-            if any(a in base_asset for a in assets):
-                asset_group = group
-                break
+        # PERFORMANCE OPTIMIZATION: O(1) direct lookup using reverse map
+        # No fallback substring matching - asset names should match exactly after cleanup
+        asset_group = self._asset_to_group.get(base_asset)
         
         if not asset_group:
             # Unknown asset, allow but with caution
             return True, "unknown_group"
         
-        # PERFORMANCE OPTIMIZATION: Build set of assets in target group for O(1) lookup
-        # This replaces the nested loop which was O(n*m) with O(n) complexity
-        group_assets_set = set(self.correlation_groups.get(asset_group, []))
-        
-        # Count positions in same group using optimized set membership check
+        # Count positions in same group - O(1) direct matching only
         same_group_count = 0
+        group_assets_set = set(self.correlation_groups[asset_group])
         for pos in open_positions:
             pos_base = pos.symbol.split('/')[0].replace('USDT', '').replace('USD', '')
-            # Check if any group asset is in position base (more efficient check)
-            if any(asset in pos_base for asset in group_assets_set):
+            # Direct O(1) set membership check only - no substring fallback needed
+            # Asset names should match exactly after removing USDT/USD suffixes
+            if pos_base in group_assets_set:
                 same_group_count += 1
         
         # Allow max 2 positions from same correlation group

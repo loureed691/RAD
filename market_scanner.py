@@ -277,12 +277,14 @@ class MarketScanner:
         metrics_count = 0
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit tasks with staggering to prevent API rate limit bursts
-            # Add 0.1s delay between each submission to spread out initial requests
+            # Submit all tasks in parallel
+            # Rate limiting: ccxt library has built-in rate limiting via enableRateLimit=True
+            # (see kucoin_client.py line 90). The library automatically throttles requests
+            # to stay within exchange limits. Additional error handling below catches rate 
+            # limit exceptions if they occur despite ccxt's throttling.
             future_to_symbol = {}
             for symbol in filtered_symbols:
                 future_to_symbol[executor.submit(self.scan_pair, symbol)] = symbol
-                time.sleep(0.1)  # Small delay to stagger API requests
             
             try:
                 for future in as_completed(future_to_symbol, timeout=overall_timeout):
@@ -323,8 +325,14 @@ class MarketScanner:
                     except Exception as e:
                         error_count += 1
                         symbol = future_to_symbol.get(future, 'unknown')
-                        self.logger.error(f"Error scanning {symbol}: {e}")
-                        self.scanning_logger.error(f"  ✗ Error scanning {symbol}: {e}")
+                        # Check if it's a rate limit error
+                        error_str = str(e).lower()
+                        if 'rate limit' in error_str or '429' in error_str:
+                            self.logger.warning(f"⚠️ Rate limit hit for {symbol}: {e}")
+                            self.scanning_logger.warning(f"  ⚠️ Rate limit: {symbol}")
+                        else:
+                            self.logger.error(f"Error scanning {symbol}: {e}")
+                            self.scanning_logger.error(f"  ✗ Error scanning {symbol}: {e}")
             except TimeoutError:
                 # Overall timeout for entire scan exceeded
                 # Cancel remaining futures to free up resources
