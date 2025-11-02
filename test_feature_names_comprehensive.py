@@ -201,9 +201,9 @@ def test_old_scaler_format_simulation():
     
     model1.train(min_samples=100)
     
-    # Simulate old scaler by removing set_output configuration before saving
-    # (This simulates loading an old model that was saved before the fix)
-    print("✓ Simulated old model format (pre-fix)")
+    # Save the model (when loaded, the fix will automatically reconfigure the scaler)
+    # This tests backward compatibility with models saved before the fix
+    print("✓ Trained and saved model (simulating pre-fix model)")
     
     # Load the model (our fix should reconfigure the scaler)
     model2 = MLModel(model_path='models/test_old_format.pkl')

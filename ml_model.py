@@ -44,7 +44,7 @@ class MLModel:
         self.model = None
         self.scaler = StandardScaler()
         
-        # Initialize logger first (needed by _configure_scaler_output)
+        # Initialize logger first (needed for logging in _configure_scaler_output)
         self.logger = Logger.get_logger()
         
         # Configure scaler to output pandas DataFrames (sklearn 1.5+)
