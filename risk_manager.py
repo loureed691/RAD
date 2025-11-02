@@ -264,25 +264,27 @@ class RiskManager:
         # Extract base asset from symbol
         base_asset = symbol.split('/')[0].replace('USDT', '').replace('USD', '')
         
-        # PERFORMANCE OPTIMIZATION: O(1) lookup using reverse map instead of nested loops
-        # Find which group this asset belongs to by checking each asset component
-        asset_group = None
-        for asset in self._asset_to_group:
-            if asset in base_asset:
-                asset_group = self._asset_to_group[asset]
-                break
+        # PERFORMANCE OPTIMIZATION: O(1) lookup using reverse map
+        # Check direct match first, then substring match as fallback
+        asset_group = self._asset_to_group.get(base_asset)
+        if not asset_group:
+            # Fallback to substring matching for partial matches
+            for asset in self._asset_to_group:
+                if asset in base_asset:
+                    asset_group = self._asset_to_group[asset]
+                    break
         
         if not asset_group:
             # Unknown asset, allow but with caution
             return True, "unknown_group"
         
-        # Count positions in same group using optimized lookup
+        # Count positions in same group - optimized with set lookup
         same_group_count = 0
-        group_assets = self.correlation_groups[asset_group]
+        group_assets_set = set(self.correlation_groups[asset_group])
         for pos in open_positions:
             pos_base = pos.symbol.split('/')[0].replace('USDT', '').replace('USD', '')
-            # Check if any group asset is in position base
-            if any(asset in pos_base for asset in group_assets):
+            # Check direct match first (O(1)), then substring match as fallback
+            if pos_base in group_assets_set or any(asset in pos_base for asset in group_assets_set):
                 same_group_count += 1
         
         # Allow max 2 positions from same correlation group
