@@ -79,10 +79,10 @@ class ConfigValidator:
             name='LEVERAGE',
             required=False,
             param_type=int,
-            min_value=1,
-            max_value=20,  # Hard cap at 20x for safety
+            min_value=2,
+            max_value=25,  # Updated range: 2-25x
             default=None,
-            description='Trading leverage (1-20x, auto-configured if None)'
+            description='Trading leverage (2-25x, fixed at 10x by default)'
         ),
         'MAX_POSITION_SIZE': ConfigParameter(
             name='MAX_POSITION_SIZE',

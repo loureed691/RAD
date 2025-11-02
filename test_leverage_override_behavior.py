@@ -63,7 +63,7 @@ class TestLeverageOverrideBehavior(unittest.TestCase):
         # After auto_configure, LEVERAGE is set but _LEVERAGE_OVERRIDE remains None
         Config.auto_configure_from_balance(1000)
         self.assertIsNone(Config._LEVERAGE_OVERRIDE)
-        self.assertEqual(Config.LEVERAGE, 8)  # Auto-configured for $1000
+        self.assertEqual(Config.LEVERAGE, 10)  # Fixed at 10x (not balance-based)
     
     def test_leverage_selection_logic_with_override(self):
         """Test the leverage selection logic when override is present"""

@@ -97,9 +97,9 @@ class TestConfigOverrides(unittest.TestCase):
         # Auto-configure should set appropriate values
         Config.auto_configure_from_balance(1000)
         
-        # For $1000 balance: leverage = 8 (balance >= 1000 and < 10000)
+        # Leverage is now fixed at 10x regardless of balance
         # position = 50% = 500 (balance >= 1000 and < 10000)
-        self.assertEqual(Config.LEVERAGE, 8)
+        self.assertEqual(Config.LEVERAGE, 10)
         self.assertEqual(Config.MAX_POSITION_SIZE, 500.0)
         self.assertEqual(Config.RISK_PER_TRADE, 0.02)
         # MIN_PROFIT_THRESHOLD should include fees
