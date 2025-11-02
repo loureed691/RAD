@@ -79,7 +79,7 @@ class MLModel:
                 self.model = saved_data['model']
                 self.scaler = saved_data['scaler']
                 
-                # Configure loaded scaler to output pandas DataFrames (sklearn 1.2+)
+                # Configure loaded scaler to output pandas DataFrames (sklearn 1.5+)
                 if hasattr(self.scaler, 'set_output'):
                     self.scaler.set_output(transform='pandas')
                 
