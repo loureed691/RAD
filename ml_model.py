@@ -243,7 +243,8 @@ class MLModel:
             features_df = pd.DataFrame(features, columns=self.FEATURE_NAMES)
             features_scaled = self.scaler.transform(features_df)
             
-            # Pass scaled numpy array directly to model prediction (avoid unnecessary DataFrame creation)
+            # Convert scaled array back to DataFrame to preserve feature names
+            features_scaled = pd.DataFrame(features_scaled, columns=self.FEATURE_NAMES)
             
             prediction = self.model.predict(features_scaled)[0]
             probabilities = self.model.predict_proba(features_scaled)[0]
@@ -349,7 +350,9 @@ class MLModel:
             X_train_scaled = self.scaler.fit_transform(X_train)
             X_test_scaled = self.scaler.transform(X_test)
             
-            # Scaled data already preserves DataFrame structure in modern sklearn; no need to convert back
+            # Convert scaled arrays back to DataFrames to preserve feature names
+            X_train_scaled = pd.DataFrame(X_train_scaled, columns=self.FEATURE_NAMES)
+            X_test_scaled = pd.DataFrame(X_test_scaled, columns=self.FEATURE_NAMES)
             
             # Create ensemble model with modern gradient boosting algorithms
             # XGBoost: Fastest and most accurate gradient boosting with GPU support
