@@ -44,12 +44,13 @@ class MLModel:
         self.model = None
         self.scaler = StandardScaler()
         
+        # Initialize logger first (needed for logging in _configure_scaler_output)
+        self.logger = Logger.get_logger()
+        
         # Configure scaler to output pandas DataFrames (sklearn 1.5+)
         # This preserves feature names and eliminates sklearn warnings
-        if hasattr(self.scaler, 'set_output'):
-            self.scaler.set_output(transform='pandas')
+        self._configure_scaler_output()
         
-        self.logger = Logger.get_logger()
         self.training_data = []
         self.feature_importance = {}
         self.performance_metrics = {
@@ -71,6 +72,19 @@ class MLModel:
         # Load existing model if available
         self.load_model()
     
+    def _configure_scaler_output(self):
+        """
+        Configure StandardScaler to output pandas DataFrames (sklearn 1.5+)
+        This preserves feature names and eliminates sklearn warnings about
+        "X has feature names, but StandardScaler was fitted without feature names"
+        """
+        if hasattr(self.scaler, 'set_output'):
+            try:
+                self.scaler.set_output(transform='pandas')
+                self.logger.debug("Configured StandardScaler to preserve feature names")
+            except Exception as e:
+                self.logger.debug(f"Could not configure scaler output: {e}")
+    
     def load_model(self):
         """Load trained model from disk"""
         try:
@@ -79,9 +93,10 @@ class MLModel:
                 self.model = saved_data['model']
                 self.scaler = saved_data['scaler']
                 
-                # Configure loaded scaler to output pandas DataFrames (sklearn 1.5+)
-                if hasattr(self.scaler, 'set_output'):
-                    self.scaler.set_output(transform='pandas')
+                # CRITICAL: Configure loaded scaler to output pandas DataFrames (sklearn 1.5+)
+                # This must be done after loading to ensure feature names are preserved
+                # and to eliminate sklearn warnings about feature names mismatch
+                self._configure_scaler_output()
                 
                 self.training_data = saved_data.get('training_data', [])
                 self.feature_importance = saved_data.get('feature_importance', {})
@@ -230,17 +245,6 @@ class MLModel:
         try:
             features = self.prepare_features(indicators)
             
-            # 2025 AI ENHANCEMENT: Apply attention-based feature weighting if available
-            if self.attention_selector is not None:
-                try:
-                    # Apply attention weighting to features
-                    weighted_features = self.attention_selector.apply_attention(features.flatten())
-                    features = weighted_features.reshape(1, -1)
-                    
-                    self.logger.debug("Applied attention-based feature weighting")
-                except Exception as e:
-                    self.logger.debug(f"Attention feature weighting error: {e}, using standard features")
-            
             # Ensure features are 2D for DataFrame creation
             if features.ndim == 1:
                 features = features.reshape(1, -1)
@@ -250,10 +254,25 @@ class MLModel:
                 self.logger.warning(f"Feature length mismatch: expected {len(self.FEATURE_NAMES)}, got {features.shape[1]}")
                 return 'HOLD', 0.0
             
-            # Convert features to DataFrame with feature names
+            # Convert features to DataFrame with feature names BEFORE attention weighting
+            # This ensures feature names are preserved throughout the pipeline
             features_df = pd.DataFrame(features, columns=self.FEATURE_NAMES)
             
+            # 2025 AI ENHANCEMENT: Apply attention-based feature weighting if available
+            if self.attention_selector is not None:
+                try:
+                    # Apply attention weighting to features while preserving DataFrame structure
+                    # Extract values, apply attention, then recreate DataFrame with same columns
+                    features_array = features_df.values.flatten()
+                    weighted_features = self.attention_selector.apply_attention(features_array)
+                    features_df = pd.DataFrame(weighted_features.reshape(1, -1), columns=self.FEATURE_NAMES)
+                    
+                    self.logger.debug("Applied attention-based feature weighting")
+                except Exception as e:
+                    self.logger.debug(f"Attention feature weighting error: {e}, using standard features")
+            
             # Scale features - scaler configured with set_output('pandas') returns DataFrame
+            # This maintains feature names and eliminates sklearn warnings
             features_scaled = self.scaler.transform(features_df)
             
             prediction = self.model.predict(features_scaled)[0]
