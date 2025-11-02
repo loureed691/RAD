@@ -226,7 +226,15 @@ class MLStrategyCoordinator2025:
             confidences['rl_strategy'] = strategy_adjustment['confidence']
             self.strategy_logger.info(f"4️⃣  RL Strategy ({selected_strategy}): {strategy_adjustment['signal']} (conf: {strategy_adjustment['confidence']:.2%})")
         except Exception as e:
-            self.logger.debug(f"RL strategy error: {e}")
+            # Reduce log verbosity - only log at warning level if repeated errors
+            # This prevents flooding logs with the same RL state initialization messages
+            if not hasattr(self, '_rl_error_count'):
+                self._rl_error_count = {}
+            error_key = str(e)[:50]  # Use first 50 chars as key
+            self._rl_error_count[error_key] = self._rl_error_count.get(error_key, 0) + 1
+            # Only log every 10th occurrence
+            if self._rl_error_count[error_key] % 10 == 1:
+                self.logger.debug(f"RL strategy error (occurred {self._rl_error_count[error_key]} times): {e}")
             signals['rl_strategy'] = technical_signal
             confidences['rl_strategy'] = technical_confidence * 0.9
         
