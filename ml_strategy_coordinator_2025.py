@@ -230,11 +230,12 @@ class MLStrategyCoordinator2025:
             # This prevents flooding logs with the same RL state initialization messages
             if not hasattr(self, '_rl_error_count'):
                 self._rl_error_count = {}
-            error_key = str(e)[:50]  # Use first 50 chars as key
+            # Use error type + first 30 chars of message as key for better grouping
+            error_key = f"{type(e).__name__}:{str(e)[:30]}"
             self._rl_error_count[error_key] = self._rl_error_count.get(error_key, 0) + 1
             # Only log every 10th occurrence
             if self._rl_error_count[error_key] % 10 == 1:
-                self.logger.debug(f"RL strategy error (occurred {self._rl_error_count[error_key]} times): {e}")
+                self.logger.debug(f"RL strategy error (occurred {self._rl_error_count[error_key]} times): {type(e).__name__}: {e}")
             signals['rl_strategy'] = technical_signal
             confidences['rl_strategy'] = technical_confidence * 0.9
         

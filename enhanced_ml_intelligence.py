@@ -460,6 +460,9 @@ class ReinforcementLearningStrategy:
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
         
+        # Define strategies as class constant for consistency
+        self.STRATEGIES = ['trend_following', 'mean_reversion', 'breakout', 'momentum']
+        
         # Q-table: state -> action -> Q-value
         # States: market regime (7 types) + volatility level (3 levels) = 21 states
         # Actions: 4 strategies
@@ -473,12 +476,11 @@ class ReinforcementLearningStrategy:
         regimes_source2 = ['trending', 'ranging', 'neutral']
         regimes = list(set(regimes_source1 + regimes_source2))
         vol_levels = ['low', 'medium', 'high']
-        strategies = ['trend_following', 'mean_reversion', 'breakout', 'momentum']
         
         for regime in regimes:
             for vol in vol_levels:
                 state = f"{regime}_{vol}"
-                self.q_table[state] = {strategy: 0.0 for strategy in strategies}
+                self.q_table[state] = {strategy: 0.0 for strategy in self.STRATEGIES}
         
         # Exploration rate
         self.epsilon = 0.2  # 20% random exploration
@@ -517,8 +519,7 @@ class ReinforcementLearningStrategy:
         # If state doesn't exist, initialize it with default Q-values
         if state not in self.q_table:
             self.logger.warning(f"State '{state}' not in Q-table, initializing with default values")
-            strategies = ['trend_following', 'mean_reversion', 'breakout', 'momentum']
-            self.q_table[state] = {strategy: 0.0 for strategy in strategies}
+            self.q_table[state] = {strategy: 0.0 for strategy in self.STRATEGIES}
         
         return state
     
@@ -598,9 +599,12 @@ class ReinforcementLearningStrategy:
                     )
                 else:
                     # Fallback to simple update if next state invalid
+                    # Log this edge case as it affects learning quality
+                    self.logger.warning(f"Next state '{next_state}' invalid in Q-update, using simple update (may affect learning)")
                     new_q = current_q + self.learning_rate * (reward - current_q)
             else:
-                # Simple update without next state
+                # Simple update without next state (terminal state assumption)
+                # This is expected for position closures and is not an error
                 new_q = current_q + self.learning_rate * (reward - current_q)
             
             self.q_table[state][strategy] = new_q
