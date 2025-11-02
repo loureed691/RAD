@@ -44,7 +44,7 @@ class MLModel:
         self.model = None
         self.scaler = StandardScaler()
         
-        # Configure scaler to output pandas DataFrames (sklearn 1.2+)
+        # Configure scaler to output pandas DataFrames (sklearn 1.5+)
         # This preserves feature names and eliminates sklearn warnings
         if hasattr(self.scaler, 'set_output'):
             self.scaler.set_output(transform='pandas')
