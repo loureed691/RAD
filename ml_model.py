@@ -43,6 +43,12 @@ class MLModel:
         self.model_path = model_path
         self.model = None
         self.scaler = StandardScaler()
+        
+        # Configure scaler to output pandas DataFrames (sklearn 1.2+)
+        # This preserves feature names and eliminates sklearn warnings
+        if hasattr(self.scaler, 'set_output'):
+            self.scaler.set_output(transform='pandas')
+        
         self.logger = Logger.get_logger()
         self.training_data = []
         self.feature_importance = {}
@@ -72,6 +78,11 @@ class MLModel:
                 saved_data = joblib.load(self.model_path)
                 self.model = saved_data['model']
                 self.scaler = saved_data['scaler']
+                
+                # Configure loaded scaler to output pandas DataFrames (sklearn 1.2+)
+                if hasattr(self.scaler, 'set_output'):
+                    self.scaler.set_output(transform='pandas')
+                
                 self.training_data = saved_data.get('training_data', [])
                 self.feature_importance = saved_data.get('feature_importance', {})
                 self.performance_metrics = saved_data.get('performance_metrics', {
@@ -241,10 +252,9 @@ class MLModel:
             
             # Convert features to DataFrame with feature names
             features_df = pd.DataFrame(features, columns=self.FEATURE_NAMES)
-            features_scaled = self.scaler.transform(features_df)
             
-            # Convert scaled array back to DataFrame to preserve feature names
-            features_scaled = pd.DataFrame(features_scaled, columns=self.FEATURE_NAMES)
+            # Scale features - scaler configured with set_output('pandas') returns DataFrame
+            features_scaled = self.scaler.transform(features_df)
             
             prediction = self.model.predict(features_scaled)[0]
             probabilities = self.model.predict_proba(features_scaled)[0]
@@ -346,13 +356,9 @@ class MLModel:
                 X, y, test_size=0.2, random_state=42, stratify=y if len(np.unique(y)) > 1 else None
             )
             
-            # Scale features (scaler handles DataFrames)
+            # Scale features - scaler configured with set_output('pandas') returns DataFrames
             X_train_scaled = self.scaler.fit_transform(X_train)
             X_test_scaled = self.scaler.transform(X_test)
-            
-            # Convert scaled arrays back to DataFrames to preserve feature names
-            X_train_scaled = pd.DataFrame(X_train_scaled, columns=self.FEATURE_NAMES)
-            X_test_scaled = pd.DataFrame(X_test_scaled, columns=self.FEATURE_NAMES)
             
             # Create ensemble model with modern gradient boosting algorithms
             # XGBoost: Fastest and most accurate gradient boosting with GPU support
