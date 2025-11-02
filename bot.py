@@ -108,8 +108,8 @@ class TradingBot:
         else:
             self.logger.warning("⚠️  Could not fetch balance, using default configuration")
             # Set defaults if balance fetch fails
-            if Config.LEVERAGE is None:
-                Config.LEVERAGE = 10
+            # Note: LEVERAGE is now determined by confidence, so no need to set a default
+            # Config.LEVERAGE can remain None (no cap on confidence-based calculation)
             if Config.MAX_POSITION_SIZE is None:
                 Config.MAX_POSITION_SIZE = 1000
             if Config.RISK_PER_TRADE is None:

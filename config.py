@@ -120,15 +120,19 @@ class Config:
         """
         Automatically configure trading parameters based on available balance
         
-        This method intelligently sets optimal values for LEVERAGE, MAX_POSITION_SIZE,
+        This method intelligently sets optimal values for MAX_POSITION_SIZE,
         RISK_PER_TRADE, and MIN_PROFIT_THRESHOLD based on the account balance.
+        
+        NOTE: LEVERAGE is now determined dynamically based on position confidence (2-25x)
+        and is no longer configured based on account balance. Users can still override
+        leverage by setting LEVERAGE in .env, but this will be used as a maximum cap.
         
         Balance tiers:
         - Micro ($10-$100): Very conservative settings for learning
         - Small ($100-$1000): Conservative settings for small accounts
         - Medium ($1000-$10000): Balanced settings for growing accounts
         - Large ($10000-$100000): Aggressive settings for experienced traders
-        - Very Large ($100000+): Professional settings with higher leverage
+        - Very Large ($100000+): Professional settings
         
         Args:
             available_balance: Current USDT balance in account
@@ -136,23 +140,16 @@ class Config:
         from logger import Logger
         logger = Logger.get_logger()
         
-        # Apply user overrides if provided, otherwise calculate smart defaults
+        # Apply user overrides if provided for leverage
+        # LEVERAGE is now based on confidence, but users can set a maximum cap
         if cls._LEVERAGE_OVERRIDE:
             cls.LEVERAGE = int(cls._LEVERAGE_OVERRIDE)
-            logger.info(f"📌 Using user-defined LEVERAGE: {cls.LEVERAGE}x")
+            logger.info(f"📌 Using user-defined LEVERAGE cap: {cls.LEVERAGE}x (dynamic calculation will not exceed this)")
         else:
-            # Smart leverage based on balance - MORE CONSERVATIVE (smaller accounts = lower leverage for safety)
-            if available_balance < 100:
-                cls.LEVERAGE = 4  # Micro account - very conservative (was 5)
-            elif available_balance < 1000:
-                cls.LEVERAGE = 6  # Small account - conservative (was 7)
-            elif available_balance < 10000:
-                cls.LEVERAGE = 8  # Medium account - balanced (was 10)
-            elif available_balance < 100000:
-                cls.LEVERAGE = 10  # Large account - moderate (was 12)
-            else:
-                cls.LEVERAGE = 12  # Very large account - moderate-aggressive (was 15)
-            logger.info(f"🤖 Auto-configured LEVERAGE: {cls.LEVERAGE}x (balance: ${available_balance:.2f})")
+            # No automatic leverage configuration - it's determined by confidence
+            # Set to None to indicate no cap (will use full 2-25x range)
+            cls.LEVERAGE = None
+            logger.info(f"🤖 LEVERAGE will be determined by position confidence (2-25x range)")
         
         if cls._MAX_POSITION_SIZE_OVERRIDE:
             cls.MAX_POSITION_SIZE = float(cls._MAX_POSITION_SIZE_OVERRIDE)
@@ -247,8 +244,8 @@ class Config:
         
         # SAFETY: Validate numerical parameters are within safe bounds
         if cls.LEVERAGE is not None:
-            if not (1 <= cls.LEVERAGE <= 20):
-                raise ValueError(f"LEVERAGE must be between 1 and 20, got {cls.LEVERAGE}")
+            if not (1 <= cls.LEVERAGE <= 25):
+                raise ValueError(f"LEVERAGE must be between 1 and 25, got {cls.LEVERAGE}")
         
         if cls.MAX_POSITION_SIZE is not None:
             if cls.MAX_POSITION_SIZE <= 0:

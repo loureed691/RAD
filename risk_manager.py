@@ -577,145 +577,110 @@ class RiskManager:
                         momentum: float = 0.0, trend_strength: float = 0.5,
                         market_regime: str = 'neutral') -> int:
         """
-        Calculate maximum safe leverage based on multiple market conditions and performance
+        Calculate maximum safe leverage based primarily on position confidence
+        
+        Leverage is now determined by confidence in the position (2-25x range),
+        with volatility acting as a safety cap to prevent excessive leverage
+        in highly volatile markets.
         
         Args:
-            volatility: Market volatility measure (ATR or BB width)
-            confidence: Signal confidence (0-1)
-            momentum: Current price momentum (-1 to 1)
-            trend_strength: Trend strength indicator (0-1)
-            market_regime: Market regime ('trending', 'ranging', 'neutral')
+            volatility: Market volatility measure (ATR or BB width) - used as safety cap
+            confidence: Signal confidence (0-1) - primary factor for leverage
+            momentum: Current price momentum (-1 to 1) - kept for backward compatibility
+            trend_strength: Trend strength indicator (0-1) - kept for backward compatibility
+            market_regime: Market regime ('trending', 'ranging', 'neutral') - kept for backward compatibility
         
         Returns:
-            Maximum leverage to use (2-12x, reduced from 3-20x)
+            Maximum leverage to use (2-25x based on confidence)
         """
-        # 1. More conservative base leverage from volatility regime (REDUCED)
+        # Calculate base leverage from confidence (2x to 25x)
+        # Linear scaling: 
+        # - confidence 0.40 (minimum) -> 2x leverage
+        # - confidence 0.95 (maximum practical) -> 25x leverage
+        # Formula: leverage = 2 + (confidence - 0.40) * (25 - 2) / (0.95 - 0.40)
+        
+        if confidence < 0.40:
+            # Very low confidence - use minimum leverage
+            base_leverage = 2
+            confidence_level = 'very_low'
+        elif confidence < 0.50:
+            # Low confidence - 2-6x
+            base_leverage = int(2 + (confidence - 0.40) * 4 / 0.10)
+            confidence_level = 'low'
+        elif confidence < 0.65:
+            # Moderate confidence - 6-12x
+            base_leverage = int(6 + (confidence - 0.50) * 6 / 0.15)
+            confidence_level = 'moderate'
+        elif confidence < 0.75:
+            # Good confidence - 12-17x
+            base_leverage = int(12 + (confidence - 0.65) * 5 / 0.10)
+            confidence_level = 'good'
+        elif confidence < 0.85:
+            # High confidence - 17-21x
+            base_leverage = int(17 + (confidence - 0.75) * 4 / 0.10)
+            confidence_level = 'high'
+        elif confidence < 0.95:
+            # Very high confidence - 21-25x
+            base_leverage = int(21 + (confidence - 0.85) * 4 / 0.10)
+            confidence_level = 'very_high'
+        else:
+            # Exceptional confidence - maximum leverage
+            base_leverage = 25
+            confidence_level = 'exceptional'
+        
+        # Apply volatility safety cap to prevent excessive leverage in volatile markets
+        # This is important to manage risk when markets are unstable
+        volatility_cap = 25  # Default: no cap
         if volatility > 0.10:
-            base_leverage = 2  # Extreme volatility - minimal leverage (was 3)
+            # Extreme volatility - cap at 5x regardless of confidence
+            volatility_cap = 5
             volatility_regime = 'extreme'
         elif volatility > 0.08:
-            base_leverage = 3  # Very high volatility (was 4)
+            # Very high volatility - cap at 8x
+            volatility_cap = 8
             volatility_regime = 'very_high'
         elif volatility > 0.05:
-            base_leverage = 4  # High volatility (was 6)
+            # High volatility - cap at 12x
+            volatility_cap = 12
             volatility_regime = 'high'
         elif volatility > 0.03:
-            base_leverage = 6  # Medium volatility (was 8)
+            # Medium volatility - cap at 18x
+            volatility_cap = 18
             volatility_regime = 'medium'
-        elif volatility > 0.02:
-            base_leverage = 8  # Normal volatility (was 11)
+        else:
+            # Normal to low volatility - no cap needed
             volatility_regime = 'normal'
-        elif volatility > 0.01:
-            base_leverage = 10  # Low volatility (was 14)
-            volatility_regime = 'low'
-        else:
-            base_leverage = 11  # Very low volatility (was 16, max now 12)
-            volatility_regime = 'very_low'
         
-        # 2. More conservative confidence adjustment (±2x instead of ±4x)
-        if confidence >= 0.85:
-            # Exceptionally high confidence
-            confidence_adj = 2  # (was 4)
-        elif confidence >= 0.80:
-            # Very high confidence
-            confidence_adj = 2  # (was 3)
-        elif confidence >= 0.75:
-            # High confidence
-            confidence_adj = 1  # (was 2)
-        elif confidence >= 0.65:
-            # Good confidence
-            confidence_adj = 1  # (was 1)
-        elif confidence >= 0.55:
-            # Acceptable confidence
-            confidence_adj = 0
-        else:
-            # Lower confidence - reduce leverage more aggressively
-            confidence_adj = -2  # (was -3)
+        # Apply volatility cap
+        final_leverage = min(base_leverage, volatility_cap)
         
-        # 3. Momentum adjustment (±1x instead of ±2x)
-        momentum_adj = 0
-        if abs(momentum) > 0.03:  # Strong momentum
-            momentum_adj = 1  # (was 2)
-        elif abs(momentum) > 0.02:  # Good momentum
-            momentum_adj = 1  # (was 1)
-        elif abs(momentum) < 0.005:  # Weak momentum
-            momentum_adj = -1
-        
-        # 4. Trend strength adjustment (±1x instead of ±2x)
-        trend_adj = 0
-        if trend_strength > 0.7:  # Strong trend
-            trend_adj = 1  # (was 2)
-        elif trend_strength > 0.5:  # Moderate trend
-            trend_adj = 1  # (was 1)
-        elif trend_strength < 0.3:  # Weak/no trend
-            trend_adj = -1
-        
-        # 5. More conservative market regime adjustment (±2x instead of ±3x)
-        regime_adj = 0
-        if market_regime == 'trending':
-            regime_adj = 2  # Can be more aggressive in trends (was 3)
-        elif market_regime == 'ranging':
-            regime_adj = -2  # More conservative in ranges
-        
-        # 6. More conservative performance streak adjustment (±2x)
-        streak_adj = 0
-        if self.win_streak >= 5:
-            # Hot streak - can be slightly more aggressive
-            streak_adj = 1  # (was 2)
-        elif self.win_streak >= 3:
-            streak_adj = 1
-        elif self.loss_streak >= 4:
-            # Cold streak - reduce leverage significantly
-            streak_adj = -2  # (was -3)
-        elif self.loss_streak >= 2:
-            streak_adj = -1  # (was -2)
-        
-        # 7. More conservative recent performance adjustment (±2x instead of ±3x)
-        recent_adj = 0
-        recent_win_rate = self.get_recent_win_rate()
-        if len(self.recent_trades) >= 5:  # Need minimum data
-            if recent_win_rate >= 0.75:
-                recent_adj = 2  # Excellent recent performance (was 3)
-            elif recent_win_rate >= 0.70:
-                recent_adj = 1  # (was 2)
-            elif recent_win_rate >= 0.60:
-                recent_adj = 1  # Good recent performance
-            elif recent_win_rate <= 0.30:
-                recent_adj = -2  # Poor recent performance (was -3)
-            elif recent_win_rate <= 0.40:
-                recent_adj = -1  # Below average performance (was -2)
-        
-        # 8. Drawdown adjustment (overrides other factors) - MORE AGGRESSIVE
+        # Apply drawdown protection (safety feature to reduce leverage during losses)
         drawdown_adj = 0
-        if self.current_drawdown > 0.15:  # Lowered from 0.20
-            drawdown_adj = -8  # Severe drawdown protection (was -10 at >0.20)
-        elif self.current_drawdown > 0.10:  # Lowered from 0.15
-            drawdown_adj = -5  # Moderate drawdown protection (was -6 at >0.15)
-        elif self.current_drawdown > 0.05:  # Lowered from 0.10, NEW threshold
-            drawdown_adj = -2  # Light drawdown protection (was -3 at >0.10)
+        if self.current_drawdown > 0.15:
+            # Severe drawdown - reduce leverage significantly
+            drawdown_adj = -10
+        elif self.current_drawdown > 0.10:
+            # Moderate drawdown - reduce leverage moderately
+            drawdown_adj = -5
+        elif self.current_drawdown > 0.05:
+            # Light drawdown - reduce leverage slightly
+            drawdown_adj = -3
         
-        # Calculate final leverage with improved bounds management
-        # Cap individual adjustment categories to prevent runaway negative leverage
-        total_adj = confidence_adj + momentum_adj + trend_adj + regime_adj + streak_adj + recent_adj
+        final_leverage = max(2, final_leverage + drawdown_adj)
         
-        # Apply drawdown adjustment separately (it's intentionally strong)
-        # but ensure combined adjustments don't exceed reasonable bounds
-        if drawdown_adj < -5:  # Changed from -10
-            # Severe drawdown - limit other adjustments' impact
-            total_adj = max(total_adj, -3)  # Cap other negative adjustments (was -5)
+        # Ensure leverage stays within bounds (2-25x)
+        final_leverage = max(2, min(final_leverage, 25))
         
-        final_leverage = base_leverage + total_adj + drawdown_adj
-        
-        # Apply hard limits (2x minimum, 12x maximum) - REDUCED from 3-20x
-        final_leverage = max(2, min(final_leverage, 12))
-        
-        # Log reasoning for transparency (only when adjustments are significant)
-        if abs(confidence_adj) > 1 or abs(streak_adj) > 1 or abs(drawdown_adj) > 0:
-            self.logger.debug(
-                f"Leverage calculation: base={base_leverage}x ({volatility_regime} vol), "
-                f"conf={confidence_adj:+d}, mom={momentum_adj:+d}, trend={trend_adj:+d}, "
-                f"regime={regime_adj:+d}, streak={streak_adj:+d}, recent={recent_adj:+d}, "
-                f"drawdown={drawdown_adj:+d} → {final_leverage}x"
+        # Log reasoning for transparency
+        if volatility_cap < base_leverage or drawdown_adj != 0:
+            self.logger.info(
+                f"Leverage calculation: confidence={confidence:.2%} ({confidence_level}) → {base_leverage}x, "
+                f"volatility={volatility:.3f} ({volatility_regime}) cap={volatility_cap}x, "
+                f"drawdown={self.current_drawdown:.2%} adj={drawdown_adj:+d}x → final={final_leverage}x"
+            )
+        else:
+            self.logger.info(
+                f"Leverage calculation: confidence={confidence:.2%} ({confidence_level}) → {final_leverage}x"
             )
         
         return final_leverage
