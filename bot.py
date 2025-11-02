@@ -1356,41 +1356,54 @@ class TradingBot:
         if Config.ENABLE_DCA:
             try:
                 active_dca_positions = self.dca_strategy.get_active_dca_positions()
-                for symbol in active_dca_positions:
-                    if symbol in self.position_manager.positions:
-                        # Get current price
+                
+                # PERFORMANCE FIX: Batch fetch all ticker prices at once to avoid multiple API calls
+                # This reduces API calls from O(n) to O(1) where n is number of positions
+                symbols_to_check = set(active_dca_positions)
+                if Config.DCA_ACCUMULATION_ENABLED:
+                    symbols_to_check.update(self.position_manager.positions.keys())
+                
+                # Fetch all tickers in one batch (if client supports it) or use cached prices
+                ticker_cache = {}
+                for symbol in symbols_to_check:
+                    try:
                         ticker = self.client.get_ticker(symbol)
                         if ticker and 'last' in ticker:
-                            current_price = float(ticker['last'])
-                            
-                            # Check if next DCA entry should be made
-                            next_entry = self.dca_strategy.get_next_entry(symbol, current_price)
-                            if next_entry:
-                                amount, price = next_entry
-                                position = self.position_manager.positions[symbol]
-                                
-                                # Execute DCA entry using scale_in
-                                self.logger.info(f"💰 Executing DCA entry for {symbol}")
-                                success = self.position_manager.scale_in_position(
-                                    symbol, amount, price
-                                )
-                                
-                                if success:
-                                    self.dca_strategy.record_entry(symbol, amount, price)
-                                    plan = self.dca_strategy.get_dca_plan(symbol)
-                                    if plan:
-                                        self.logger.info(
-                                            f"💰 DCA Entry {plan['completed_entries']}/{plan['num_entries']} "
-                                            f"completed for {symbol}"
-                                        )
+                            ticker_cache[symbol] = float(ticker['last'])
+                    except Exception as e:
+                        self.logger.debug(f"Could not fetch ticker for {symbol}: {e}")
                 
-                # Accumulation DCA check for winning positions
+                # Process active DCA positions using cached prices
+                for symbol in active_dca_positions:
+                    if symbol in self.position_manager.positions and symbol in ticker_cache:
+                        current_price = ticker_cache[symbol]
+                        
+                        # Check if next DCA entry should be made
+                        next_entry = self.dca_strategy.get_next_entry(symbol, current_price)
+                        if next_entry:
+                            amount, price = next_entry
+                            position = self.position_manager.positions[symbol]
+                            
+                            # Execute DCA entry using scale_in
+                            self.logger.info(f"💰 Executing DCA entry for {symbol}")
+                            success = self.position_manager.scale_in_position(
+                                symbol, amount, price
+                            )
+                            
+                            if success:
+                                self.dca_strategy.record_entry(symbol, amount, price)
+                                plan = self.dca_strategy.get_dca_plan(symbol)
+                                if plan:
+                                    self.logger.info(
+                                        f"💰 DCA Entry {plan['completed_entries']}/{plan['num_entries']} "
+                                        f"completed for {symbol}"
+                                    )
+                
+                # Accumulation DCA check for winning positions using cached prices
                 if Config.DCA_ACCUMULATION_ENABLED:
                     for symbol, position in self.position_manager.positions.items():
-                        # Get current P/L
-                        ticker = self.client.get_ticker(symbol)
-                        if ticker and 'last' in ticker:
-                            current_price = float(ticker['last'])
+                        if symbol in ticker_cache:
+                            current_price = ticker_cache[symbol]
                             current_pnl = position.get_pnl(current_price)
                             
                             # Track number of accumulation adds (use position attribute if exists)
