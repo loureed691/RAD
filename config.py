@@ -38,7 +38,7 @@ class Config:
     All other parameters are automatically configured with optimal defaults.
     
     AUTO-CONFIGURED PARAMETERS (based on account balance):
-    - LEVERAGE: 4-12x (smaller accounts get lower leverage for safety)
+    - LEVERAGE: 10x (fixed, can be overridden to 2-25x range)
     - MAX_POSITION_SIZE: 30-60% of balance (scaled for account size)
     - RISK_PER_TRADE: 1-3% (conservative for small, aggressive for large)
     - MIN_PROFIT_THRESHOLD: 0.62-0.92% (includes trading fees + profit)
@@ -120,15 +120,17 @@ class Config:
         """
         Automatically configure trading parameters based on available balance
         
-        This method intelligently sets optimal values for LEVERAGE, MAX_POSITION_SIZE,
-        RISK_PER_TRADE, and MIN_PROFIT_THRESHOLD based on the account balance.
+        This method sets optimal values for MAX_POSITION_SIZE, RISK_PER_TRADE, 
+        and MIN_PROFIT_THRESHOLD based on the account balance.
+        LEVERAGE is fixed at 10x by default (not balance-based) and can be 
+        overridden via LEVERAGE env var (range: 2-25x).
         
         Balance tiers:
         - Micro ($10-$100): Very conservative settings for learning
         - Small ($100-$1000): Conservative settings for small accounts
         - Medium ($1000-$10000): Balanced settings for growing accounts
         - Large ($10000-$100000): Aggressive settings for experienced traders
-        - Very Large ($100000+): Professional settings with higher leverage
+        - Very Large ($100000+): Professional settings
         
         Args:
             available_balance: Current USDT balance in account
@@ -136,23 +138,14 @@ class Config:
         from logger import Logger
         logger = Logger.get_logger()
         
-        # Apply user overrides if provided, otherwise calculate smart defaults
+        # Apply user overrides if provided, otherwise use fixed default
         if cls._LEVERAGE_OVERRIDE:
             cls.LEVERAGE = int(cls._LEVERAGE_OVERRIDE)
             logger.info(f"📌 Using user-defined LEVERAGE: {cls.LEVERAGE}x")
         else:
-            # Smart leverage based on balance - MORE CONSERVATIVE (smaller accounts = lower leverage for safety)
-            if available_balance < 100:
-                cls.LEVERAGE = 4  # Micro account - very conservative (was 5)
-            elif available_balance < 1000:
-                cls.LEVERAGE = 6  # Small account - conservative (was 7)
-            elif available_balance < 10000:
-                cls.LEVERAGE = 8  # Medium account - balanced (was 10)
-            elif available_balance < 100000:
-                cls.LEVERAGE = 10  # Large account - moderate (was 12)
-            else:
-                cls.LEVERAGE = 12  # Very large account - moderate-aggressive (was 15)
-            logger.info(f"🤖 Auto-configured LEVERAGE: {cls.LEVERAGE}x (balance: ${available_balance:.2f})")
+            # Fixed leverage (not balance-based) - can be overridden via LEVERAGE env var
+            cls.LEVERAGE = 10
+            logger.info(f"🤖 Using default LEVERAGE: {cls.LEVERAGE}x")
         
         if cls._MAX_POSITION_SIZE_OVERRIDE:
             cls.MAX_POSITION_SIZE = float(cls._MAX_POSITION_SIZE_OVERRIDE)
@@ -247,8 +240,8 @@ class Config:
         
         # SAFETY: Validate numerical parameters are within safe bounds
         if cls.LEVERAGE is not None:
-            if not (1 <= cls.LEVERAGE <= 20):
-                raise ValueError(f"LEVERAGE must be between 1 and 20, got {cls.LEVERAGE}")
+            if not (2 <= cls.LEVERAGE <= 25):
+                raise ValueError(f"LEVERAGE must be between 2 and 25, got {cls.LEVERAGE}")
         
         if cls.MAX_POSITION_SIZE is not None:
             if cls.MAX_POSITION_SIZE <= 0:
@@ -270,7 +263,7 @@ class Config:
             raise ValueError(f"CHECK_INTERVAL must be between 10 and 3600 seconds, got {cls.CHECK_INTERVAL}")
         
         # SAFETY: Warn about aggressive settings
-        if cls.LEVERAGE is not None and cls.LEVERAGE > 15:
+        if cls.LEVERAGE is not None and cls.LEVERAGE > 20:
             logger.warning(f"⚠️  HIGH LEVERAGE WARNING: {cls.LEVERAGE}x leverage is very risky!")
         
         if cls.RISK_PER_TRADE is not None and cls.RISK_PER_TRADE > 0.05:

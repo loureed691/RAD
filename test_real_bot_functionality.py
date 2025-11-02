@@ -332,10 +332,10 @@ def test_risk_management_integration():
         print("\n  Test 4.1: Auto-configuration with different balances...")
         
         test_cases = [
-            (50, 4, 0.01),      # Micro account
-            (500, 6, 0.015),    # Small account
-            (5000, 8, 0.02),    # Medium account
-            (50000, 10, 0.025), # Large account
+            (50, 10, 0.01),      # Micro account - leverage now fixed at 10x
+            (500, 10, 0.015),    # Small account - leverage now fixed at 10x
+            (5000, 10, 0.02),    # Medium account - leverage now fixed at 10x
+            (50000, 10, 0.025), # Large account - leverage now fixed at 10x
         ]
         
         for balance, expected_leverage, expected_risk in test_cases:

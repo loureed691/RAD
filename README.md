@@ -20,7 +20,7 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 3. **Monitor**: Web dashboard at http://localhost:5000 (starts automatically!)
 
 **That's it!** No complex configuration needed. The bot automatically:
-- ✅ Sets optimal leverage based on your account size (4-12x)
+- ✅ Sets optimal leverage at 10x (configurable 2-25x)
 - ✅ Configures position sizing for your balance (30-60%)
 - ✅ Adjusts risk parameters (1-3% per trade)
 - ✅ Enables WebSocket for real-time data
@@ -241,7 +241,7 @@ Key configuration parameters in `.env`:
 - **ENABLE_WEBSOCKET**: Use WebSocket for market data (default: true) ⭐ NEW!
 
 **Trading Parameters (Auto-configured if not set):**
-- **LEVERAGE**: Maximum leverage to use (default: 10, auto-scales 5x-15x based on balance)
+- **LEVERAGE**: Trading leverage (default: 10x, configurable range: 2-25x)
 - **MAX_POSITION_SIZE**: Maximum position size in USDT (default: 1000, auto-adjusts to 30-60% of balance)
 - **RISK_PER_TRADE**: Risk per trade as percentage of balance (default: 0.02 = 2%, auto-adjusts 1-3%)
 - **MIN_PROFIT_THRESHOLD**: Minimum profit threshold (default: 0.005 = 0.5%, auto-adjusted for fees)

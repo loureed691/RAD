@@ -24,7 +24,7 @@ Your bot now features **intelligent auto-configuration** - just add your API key
    ```
 
 **That's it!** Everything else is automatically configured:
-- ✅ Optimal leverage based on your account size (4-12x)
+- ✅ Fixed leverage at 10x (configurable 2-25x)
 - ✅ Smart position sizing (30-60% of balance)
 - ✅ Adaptive risk management (1-3% per trade)
 - ✅ WebSocket real-time data (enabled)
@@ -75,7 +75,7 @@ When the bot starts, you'll see logs like:
 
 ```env
 # Override specific settings in .env
-LEVERAGE=8                   # Use 8x leverage instead of auto (4-12x)
+LEVERAGE=15                  # Use 15x leverage instead of default 10x (range: 2-25x)
 RISK_PER_TRADE=0.015        # Use 1.5% risk instead of auto (1-3%)
 MAX_OPEN_POSITIONS=5        # Allow 5 concurrent positions
 CHECK_INTERVAL=120          # Scan every 2 minutes instead of 1 minute
