@@ -1363,7 +1363,20 @@ class TradingBot:
                 if Config.DCA_ACCUMULATION_ENABLED:
                     symbols_to_check.update(self.position_manager.positions.keys())
                 
+                # Helper function to extract valid price from ticker
+                def extract_price(ticker):
+                    """Extract and validate price from ticker data"""
+                    if ticker and 'last' in ticker and ticker['last']:
+                        try:
+                            return float(ticker['last'])
+                        except (ValueError, TypeError):
+                            return None
+                    return None
+                
                 # Batch fetch all tickers in one API call - TRUE O(1) operation
+                # Note: fetch_tickers() retrieves all market tickers, which is still more efficient
+                # than making N individual API calls. The network overhead of one large response
+                # is significantly less than N round-trips for small responses.
                 ticker_cache = {}
                 if symbols_to_check:
                     try:
@@ -1371,18 +1384,19 @@ class TradingBot:
                         all_tickers = self.client.exchange.fetch_tickers()
                         for symbol in symbols_to_check:
                             if symbol in all_tickers:
-                                ticker = all_tickers[symbol]
-                                if 'last' in ticker and ticker['last']:
-                                    ticker_cache[symbol] = float(ticker['last'])
-                        self.logger.debug(f"Batch fetched {len(ticker_cache)} ticker prices for DCA monitoring")
+                                price = extract_price(all_tickers[symbol])
+                                if price:
+                                    ticker_cache[symbol] = price
+                        self.logger.debug(f"Batch fetched {len(ticker_cache)}/{len(symbols_to_check)} ticker prices for DCA monitoring")
                     except Exception as e:
                         self.logger.debug(f"Batch ticker fetch failed, using fallback: {e}")
                         # Fallback to individual calls if batch fails
                         for symbol in symbols_to_check:
                             try:
                                 ticker = self.client.get_ticker(symbol)
-                                if ticker and 'last' in ticker:
-                                    ticker_cache[symbol] = float(ticker['last'])
+                                price = extract_price(ticker)
+                                if price:
+                                    ticker_cache[symbol] = price
                             except Exception as e2:
                                 self.logger.debug(f"Could not fetch ticker for {symbol}: {e2}")
                 
