@@ -27,12 +27,12 @@ When the bot starts, it:
 
 ## What Gets Auto-Configured
 
-### ⚙️ Trading Parameters (Balance-Based)
+### ⚙️ Trading Parameters
 These are automatically set based on your account balance:
-- **LEVERAGE**: Dynamically adjusted between 4-12x
-  - Base leverage depends on account size (smaller accounts = lower leverage)
-  - Further adjusted by market volatility, trend strength, and trading performance
-  - Provides adaptive safety based on current market conditions
+- **LEVERAGE**: Fixed at 10x by default
+  - Can be overridden via LEVERAGE env var (range: 2-25x)
+  - Not adjusted based on balance or market conditions
+  - Provides consistent leverage across all account sizes
 - **MAX_POSITION_SIZE**: 30-60% of balance (scaled appropriately)
 - **RISK_PER_TRADE**: 1-3% (conservative for small, aggressive for large)
 - **MIN_PROFIT_THRESHOLD**: 0.62-0.92% (includes trading fees + profit)
@@ -174,10 +174,10 @@ ENABLE_DASHBOARD=false      # Disable the web dashboard
 ```
 
 **Important Note on LEVERAGE:**
-- When you set `LEVERAGE=12` in .env, that **exact value is used for ALL trades**
-- The bot will NOT use its dynamic leverage calculation (which adjusts based on market conditions)
-- This gives you full control but removes the safety of adaptive leverage
-- If you DON'T set LEVERAGE, the bot intelligently calculates it (4-12x based on balance and market volatility)
+- When you set `LEVERAGE=15` in .env, that **exact value is used for ALL trades**
+- Valid range is 2-25x
+- If you DON'T set LEVERAGE, the bot uses a fixed default of 10x (not balance-based)
+- This provides consistent leverage across all account sizes
 
 The bot will:
 - ✅ Use your custom value EXACTLY as specified for overridden parameters
