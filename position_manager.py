@@ -625,7 +625,7 @@ class Position:
                     return True, reason
             except Exception as e:
                 # Fallback to base levels if adaptive system fails
-                pass
+                self.position_logger.debug(f"Adaptive emergency system unavailable: {e}")
         
         # FALLBACK: Base emergency thresholds (used when adaptive system not available)
         # Level 1: Emergency stop at -40% ROI (liquidation danger zone)
@@ -826,7 +826,6 @@ class PositionManager:
                     mark_price = float(mark_price_str)
                 except (ValueError, TypeError) as e:
                     self.position_logger.debug(f"Could not parse mark price '{mark_price_str}': {e}")
-                    pass
         
         # Use mark price if available, otherwise fall back to last price
         if mark_price and mark_price > 0:

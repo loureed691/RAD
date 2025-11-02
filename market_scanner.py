@@ -277,12 +277,10 @@ class MarketScanner:
         metrics_count = 0
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit tasks with staggering to prevent API rate limit bursts
-            # Add 0.1s delay between each submission to spread out initial requests
+            # Submit all tasks in parallel - API rate limiting is handled by ccxt library
             future_to_symbol = {}
             for symbol in filtered_symbols:
                 future_to_symbol[executor.submit(self.scan_pair, symbol)] = symbol
-                time.sleep(0.1)  # Small delay to stagger API requests
             
             try:
                 for future in as_completed(future_to_symbol, timeout=overall_timeout):

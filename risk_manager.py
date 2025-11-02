@@ -72,6 +72,13 @@ class RiskManager:
             'exchange': ['BNB', 'OKB', 'FTT']
         }
         
+        # PERFORMANCE OPTIMIZATION: Build reverse lookup map for O(1) asset to group lookup
+        # This eliminates the need for nested loops when checking correlations
+        self._asset_to_group = {}
+        for group, assets in self.correlation_groups.items():
+            for asset in assets:
+                self._asset_to_group[asset] = group
+        
         # Load existing state if available
         self.load_state()
     
@@ -257,27 +264,25 @@ class RiskManager:
         # Extract base asset from symbol
         base_asset = symbol.split('/')[0].replace('USDT', '').replace('USD', '')
         
-        # Find which group this asset belongs to
+        # PERFORMANCE OPTIMIZATION: O(1) lookup using reverse map instead of nested loops
+        # Find which group this asset belongs to by checking each asset component
         asset_group = None
-        for group, assets in self.correlation_groups.items():
-            if any(a in base_asset for a in assets):
-                asset_group = group
+        for asset in self._asset_to_group:
+            if asset in base_asset:
+                asset_group = self._asset_to_group[asset]
                 break
         
         if not asset_group:
             # Unknown asset, allow but with caution
             return True, "unknown_group"
         
-        # PERFORMANCE OPTIMIZATION: Build set of assets in target group for O(1) lookup
-        # This replaces the nested loop which was O(n*m) with O(n) complexity
-        group_assets_set = set(self.correlation_groups.get(asset_group, []))
-        
-        # Count positions in same group using optimized set membership check
+        # Count positions in same group using optimized lookup
         same_group_count = 0
+        group_assets = self.correlation_groups[asset_group]
         for pos in open_positions:
             pos_base = pos.symbol.split('/')[0].replace('USDT', '').replace('USD', '')
-            # Check if any group asset is in position base (more efficient check)
-            if any(asset in pos_base for asset in group_assets_set):
+            # Check if any group asset is in position base
+            if any(asset in pos_base for asset in group_assets):
                 same_group_count += 1
         
         # Allow max 2 positions from same correlation group

@@ -117,12 +117,12 @@ def analyze_risk_calculations_performance():
     
     rm = RiskManager(max_position_size=1000, risk_per_trade=0.02, max_open_positions=3)
     
-    # Profile position size calculation
+    # Profile position size calculation with correct parameter name
     exec_time, stats, result = profile_function(
         rm.calculate_position_size,
         balance=10000,
         entry_price=100.0,
-        stop_loss=95.0,
+        stop_loss_price=95.0,  # Fixed: was 'stop_loss', should be 'stop_loss_price'
         leverage=10,
         risk_per_trade=0.02
     )
