@@ -571,7 +571,7 @@ class RiskManager:
         # Cap between 1.5% and 4.0% (increased from 1.0%-2.5%)
         # With 10x leverage: 4.0% price stop = 40% ROI (emergency level)
         # This ensures stops trigger AFTER the position has room to work
-        stop_loss = max(0.015, min(stop_loss, 0.040))
+        stop_loss = max(0.018, min(stop_loss, 0.040))
         
         return stop_loss
     
