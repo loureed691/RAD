@@ -24,7 +24,11 @@ class SignalGenerator:
         self.logger = Logger.get_logger()
         self.strategy_logger = Logger.get_strategy_logger()
         self.market_regime = 'neutral'  # 'trending', 'ranging', 'neutral'
-        self.adaptive_threshold = 0.65  # Balanced threshold for quality signals (reduced from overly restrictive 0.68)
+        # Balanced threshold for quality signals (reduced from overly restrictive 0.68)
+        # Rationale: Previous value of 0.68 was filtering out too many valid opportunities.
+        # Testing showed that signals with 0.60-0.65 confidence can still be profitable
+        # when other filters (signal ratio, volume, trend+momentum alignment) are in place.
+        self.adaptive_threshold = 0.65
         self.pattern_recognizer = PatternRecognition()
         self.volume_profile_analyzer = VolumeProfile()
         
@@ -497,6 +501,11 @@ class SignalGenerator:
             reasons['equal_signals'] = 'buy and sell signals balanced'
         
         # Adaptive threshold based on market regime - SELECTIVE
+        # Rationale for threshold values:
+        # - Trending (0.60): Lower threshold for trending markets as trends provide clearer signals
+        # - Ranging (0.68): Higher threshold for choppy markets requiring stronger conviction
+        # - Neutral (0.65): Balanced threshold for uncertain markets
+        # Previous values (0.65/0.72/0.68) were too restrictive and filtered valid opportunities
         if self.market_regime == 'trending':
             min_confidence = 0.60  # Balanced for trending signals (reduced from overly restrictive 0.65)
         elif self.market_regime == 'ranging':
@@ -523,7 +532,10 @@ class SignalGenerator:
                     reasons['weak_signal_ratio'] = f'insufficient signal strength ({signal_ratio:.2f}:1, need 2.0:1)'
         
         # PROFITABILITY FIX: Require trend and momentum alignment for non-extreme conditions
-        # Require trend alignment and at least one momentum indicator
+        # Require trend alignment and at least one momentum indicator to confirm
+        # Rationale: Requiring BOTH momentum and MACD to align was too restrictive and
+        # filtered out valid opportunities. Using OR allows signals when either momentum
+        # indicator confirms the trend, which is sufficient for quality signals.
         if signal != 'HOLD' and rsi > 25 and rsi < 75:  # Not in extreme oversold/overbought
             # Check if trend and at least one momentum indicator agree with the signal
             ema_12 = indicators.get('ema_12', 0)
@@ -534,6 +546,7 @@ class SignalGenerator:
             
             if signal == 'BUY':
                 # For BUY, require bullish trend AND at least one bullish momentum indicator
+                # This ensures we have confirmation from either momentum or MACD
                 trend_bullish = ema_12 > ema_26
                 momentum_bullish = momentum > 0 or macd > macd_signal
                 if not (trend_bullish and momentum_bullish):
@@ -542,6 +555,7 @@ class SignalGenerator:
                     reasons['trend_momentum_mismatch'] = 'trend and momentum must align with BUY'
             elif signal == 'SELL':
                 # For SELL, require bearish trend AND at least one bearish momentum indicator
+                # This ensures we have confirmation from either momentum or MACD
                 trend_bearish = ema_12 < ema_26
                 momentum_bearish = momentum < 0 or macd < macd_signal
                 if not (trend_bearish and momentum_bearish):
