@@ -20,6 +20,23 @@ except ImportError:
 class SignalGenerator:
     """Generate trading signals based on multiple indicators"""
     
+    # Loss prevention thresholds - adjustable for fine-tuning
+    MIN_CONFLUENCE_THRESHOLD = 0.55  # Minimum confluence score for penalty
+    VERY_WEAK_CONFLUENCE_THRESHOLD = 0.40  # Below this, reject signal entirely
+    
+    # Volatility filter thresholds
+    EXTREME_HIGH_VOLATILITY_BB = 0.12  # Max Bollinger Band width (12%)
+    EXTREME_HIGH_VOLATILITY_ATR = 0.08  # Max ATR as % of price (8%)
+    EXTREME_LOW_VOLATILITY_BB = 0.008  # Min Bollinger Band width (0.8%)
+    EXTREME_LOW_VOLATILITY_ATR = 0.005  # Min ATR as % of price (0.5%)
+    
+    # Choppy market detection thresholds
+    CHOPPY_MARKET_EMA_DIFF = 0.01  # Max EMA difference for choppy market (1%)
+    CHOPPY_MARKET_ROC = 1.5  # Max ROC for choppy market
+    
+    # Risk-reward requirements
+    MIN_RISK_REWARD_RATIO = 2.0  # Minimum R:R ratio required
+    
     def __init__(self):
         self.logger = Logger.get_logger()
         self.strategy_logger = Logger.get_strategy_logger()
@@ -557,12 +574,12 @@ class SignalGenerator:
                 confidence *= (1.0 + (confluence_score - 0.7) * 0.5)  # Up to 15% boost
                 confidence = min(confidence, 0.99)
                 reasons['confluence'] = f'strong ({confluence_score:.1%})'
-            elif confluence_score < 0.55:  # FURTHER INCREASED from 0.5 - even more selective
+            elif confluence_score < self.MIN_CONFLUENCE_THRESHOLD:  # Use class constant
                 # Weak confluence - reduce confidence more aggressively
                 confidence *= 0.75  # FURTHER INCREASED penalty from 0.80
                 reasons['confluence'] = f'weak ({confluence_score:.1%})'
                 # If confluence is too weak, reject the signal entirely
-                if confluence_score < 0.40:
+                if confluence_score < self.VERY_WEAK_CONFLUENCE_THRESHOLD:  # Use class constant
                     signal = 'HOLD'
                     confidence = 0.0
                     reasons['very_weak_confluence'] = f'extremely weak signal alignment ({confluence_score:.1%})'
@@ -598,12 +615,12 @@ class SignalGenerator:
         atr_normalized = indicators.get('atr', 0) / indicators.get('close', 1) if indicators.get('close', 0) > 0 else 0
         if signal != 'HOLD':
             # Avoid extreme volatility that leads to stop-loss hunting
-            if bb_width > 0.12 or atr_normalized > 0.08:  # Extremely high volatility
+            if bb_width > self.EXTREME_HIGH_VOLATILITY_BB or atr_normalized > self.EXTREME_HIGH_VOLATILITY_ATR:
                 signal = 'HOLD'
                 confidence = 0.0
                 reasons['extreme_volatility'] = f'dangerous volatility (bb_width: {bb_width:.3f}, atr: {atr_normalized:.3f})'
             # Also avoid very low volatility (low profit potential, high slippage risk)
-            elif bb_width < 0.008 or atr_normalized < 0.005:
+            elif bb_width < self.EXTREME_LOW_VOLATILITY_BB or atr_normalized < self.EXTREME_LOW_VOLATILITY_ATR:
                 signal = 'HOLD'
                 confidence = 0.0
                 reasons['insufficient_volatility'] = f'too low volatility for profitable trade (bb_width: {bb_width:.3f})'
@@ -617,7 +634,7 @@ class SignalGenerator:
             roc = abs(indicators.get('roc', 0))
             
             # Choppy market: weak trend + conflicting signals
-            is_choppy = (ema_diff < 0.01 and roc < 1.5)  # Very weak trend
+            is_choppy = (ema_diff < self.CHOPPY_MARKET_EMA_DIFF and roc < self.CHOPPY_MARKET_ROC)
             if is_choppy:
                 signal = 'HOLD'
                 confidence = 0.0
@@ -633,13 +650,13 @@ class SignalGenerator:
                 # Estimate take profit potential (2x ATR or 1.5x BB width)
                 estimated_tp_potential = max(atr_normalized * 2.5, bb_width * 1.5)
                 
-                # Require at least 2:1 risk-reward ratio
+                # Require minimum risk-reward ratio
                 if estimated_stop_distance > 0:
                     risk_reward = estimated_tp_potential / estimated_stop_distance
-                    if risk_reward < 2.0:
+                    if risk_reward < self.MIN_RISK_REWARD_RATIO:  # Use class constant
                         signal = 'HOLD'
                         confidence = 0.0
-                        reasons['poor_risk_reward'] = f'insufficient R:R ratio ({risk_reward:.2f}:1, need 2.0:1)'
+                        reasons['poor_risk_reward'] = f'insufficient R:R ratio ({risk_reward:.2f}:1, need {self.MIN_RISK_REWARD_RATIO}:1)'
         
         self.logger.debug(f"Signal: {signal}, Confidence: {confidence:.2f}, Regime: {self.market_regime}, Buy: {buy_signals:.1f}/{total_signals:.1f}, Sell: {sell_signals:.1f}/{total_signals:.1f}")
         
