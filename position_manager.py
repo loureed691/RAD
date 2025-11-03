@@ -159,11 +159,11 @@ class Position:
         
         # 2. Profit-based adjustment - LESS AGGRESSIVE to avoid early exits
         # Only tighten after significant profit to avoid giving back gains
-        if current_pnl > 0.15:  # >15% profit (increased from 10%)
+        if current_pnl > 0.15:  # >15% price movement (unleveraged profit, increased from 10%)
             adaptive_trailing *= 0.6  # LESS TIGHT from 0.5 
-        elif current_pnl > 0.08:  # >8% profit (increased from 5%)
+        elif current_pnl > 0.08:  # >8% price movement (unleveraged profit, increased from 5%)
             adaptive_trailing *= 0.8  # LESS TIGHT from 0.7
-        elif current_pnl > 0.05:  # >5% profit
+        elif current_pnl > 0.05:  # >5% price movement (unleveraged profit)
             adaptive_trailing *= 0.9  # LESS TIGHT - start tightening later
         
         # 3. Momentum adjustment - allow positions to run
