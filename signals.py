@@ -581,7 +581,7 @@ class SignalGenerator:
                     reasons['confidence'] = f'too low after MTF adjustment ({confidence:.2f} < {min_confidence:.2f})'
         
         # ADDITIONAL FILTER: Reject signals with no multi-timeframe support in neutral regime
-        if signal != 'HOLD' and self.market_regime == 'neutral' and mtf_analysis['trend_alignment'] == 'neutral':
+        if signal != 'HOLD' and self.market_regime == 'neutral' and mtf_analysis.get('trend_alignment') == 'neutral':
             # In uncertain conditions, require either strong confidence or MTF confirmation
             if confidence < 0.75:  # Very high threshold for neutral/neutral combination
                 signal = 'HOLD'
