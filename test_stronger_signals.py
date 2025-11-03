@@ -50,19 +50,19 @@ def create_test_dataframe(rows=100, price=50000, trend='bullish'):
 
 
 def test_increased_base_threshold():
-    """Test that base confidence threshold is increased to 0.68"""
+    """Test that base confidence threshold is increased to 0.72"""
     print("\n" + "="*60)
-    print("Testing Increased Base Threshold (0.68)")
+    print("Testing Increased Base Threshold (0.72)")
     print("="*60)
     
     try:
         sg = SignalGenerator()
         
         # Verify threshold is set correctly
-        assert sg.adaptive_threshold == 0.68, f"Expected 0.68, got {sg.adaptive_threshold}"
-        print(f"  ✓ Base threshold increased to {sg.adaptive_threshold} (was 0.62)")
+        assert sg.adaptive_threshold == 0.72, f"Expected 0.72, got {sg.adaptive_threshold}"
+        print(f"  ✓ Base threshold increased to {sg.adaptive_threshold} (was 0.68)")
         
-        # Create a moderate signal that would have passed with 0.62 but not with 0.68
+        # Create a moderate signal that would have passed with 0.68 but not with 0.72
         df = create_test_dataframe(rows=100, price=50000, trend='bullish')
         signal, confidence, reasons = sg.generate_signal(df)
         
@@ -86,20 +86,20 @@ def test_regime_specific_thresholds():
     try:
         sg = SignalGenerator()
         
-        # Test trending market threshold (should be 0.65)
+        # Test trending market threshold (should be 0.70)
         df_trending = create_test_dataframe(rows=100, price=50000, trend='bullish')
         signal_trend, conf_trend, reasons_trend = sg.generate_signal(df_trending)
         print(f"  ✓ Trending market: {sg.market_regime}")
         print(f"    Signal: {signal_trend}, Confidence: {conf_trend:.2%}")
         
-        # Test ranging market threshold (should be 0.72)
+        # Test ranging market threshold (should be 0.76)
         df_ranging = create_test_dataframe(rows=100, price=50000, trend='ranging')
         signal_range, conf_range, reasons_range = sg.generate_signal(df_ranging)
         print(f"  ✓ Ranging market: {sg.market_regime}")
         print(f"    Signal: {signal_range}, Confidence: {conf_range:.2%}")
         
         # Ranging markets should be more selective
-        print(f"  ✓ Ranging markets require higher confidence (0.72 vs 0.65)")
+        print(f"  ✓ Ranging markets require higher confidence (0.76 vs 0.70)")
         
         return True
     except Exception as e:
@@ -110,9 +110,9 @@ def test_regime_specific_thresholds():
 
 
 def test_signal_ratio_requirement():
-    """Test that signal ratio requirement is 2.5:1 (increased from 2.0:1)"""
+    """Test that signal ratio requirement is 3.0:1 (increased from 2.5:1)"""
     print("\n" + "="*60)
-    print("Testing Signal Ratio Requirement (2.5:1)")
+    print("Testing Signal Ratio Requirement (3.0:1)")
     print("="*60)
     
     try:
@@ -128,7 +128,7 @@ def test_signal_ratio_requirement():
         # Check if signal was rejected due to weak ratio
         if 'weak_signal_ratio' in reasons:
             print(f"    ✓ Signal correctly rejected: {reasons['weak_signal_ratio']}")
-            assert '2.5:1' in reasons['weak_signal_ratio'], "Should mention 2.5:1 requirement"
+            assert '3.0:1' in reasons['weak_signal_ratio'], "Should mention 3.0:1 requirement"
         elif signal == 'HOLD':
             print(f"    ✓ Signal held due to other filters")
         else:
@@ -143,9 +143,9 @@ def test_signal_ratio_requirement():
 
 
 def test_volume_requirement():
-    """Test that volume requirement is stricter (0.9 instead of 0.8)"""
+    """Test that volume requirement is stricter (1.0 instead of 0.9)"""
     print("\n" + "="*60)
-    print("Testing Stricter Volume Requirements (0.9)")
+    print("Testing Stricter Volume Requirements (1.0)")
     print("="*60)
     
     try:
@@ -162,12 +162,12 @@ def test_volume_requirement():
         
         signal, confidence, reasons = sg.generate_signal(df)
         
-        if volume_ratio < 0.9:
-            print(f"    ✓ Low volume detected (< 0.9)")
+        if volume_ratio < 1.0:
+            print(f"    ✓ Low volume detected (< 1.0)")
             if 'volume' in reasons:
                 print(f"    ✓ Volume filter applied: {reasons['volume']}")
         else:
-            print(f"    ✓ Adequate volume (>= 0.9)")
+            print(f"    ✓ Adequate volume (>= 1.0)")
         
         return True
     except Exception as e:
@@ -209,9 +209,9 @@ def test_trend_momentum_alignment():
 
 
 def test_confluence_requirements():
-    """Test that confluence requirements are stricter (0.5 instead of 0.4)"""
+    """Test that confluence requirements are stricter (0.55 instead of 0.5)"""
     print("\n" + "="*60)
-    print("Testing Stricter Confluence Requirements (0.5)")
+    print("Testing Stricter Confluence Requirements (0.55)")
     print("="*60)
     
     try:
@@ -236,9 +236,9 @@ def test_confluence_requirements():
 
 
 def test_mtf_conflict_penalty():
-    """Test that MTF conflicts are penalized more heavily (0.6 instead of 0.7)"""
+    """Test that MTF conflicts are penalized more heavily (0.5 instead of 0.6)"""
     print("\n" + "="*60)
-    print("Testing Stronger MTF Conflict Penalty (0.6)")
+    print("Testing Stronger MTF Conflict Penalty (0.5)")
     print("="*60)
     
     try:
@@ -349,13 +349,13 @@ def run_all_tests():
     print("Expected outcome: Fewer trades, but stronger signals")
     
     tests = [
-        ("Base Threshold (0.68)", test_increased_base_threshold),
+        ("Base Threshold (0.72)", test_increased_base_threshold),
         ("Regime Thresholds", test_regime_specific_thresholds),
-        ("Signal Ratio (2.5:1)", test_signal_ratio_requirement),
-        ("Volume Requirement (0.9)", test_volume_requirement),
+        ("Signal Ratio (3.0:1)", test_signal_ratio_requirement),
+        ("Volume Requirement (1.0)", test_volume_requirement),
         ("Trend AND Momentum", test_trend_momentum_alignment),
-        ("Confluence (0.5)", test_confluence_requirements),
-        ("MTF Conflict (0.6)", test_mtf_conflict_penalty),
+        ("Confluence (0.55)", test_confluence_requirements),
+        ("MTF Conflict (0.5)", test_mtf_conflict_penalty),
         ("Neutral Regime Filter", test_neutral_regime_filter),
         ("Overall Selectivity", test_overall_selectivity),
     ]

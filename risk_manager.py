@@ -37,8 +37,8 @@ class RiskManager:
         self.last_drawdown_warning_level = 0.0  # Track when we last warned about drawdown
         self.drawdown_warning_threshold = 0.10  # Only warn when drawdown increases by 10%
         
-        # PROFITABILITY FIX: Daily loss limit to prevent catastrophic losses
-        self.daily_loss_limit = 0.10  # Stop trading if lose 10% in a day
+        # LOSS PREVENTION: Stricter daily loss limit to prevent catastrophic losses
+        self.daily_loss_limit = 0.05  # Stop trading if lose 5% in a day (reduced from 10%)
         self.daily_start_balance = 0.0
         self.daily_loss = 0.0
         from datetime import date
@@ -46,7 +46,7 @@ class RiskManager:
         
         # PRIORITY 1 SAFETY: Hard guardrails
         self.kill_switch_active = False  # Global kill switch - halts new entries, allows exits
-        self.max_risk_per_trade_pct = 0.05  # Max 5% of equity per trade
+        self.max_risk_per_trade_pct = 0.03  # Max 3% of equity per trade (reduced from 5%)
         self.kill_switch_reason = ""  # Reason for kill switch activation
         
         # Performance streak tracking for adaptive leverage
@@ -546,11 +546,11 @@ class RiskManager:
         Returns:
             Stop loss percentage (e.g., 0.05 for 5%)
         """
-        # PROFITABILITY FIX: Wider base stop loss to reduce premature stop-outs
-        # Previous 1.2% was too tight, causing excessive losses from stop-outs
-        # With 10x leverage: 2.0% price stop = 20% ROI loss (more reasonable)
-        # This gives positions more room to breathe and develop favorable moves
-        base_stop = 0.020  # 2.0% (increased from 1.2%)
+        # LOSS PREVENTION: Tighter base stop loss to protect capital
+        # Reduced from 2.0% to 1.5% to prevent larger losses
+        # With 10x leverage: 1.5% price stop = 15% ROI loss (reasonable protection)
+        # This protects capital while still giving positions some room
+        base_stop = 0.015  # 1.5% (reduced from 2.0%)
         
         # Adjust based on volatility (adaptive approach)
         # Higher volatility = wider stop loss to avoid premature stops
@@ -563,15 +563,15 @@ class RiskManager:
             volatility_adjustment = volatility * 0.8  # Moderate widening
         else:
             # High volatility - larger adjustment but capped
-            volatility_adjustment = min(volatility * 1.0, 0.020)  # Cap at 2%
+            volatility_adjustment = min(volatility * 1.0, 0.015)  # Cap at 1.5%
         
         stop_loss = base_stop + volatility_adjustment
         
-        # PROFITABILITY FIX: Wider caps to allow positions to develop
-        # Cap between 1.5% and 4.0% (increased from 1.0%-2.5%)
-        # With 10x leverage: 4.0% price stop = 40% ROI (emergency level)
-        # This ensures stops trigger AFTER the position has room to work
-        stop_loss = max(0.018, min(stop_loss, 0.040))
+        # LOSS PREVENTION: Tighter caps to limit maximum loss per trade
+        # Cap between 1.2% and 3.0% (reduced from 1.5%-4.0%)
+        # With 10x leverage: 3.0% price stop = 30% ROI (maximum acceptable loss)
+        # This ensures we never risk more than 30% ROI on any single trade
+        stop_loss = max(0.012, min(stop_loss, 0.030))
         
         return stop_loss
     

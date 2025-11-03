@@ -20,11 +20,28 @@ except ImportError:
 class SignalGenerator:
     """Generate trading signals based on multiple indicators"""
     
+    # Loss prevention thresholds - adjustable for fine-tuning
+    MIN_CONFLUENCE_THRESHOLD = 0.55  # Minimum confluence score for penalty
+    VERY_WEAK_CONFLUENCE_THRESHOLD = 0.40  # Below this, reject signal entirely
+    
+    # Volatility filter thresholds
+    EXTREME_HIGH_VOLATILITY_BB = 0.12  # Max Bollinger Band width (12%)
+    EXTREME_HIGH_VOLATILITY_ATR = 0.08  # Max ATR as % of price (8%)
+    EXTREME_LOW_VOLATILITY_BB = 0.008  # Min Bollinger Band width (0.8%)
+    EXTREME_LOW_VOLATILITY_ATR = 0.005  # Min ATR as % of price (0.5%)
+    
+    # Choppy market detection thresholds
+    CHOPPY_MARKET_EMA_DIFF = 0.01  # Max EMA difference for choppy market (1%)
+    CHOPPY_MARKET_ROC = 1.5  # Max ROC for choppy market
+    
+    # Risk-reward requirements
+    MIN_RISK_REWARD_RATIO = 2.0  # Minimum R:R ratio required
+    
     def __init__(self):
         self.logger = Logger.get_logger()
         self.strategy_logger = Logger.get_strategy_logger()
         self.market_regime = 'neutral'  # 'trending', 'ranging', 'neutral'
-        self.adaptive_threshold = 0.68  # INCREASED from 0.62 for stronger, more profitable trades
+        self.adaptive_threshold = 0.72  # FURTHER INCREASED from 0.68 to prevent money loss - ultra-selective
         self.pattern_recognizer = PatternRecognition()
         self.volume_profile_analyzer = VolumeProfile()
         
@@ -390,12 +407,12 @@ class SignalGenerator:
             reasons['bollinger'] = 'above upper band'
         
         # 6. Volume (confirmation signal - amplifies existing signals)
-        # PROFITABILITY FIX: Require minimum volume to avoid low-liquidity traps
+        # LOSS PREVENTION: Require strong volume to avoid low-liquidity traps
         volume_ratio = indicators.get('volume_ratio', 0)
-        if volume_ratio < 0.9:
-            # Below-average volume - signal is unreliable (INCREASED from 0.8)
-            buy_signals *= 0.6  # Penalize more heavily (INCREASED from 0.7)
-            sell_signals *= 0.6
+        if volume_ratio < 1.0:
+            # Below-average volume - signal is unreliable (FURTHER INCREASED from 0.9)
+            buy_signals *= 0.5  # Penalize even more heavily (INCREASED from 0.6)
+            sell_signals *= 0.5
             reasons['volume'] = 'low volume - weak signal'
         elif volume_ratio > 1.5:
             reasons['volume'] = 'high volume confirmation'
@@ -496,11 +513,11 @@ class SignalGenerator:
             confidence = 0.0
             reasons['equal_signals'] = 'buy and sell signals balanced'
         
-        # Adaptive threshold based on market regime - HIGHLY SELECTIVE
+        # Adaptive threshold based on market regime - ULTRA-SELECTIVE to prevent losses
         if self.market_regime == 'trending':
-            min_confidence = 0.65  # INCREASED from 0.58 for stronger trending signals
+            min_confidence = 0.70  # FURTHER INCREASED from 0.65 - only strongest trending signals
         elif self.market_regime == 'ranging':
-            min_confidence = 0.72  # INCREASED from 0.65 - ranging markets need very strong signals
+            min_confidence = 0.76  # FURTHER INCREASED from 0.72 - ranging markets are dangerous
         else:
             min_confidence = self.adaptive_threshold
         
@@ -509,18 +526,18 @@ class SignalGenerator:
             signal = 'HOLD'
             reasons['confidence'] = f'too low ({confidence:.2f} < {min_confidence:.2f})'
         
-        # PROFITABILITY FIX: Require minimum signal strength ratio
+        # LOSS PREVENTION: Require even stronger signal strength ratio
         # This prevents weak trades where buy/sell signals are too close
         if signal != 'HOLD':
             weaker_signal = min(buy_signals, sell_signals)
             stronger_signal = max(buy_signals, sell_signals)
             if stronger_signal > 0:
                 signal_ratio = stronger_signal / (weaker_signal + 1)  # Add 1 to avoid div by 0
-                # Require at least 2.5:1 ratio between winning and losing signals (INCREASED from 2.0:1)
-                if signal_ratio < 2.5:
+                # Require at least 3.0:1 ratio - FURTHER INCREASED from 2.5:1 to prevent losses
+                if signal_ratio < 3.0:
                     signal = 'HOLD'
                     confidence = 0.0
-                    reasons['weak_signal_ratio'] = f'insufficient signal strength ({signal_ratio:.2f}:1, need 2.5:1)'
+                    reasons['weak_signal_ratio'] = f'insufficient signal strength ({signal_ratio:.2f}:1, need 3.0:1)'
         
         # PROFITABILITY FIX: Require trend and momentum alignment for non-extreme conditions
         # STRENGTHENED: Require BOTH trend AND momentum alignment (not just OR) for stronger signals
@@ -557,10 +574,15 @@ class SignalGenerator:
                 confidence *= (1.0 + (confluence_score - 0.7) * 0.5)  # Up to 15% boost
                 confidence = min(confidence, 0.99)
                 reasons['confluence'] = f'strong ({confluence_score:.1%})'
-            elif confluence_score < 0.5:  # INCREASED from 0.4 - more selective
+            elif confluence_score < self.MIN_CONFLUENCE_THRESHOLD:  # Use class constant
                 # Weak confluence - reduce confidence more aggressively
-                confidence *= 0.80  # INCREASED penalty from 0.85
+                confidence *= 0.75  # FURTHER INCREASED penalty from 0.80
                 reasons['confluence'] = f'weak ({confluence_score:.1%})'
+                # If confluence is too weak, reject the signal entirely
+                if confluence_score < self.VERY_WEAK_CONFLUENCE_THRESHOLD:  # Use class constant
+                    signal = 'HOLD'
+                    confidence = 0.0
+                    reasons['very_weak_confluence'] = f'extremely weak signal alignment ({confluence_score:.1%})'
         
         # Apply multi-timeframe confidence boost
         if signal != 'HOLD' and mtf_analysis['trend_alignment'] != 'neutral':
@@ -570,10 +592,10 @@ class SignalGenerator:
                 confidence *= mtf_analysis['confidence_multiplier']
                 confidence = min(confidence, 0.99)  # Cap at 99%
                 reasons['mtf_boost'] = f"+{(mtf_analysis['confidence_multiplier']-1)*100:.0f}%"
-            # MTF conflict handling: When higher timeframes disagree, be MORE conservative
+            # MTF conflict handling: When higher timeframes disagree, be VERY conservative
             elif (signal == 'BUY' and mtf_analysis['trend_alignment'] == 'bearish') or \
                  (signal == 'SELL' and mtf_analysis['trend_alignment'] == 'bullish'):
-                confidence *= 0.6  # Stronger penalty for conflicting signals (INCREASED from 0.7)
+                confidence *= 0.5  # Even stronger penalty for conflicting signals (INCREASED from 0.6)
                 # Keep original threshold - don't make it easier to pass when there's conflict
                 reasons['mtf_conflict'] = 'warning'
                 if confidence < min_confidence:
@@ -587,6 +609,54 @@ class SignalGenerator:
                 signal = 'HOLD'
                 confidence = 0.0
                 reasons['neutral_regime_no_mtf'] = 'neutral market + no MTF support requires >75% confidence'
+        
+        # LOSS PREVENTION: Reject signals in extremely volatile conditions (whipsaw risk)
+        bb_width = indicators.get('bb_width', 0)
+        atr_normalized = indicators.get('atr', 0) / indicators.get('close', 1) if indicators.get('close', 0) > 0 else 0
+        if signal != 'HOLD':
+            # Avoid extreme volatility that leads to stop-loss hunting
+            if bb_width > self.EXTREME_HIGH_VOLATILITY_BB or atr_normalized > self.EXTREME_HIGH_VOLATILITY_ATR:
+                signal = 'HOLD'
+                confidence = 0.0
+                reasons['extreme_volatility'] = f'dangerous volatility (bb_width: {bb_width:.3f}, atr: {atr_normalized:.3f})'
+            # Also avoid very low volatility (low profit potential, high slippage risk)
+            elif bb_width < self.EXTREME_LOW_VOLATILITY_BB or atr_normalized < self.EXTREME_LOW_VOLATILITY_ATR:
+                signal = 'HOLD'
+                confidence = 0.0
+                reasons['insufficient_volatility'] = f'too low volatility for profitable trade (bb_width: {bb_width:.3f})'
+        
+        # LOSS PREVENTION: Check for choppy market conditions using ADX-like logic
+        if signal != 'HOLD':
+            # Calculate trend strength
+            ema_12 = indicators.get('ema_12', 0)
+            ema_26 = indicators.get('ema_26', 0)
+            ema_diff = abs(ema_12 - ema_26) / ema_26 if ema_26 > 0 else 0
+            roc = abs(indicators.get('roc', 0))
+            
+            # Choppy market: weak trend + conflicting signals
+            is_choppy = (ema_diff < self.CHOPPY_MARKET_EMA_DIFF and roc < self.CHOPPY_MARKET_ROC)
+            if is_choppy:
+                signal = 'HOLD'
+                confidence = 0.0
+                reasons['choppy_market'] = f'no clear trend (ema_diff: {ema_diff:.3%}, roc: {roc:.2f})'
+        
+        # LOSS PREVENTION: Require strong risk-reward ratio
+        if signal != 'HOLD':
+            # Calculate potential risk-reward based on volatility
+            close = indicators.get('close', 0)
+            if close > 0 and bb_width > 0:
+                # Estimate stop loss distance (1.5x ATR or BB width)
+                estimated_stop_distance = max(atr_normalized * 1.5, bb_width / 2)
+                # Estimate take profit potential (2x ATR or 1.5x BB width)
+                estimated_tp_potential = max(atr_normalized * 2.5, bb_width * 1.5)
+                
+                # Require minimum risk-reward ratio
+                if estimated_stop_distance > 0:
+                    risk_reward = estimated_tp_potential / estimated_stop_distance
+                    if risk_reward < self.MIN_RISK_REWARD_RATIO:  # Use class constant
+                        signal = 'HOLD'
+                        confidence = 0.0
+                        reasons['poor_risk_reward'] = f'insufficient R:R ratio ({risk_reward:.2f}:1, need {self.MIN_RISK_REWARD_RATIO}:1)'
         
         self.logger.debug(f"Signal: {signal}, Confidence: {confidence:.2f}, Regime: {self.market_regime}, Buy: {buy_signals:.1f}/{total_signals:.1f}, Sell: {sell_signals:.1f}/{total_signals:.1f}")
         
