@@ -546,30 +546,32 @@ class RiskManager:
         Returns:
             Stop loss percentage (e.g., 0.05 for 5%)
         """
-        # MONEY LOSS FIX: Tighter base stop loss to prevent excessive losses with leverage
-        # With average leverage of 6x, we want max -10% ROI loss on stop = ~1.7% price stop
-        # Base stop loss reduced from 1.5% to 1.2% for better protection
-        base_stop = 0.012  # 1.2%
+        # PROFITABILITY FIX: Wider base stop loss to reduce premature stop-outs
+        # Previous 1.2% was too tight, causing excessive losses from stop-outs
+        # With 10x leverage: 2.0% price stop = 20% ROI loss (more reasonable)
+        # This gives positions more room to breathe and develop favorable moves
+        base_stop = 0.020  # 2.0% (increased from 1.2%)
         
         # Adjust based on volatility (adaptive approach)
         # Higher volatility = wider stop loss to avoid premature stops
+        # Use smaller multipliers to keep stops within reasonable range
         if volatility < 0.02:
-            # Low volatility - tighter stops
-            volatility_adjustment = volatility * 1.0  # Reduced multiplier from 1.2
+            # Low volatility - minimal adjustment
+            volatility_adjustment = volatility * 0.5  # Slight widening
         elif volatility < 0.05:
-            # Medium volatility - standard adjustment
-            volatility_adjustment = volatility * 1.2  # Reduced from 1.5
+            # Medium volatility - moderate adjustment
+            volatility_adjustment = volatility * 0.8  # Moderate widening
         else:
-            # High volatility - wider stops but capped
-            volatility_adjustment = min(volatility * 1.5, 0.02)  # Reduced cap from 0.03 to 0.02
+            # High volatility - larger adjustment but capped
+            volatility_adjustment = min(volatility * 1.0, 0.020)  # Cap at 2%
         
         stop_loss = base_stop + volatility_adjustment
         
-        # MONEY LOSS FIX: Tighter caps to prevent excessive losses with leverage
-        # Cap between 1.0% and 2.5% (reduced from 1.0%-4.0%)
-        # With 6x leverage: 2.5% price stop = -15% ROI (at emergency threshold)
-        # This ensures stops trigger BEFORE emergency stops
-        stop_loss = max(0.010, min(stop_loss, 0.025))
+        # PROFITABILITY FIX: Wider caps to allow positions to develop
+        # Cap between 1.5% and 4.0% (increased from 1.0%-2.5%)
+        # With 10x leverage: 4.0% price stop = 40% ROI (emergency level)
+        # This ensures stops trigger AFTER the position has room to work
+        stop_loss = max(0.015, min(stop_loss, 0.040))
         
         return stop_loss
     
