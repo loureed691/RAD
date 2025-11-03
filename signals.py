@@ -24,7 +24,7 @@ class SignalGenerator:
         self.logger = Logger.get_logger()
         self.strategy_logger = Logger.get_strategy_logger()
         self.market_regime = 'neutral'  # 'trending', 'ranging', 'neutral'
-        self.adaptive_threshold = 0.68  # INCREASED from 0.62 for stronger, more profitable trades
+        self.adaptive_threshold = 0.65  # Balanced threshold for quality signals (reduced from overly restrictive 0.68)
         self.pattern_recognizer = PatternRecognition()
         self.volume_profile_analyzer = VolumeProfile()
         
@@ -496,11 +496,11 @@ class SignalGenerator:
             confidence = 0.0
             reasons['equal_signals'] = 'buy and sell signals balanced'
         
-        # Adaptive threshold based on market regime - HIGHLY SELECTIVE
+        # Adaptive threshold based on market regime - SELECTIVE
         if self.market_regime == 'trending':
-            min_confidence = 0.65  # INCREASED from 0.58 for stronger trending signals
+            min_confidence = 0.60  # Balanced for trending signals (reduced from overly restrictive 0.65)
         elif self.market_regime == 'ranging':
-            min_confidence = 0.72  # INCREASED from 0.65 - ranging markets need very strong signals
+            min_confidence = 0.68  # Higher threshold for ranging markets (reduced from overly restrictive 0.72)
         else:
             min_confidence = self.adaptive_threshold
         
@@ -516,16 +516,16 @@ class SignalGenerator:
             stronger_signal = max(buy_signals, sell_signals)
             if stronger_signal > 0:
                 signal_ratio = stronger_signal / (weaker_signal + 1)  # Add 1 to avoid div by 0
-                # Require at least 2.5:1 ratio between winning and losing signals (INCREASED from 2.0:1)
-                if signal_ratio < 2.5:
+                # Require at least 2.0:1 ratio between winning and losing signals (balanced)
+                if signal_ratio < 2.0:
                     signal = 'HOLD'
                     confidence = 0.0
-                    reasons['weak_signal_ratio'] = f'insufficient signal strength ({signal_ratio:.2f}:1, need 2.5:1)'
+                    reasons['weak_signal_ratio'] = f'insufficient signal strength ({signal_ratio:.2f}:1, need 2.0:1)'
         
         # PROFITABILITY FIX: Require trend and momentum alignment for non-extreme conditions
-        # STRENGTHENED: Require BOTH trend AND momentum alignment (not just OR) for stronger signals
-        if signal != 'HOLD' and rsi > 25 and rsi < 75:  # Not in extreme oversold/overbought (wider range)
-            # Check if trend and momentum agree with the signal
+        # Require trend alignment and at least one momentum indicator
+        if signal != 'HOLD' and rsi > 25 and rsi < 75:  # Not in extreme oversold/overbought
+            # Check if trend and at least one momentum indicator agree with the signal
             ema_12 = indicators.get('ema_12', 0)
             ema_26 = indicators.get('ema_26', 0)
             momentum = indicators.get('momentum', 0)
@@ -533,21 +533,21 @@ class SignalGenerator:
             macd_signal = indicators.get('macd_signal', 0)
             
             if signal == 'BUY':
-                # For BUY, require BOTH bullish trend AND bullish momentum (STRENGTHENED from OR)
+                # For BUY, require bullish trend AND at least one bullish momentum indicator
                 trend_bullish = ema_12 > ema_26
-                momentum_bullish = momentum > 0 and macd > macd_signal
+                momentum_bullish = momentum > 0 or macd > macd_signal
                 if not (trend_bullish and momentum_bullish):
                     signal = 'HOLD'
                     confidence = 0.0
-                    reasons['trend_momentum_mismatch'] = 'both trend AND momentum must align with BUY'
+                    reasons['trend_momentum_mismatch'] = 'trend and momentum must align with BUY'
             elif signal == 'SELL':
-                # For SELL, require BOTH bearish trend AND bearish momentum (STRENGTHENED from OR)
+                # For SELL, require bearish trend AND at least one bearish momentum indicator
                 trend_bearish = ema_12 < ema_26
-                momentum_bearish = momentum < 0 and macd < macd_signal
+                momentum_bearish = momentum < 0 or macd < macd_signal
                 if not (trend_bearish and momentum_bearish):
                     signal = 'HOLD'
                     confidence = 0.0
-                    reasons['trend_momentum_mismatch'] = 'both trend AND momentum must align with SELL'
+                    reasons['trend_momentum_mismatch'] = 'trend and momentum must align with SELL'
         
         # Apply confluence scoring boost (NEW)
         if signal != 'HOLD':
@@ -583,10 +583,10 @@ class SignalGenerator:
         # ADDITIONAL FILTER: Reject signals with no multi-timeframe support in neutral regime
         if signal != 'HOLD' and self.market_regime == 'neutral' and mtf_analysis.get('trend_alignment') == 'neutral':
             # In uncertain conditions, require either strong confidence or MTF confirmation
-            if confidence < 0.75:  # Very high threshold for neutral/neutral combination
+            if confidence < 0.70:  # High threshold for neutral/neutral combination (reduced from overly restrictive 0.75)
                 signal = 'HOLD'
                 confidence = 0.0
-                reasons['neutral_regime_no_mtf'] = 'neutral market + no MTF support requires >75% confidence'
+                reasons['neutral_regime_no_mtf'] = 'neutral market + no MTF support requires >70% confidence'
         
         self.logger.debug(f"Signal: {signal}, Confidence: {confidence:.2f}, Regime: {self.market_regime}, Buy: {buy_signals:.1f}/{total_signals:.1f}, Sell: {sell_signals:.1f}/{total_signals:.1f}")
         
