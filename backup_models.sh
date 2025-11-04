@@ -73,8 +73,12 @@ restore() {
         BACKUP_NAME="$1"
         RESTORE_PATH="$BACKUP_DIR/$BACKUP_NAME"
     else
-        # Get the latest backup
-        BACKUP_NAME=$(ls -1t "$BACKUP_DIR" | head -1)
+        # Get the latest backup (handle empty directory safely)
+        BACKUP_NAME=$(ls -1t "$BACKUP_DIR" 2>/dev/null | head -1)
+        if [ -z "$BACKUP_NAME" ]; then
+            echo -e "${RED}Error: No backups found${NC}"
+            exit 1
+        fi
         RESTORE_PATH="$BACKUP_DIR/$BACKUP_NAME"
         echo -e "${YELLOW}No backup specified, using latest: $BACKUP_NAME${NC}"
     fi
@@ -97,8 +101,14 @@ restore() {
         exit 0
     fi
     
-    # Copy backup files to models directory
-    cp -v "$RESTORE_PATH"/* "$MODELS_DIR/" 2>/dev/null || true
+    # Copy backup files to models directory (check if files exist first)
+    FILE_COUNT=$(find "$RESTORE_PATH" -maxdepth 1 -type f | wc -l)
+    if [ "$FILE_COUNT" -eq 0 ]; then
+        echo -e "${RED}Error: No files found in backup${NC}"
+        exit 1
+    fi
+    
+    find "$RESTORE_PATH" -maxdepth 1 -type f -exec cp -v {} "$MODELS_DIR/" \;
     
     echo -e "${GREEN}✓ Models restored successfully!${NC}"
     echo "Restored from: $RESTORE_PATH"
@@ -134,15 +144,19 @@ cleanup() {
         exit 0
     fi
     
-    # Keep only the last 5 backups
-    BACKUP_COUNT=$(ls -1 "$BACKUP_DIR" | wc -l)
+    # Keep only the last 5 backups (handle empty directory and spaces in filenames safely)
+    BACKUP_COUNT=$(find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
     
     if [ "$BACKUP_COUNT" -gt 5 ]; then
         echo "Found $BACKUP_COUNT backups, keeping 5 most recent..."
-        ls -1t "$BACKUP_DIR" | tail -n +6 | while read old_backup; do
-            rm -rf "$BACKUP_DIR/$old_backup"
-            echo "Removed: $old_backup"
-        done
+        # Use find with null delimiter for safe filename handling
+        find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\0' 2>/dev/null | \
+            sort -zrn | tail -zn +6 | while IFS= read -r -d '' entry; do
+                # Extract path (skip timestamp)
+                old_backup="${entry#* }"
+                rm -rf "$old_backup"
+                echo "Removed: $(basename "$old_backup")"
+            done
         echo -e "${GREEN}✓ Cleanup complete${NC}"
     else
         echo "Only $BACKUP_COUNT backups found, no cleanup needed"

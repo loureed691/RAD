@@ -48,6 +48,8 @@ logs/
 *.log
 
 # Data and models
+# Note: models/ directory ignore protects the entire directory
+# Individual extensions below provide defense-in-depth for any model files outside models/
 data/
 models/
 models_backups/
