@@ -17,7 +17,7 @@ class SmartTradeFilter:
 
     def __init__(self):
         self.logger = Logger.get_logger()
-        self.min_quality_score = 0.72  # Increased from 0.65 to 0.72 for higher quality trades only
+        self.min_quality_score = 0.72  # Increased from 0.65 to 0.72 (10.8% more selective) for higher quality trades only
         self.trade_history = []
 
     def calculate_trade_quality_score(self,
