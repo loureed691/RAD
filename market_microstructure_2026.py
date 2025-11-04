@@ -504,6 +504,8 @@ class MarketMicrostructure2026:
                 'signal_count': spoof_signals
             }
 
+        except Exception as e:
+            self.logger.error(f"Error detecting spoofing: {e}")
             return {
                 'spoofing_detected': False,
                 'confidence': 0.0
