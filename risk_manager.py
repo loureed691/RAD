@@ -61,7 +61,7 @@ class RiskManager:
         
         # PRIORITY 1 SAFETY: Hard guardrails
         self.kill_switch_active = False  # Global kill switch - halts new entries, allows exits
-        self.max_risk_per_trade_pct = 0.03  # Max 3% of equity per trade (reduced from 5%)
+        self.max_risk_per_trade_pct = 0.05  # Max 3% of equity per trade (reduced from 5%)
         self.kill_switch_reason = ""  # Reason for kill switch activation
         
         # Performance streak tracking for adaptive leverage
