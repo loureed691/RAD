@@ -88,7 +88,7 @@ adaptive_interval = 10s  # Stay at base rate
 #### Profit Protection Thresholds:
 | Metric | Before | After | Change |
 |--------|--------|-------|--------|
-| First profit tier | 3.0% | 2.5% | -17% (earlier) |
+| First profit tier | 3.0% | 2.5% | -16.7% (earlier) |
 | Large profit tier | 7.0% | 5.0% | -29% (earlier) |
 | Exit threshold score | 50 | 45 | -10% (more responsive) |
 
