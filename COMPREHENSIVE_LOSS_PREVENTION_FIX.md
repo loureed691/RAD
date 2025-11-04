@@ -32,7 +32,7 @@ cls.LEVERAGE = 5  # Reduced to 5x for stability
 - Max loss per trade: **Cut from 30% to 15%** (50% reduction)
 - Liquidation distance: **Doubled** (2x safer)
 - Required win rate: **Lowered** (easier to be profitable)
-- With 1.5% stop: 15% loss → 7.5% loss
+- With 1.5% stop: 1.5% × 10x = 15% loss → 1.5% × 5x = 7.5% loss
 
 **Example**: 
 - Old: 3% stop × 10x = 30% loss 😱
