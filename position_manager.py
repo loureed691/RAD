@@ -13,16 +13,9 @@ from advanced_exit_strategy import AdvancedExitStrategy
 from volume_profile import VolumeProfile
 from smart_trading_enhancements import SmartExitOptimizer
 
-# Import ML Strategy Coordinator 2025 for smart self-learning
-try:
-    from ml_strategy_coordinator_2025 import MLStrategyCoordinator2025
-    ML_COORDINATOR_AVAILABLE = True
-except ImportError:
-    ML_COORDINATOR_AVAILABLE = False
-
 # Import enhanced ML intelligence for adaptive exits
 try:
-    from enhanced_ml_intelligence import AdaptiveExitStrategy
+    from enhanced_ml_intelligence import AdaptiveExitStrategy as MLAdaptiveExitStrategy
     ADAPTIVE_EXIT_AVAILABLE = True
 except ImportError:
     ADAPTIVE_EXIT_AVAILABLE = False
@@ -920,7 +913,7 @@ class PositionManager:
         self.ml_exit_strategy = None
         if ADAPTIVE_EXIT_AVAILABLE:
             try:
-                self.ml_exit_strategy = AdaptiveExitStrategy()
+                self.ml_exit_strategy = MLAdaptiveExitStrategy()
                 self.ml_enabled = True
                 self.logger.info("✅ Smart Self-Learning 2025: ML-adaptive exit strategy enabled")
             except Exception as e:

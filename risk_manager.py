@@ -12,13 +12,6 @@ except ImportError as e:
     Logger.get_logger().error("Numpy is required but not installed. Please install numpy to proceed.")
     raise
 
-# Import ML Strategy Coordinator 2025 for smart self-learning
-try:
-    from ml_strategy_coordinator_2025 import MLStrategyCoordinator2025
-    ML_COORDINATOR_AVAILABLE = True
-except ImportError:
-    ML_COORDINATOR_AVAILABLE = False
-
 # Import Bayesian Kelly for advanced position sizing
 try:
     from bayesian_kelly_2025 import BayesianAdaptiveKelly

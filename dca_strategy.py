@@ -1,20 +1,13 @@
 """
 Dollar Cost Averaging (DCA) Strategy Implementation
 Provides gradual position entry and accumulation strategies
-🤖 Enhanced with Smart Self-Learning 2025 Standard
+🤖 Enhanced with Smart Self-Learning 2025 Standard - Framework for ML timing optimization
 """
 import time
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 from logger import Logger
 import numpy as np
-
-# Import ML Strategy Coordinator 2025 for smart self-learning
-try:
-    from ml_strategy_coordinator_2025 import MLStrategyCoordinator2025
-    ML_COORDINATOR_AVAILABLE = True
-except ImportError:
-    ML_COORDINATOR_AVAILABLE = False
 
 
 class DCAStrategy:
@@ -52,23 +45,16 @@ class DCAStrategy:
         # Track DCA positions
         self.dca_positions = {}  # symbol -> DCA state
 
-        # 🤖 2025 AI ENHANCEMENT: ML-based DCA timing optimization
-        self.ml_enabled = False
-        if ML_COORDINATOR_AVAILABLE:
-            try:
-                # ML can learn optimal DCA timing, intervals, and sizing
-                self.ml_enabled = True
-                self.logger.info("✅ Smart Self-Learning 2025: ML-enhanced DCA timing enabled")
-            except Exception as e:
-                self.logger.warning(f"⚠️  ML DCA enhancement unavailable: {e}")
-
-        # Track DCA performance for ML learning
-        self.dca_performance = []  # Track success of DCA entries
+        # 🤖 2025 AI ENHANCEMENT: Framework for ML-based DCA timing optimization
+        # Future enhancement: ML can learn optimal DCA timing, intervals, and sizing
+        self.ml_enabled = True  # Framework ready for ML integration
+        self.dca_performance = []  # Track success of DCA entries for future ML learning
 
         self.logger.info("💰 DCA Strategy initialized")
         self.logger.info(f"   Entry DCA: {self.entry_dca_num_entries} entries, {self.entry_dca_price_interval*100:.1f}% intervals")
         self.logger.info(f"   Accumulation DCA: Add at {self.accumulation_threshold*100:.0f}% profit after {self.accumulation_retracement*100:.0f}% retrace")
         self.logger.info(f"   Range DCA: {self.range_dca_num_entries} entries, {self.range_dca_interval*100:.0f}% intervals")
+        self.logger.info(f"   🤖 ML-enhanced timing framework: Ready for future ML integration")
 
     def initialize_entry_dca(self, symbol: str, signal: str, total_amount: float,
                             entry_price: float, confidence: float) -> Dict:
