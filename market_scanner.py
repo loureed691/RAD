@@ -562,4 +562,4 @@ class MarketScanner:
             self.last_full_scan = None
             self._cached_priority_pairs = None
             self._last_priority_pairs_update = None
-        self.logger.info("Market scanner cache cleared (including priority pairs)")
+        self.logger.info("Market scanner caches cleared (scan results, candle data, and priority pairs)")
