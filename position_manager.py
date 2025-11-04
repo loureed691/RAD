@@ -107,7 +107,6 @@ class Position:
         self.profit_velocity = 0.0  # Rate of profit change (% per hour)
         
         # Breakeven and profit scaling
-        self.breakeven_moved = False
         self.breakeven_plus_activated = False  # Track if breakeven+ is active
         self.profit_acceleration = 0.0  # Rate of change of profit velocity
         self.trailing_tp_activated = False  # Track if trailing TP is active
