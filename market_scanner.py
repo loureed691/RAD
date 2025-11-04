@@ -40,6 +40,12 @@ class MarketScanner:
         self._cached_futures = None
         self._futures_cache_duration = 300  # Cache futures list for 5 minutes
 
+        # OPTIMIZATION: Priority pairs caching to reduce API calls
+        # Cache priority pairs list and refresh only hourly instead of every scan
+        self._cached_priority_pairs = None
+        self._last_priority_pairs_update = None
+        self._priority_pairs_refresh_interval = Config.PRIORITY_PAIRS_REFRESH_INTERVAL
+
     def scan_pair(self, symbol: str) -> Tuple[str, float, str, float, Dict]:
         """
         Scan a single trading pair with caching as fallback only
@@ -230,33 +236,68 @@ class MarketScanner:
 
         self.logger.info("Starting market scan with live data...")
 
-        # Get all active futures
-        self.scanning_logger.info("Fetching active futures contracts...")
-        futures = self.client.get_active_futures()
-        if not futures:
-            self.logger.warning("No active futures found, checking for cached results...")
-            self.scanning_logger.warning("⚠ No active futures found, checking for cached results...")
-            # Try to use cached results as fallback
-            if use_cache and self.scan_results_cache and self.last_full_scan:
-                time_since_scan = (datetime.now() - self.last_full_scan).total_seconds()
-                if time_since_scan < self.cache_duration:
-                    self.logger.info(f"Using cached market scan results as fallback ({time_since_scan:.0f}s old)")
-                    self.scanning_logger.info(f"Using cached results as fallback (age: {time_since_scan:.0f}s)")
-                    self.scanning_logger.info(f"{'='*80}\n")
-                    return self.scan_results_cache
-            # No cache available
-            self.scanning_logger.info(f"{'='*80}\n")
-            return []
+        # Check if we can use cached priority pairs (refreshed hourly)
+        current_time = time.time()
+        use_cached_priority_pairs = False
+        
+        if (self._cached_priority_pairs is not None and 
+            self._last_priority_pairs_update is not None):
+            time_since_priority_update = current_time - self._last_priority_pairs_update
+            if time_since_priority_update < self._priority_pairs_refresh_interval:
+                use_cached_priority_pairs = True
+                time_until_refresh = self._priority_pairs_refresh_interval - time_since_priority_update
+                self.logger.info(
+                    f"Using cached priority pairs (refreshed {int(time_since_priority_update)}s ago, "
+                    f"next refresh in {int(time_until_refresh)}s)"
+                )
+                self.scanning_logger.info(
+                    f"Using cached priority pairs ({int(time_since_priority_update)}s old, "
+                    f"refreshes in {int(time_until_refresh)}s)"
+                )
 
-        symbols = [f['symbol'] for f in futures]
-        self.scanning_logger.info(f"Total futures contracts: {len(symbols)}")
+        filtered_symbols = None
+        
+        if use_cached_priority_pairs:
+            # Use cached priority pairs
+            filtered_symbols = self._cached_priority_pairs
+            self.scanning_logger.info(f"Using {len(filtered_symbols)} cached priority pairs")
+        else:
+            # Fetch and filter priority pairs (happens hourly or on first scan)
+            self.scanning_logger.info("Fetching and filtering priority pairs...")
+            
+            # Get all active futures
+            self.scanning_logger.info("Fetching active futures contracts...")
+            futures = self.client.get_active_futures()
+            if not futures:
+                self.logger.warning("No active futures found, checking for cached results...")
+                self.scanning_logger.warning("⚠ No active futures found, checking for cached results...")
+                # Try to use cached results as fallback
+                if use_cache and self.scan_results_cache and self.last_full_scan:
+                    time_since_scan = (datetime.now() - self.last_full_scan).total_seconds()
+                    if time_since_scan < self.cache_duration:
+                        self.logger.info(f"Using cached market scan results as fallback ({time_since_scan:.0f}s old)")
+                        self.scanning_logger.info(f"Using cached results as fallback (age: {time_since_scan:.0f}s)")
+                        self.scanning_logger.info(f"{'='*80}\n")
+                        return self.scan_results_cache
+                # No cache available
+                self.scanning_logger.info(f"{'='*80}\n")
+                return []
 
-        # Smart filtering: prioritize high-volume pairs
-        self.scanning_logger.info("Filtering high-priority pairs...")
-        filtered_symbols = self._filter_high_priority_pairs(symbols, futures)
+            symbols = [f['symbol'] for f in futures]
+            self.scanning_logger.info(f"Total futures contracts: {len(symbols)}")
 
-        self.logger.info(f"Scanning {len(filtered_symbols)} high-priority pairs (filtered from {len(symbols)} total)...")
-        self.scanning_logger.info(f"Filtered to {len(filtered_symbols)} high-priority pairs")
+            # Smart filtering: prioritize high-volume pairs
+            self.scanning_logger.info("Filtering high-priority pairs...")
+            filtered_symbols = self._filter_high_priority_pairs(symbols, futures)
+            
+            # Cache the priority pairs for future scans
+            self._cached_priority_pairs = filtered_symbols
+            self._last_priority_pairs_update = current_time
+            self.logger.info(f"Priority pairs cached (will refresh in {self._priority_pairs_refresh_interval}s)")
+            self.scanning_logger.info(f"Priority pairs cached (refresh in {self._priority_pairs_refresh_interval}s)")
+
+        self.logger.info(f"Scanning {len(filtered_symbols)} high-priority pairs...")
+        self.scanning_logger.info(f"Scanning {len(filtered_symbols)} high-priority pairs")
         self.scanning_logger.info(f"Max workers: {max_workers}")
         self.scanning_logger.info(f"\nScanning pairs in parallel...")
 
@@ -519,4 +560,6 @@ class MarketScanner:
             self.cache.clear()
             self.scan_results_cache = []
             self.last_full_scan = None
-        self.logger.info("Market scanner cache cleared")
+            self._cached_priority_pairs = None
+            self._last_priority_pairs_update = None
+        self.logger.info("Market scanner cache cleared (including priority pairs)")

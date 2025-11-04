@@ -88,6 +88,7 @@ class Config:
     MAX_WORKERS = int(os.getenv('MAX_WORKERS', '20'))  # 20 workers = fast parallel scanning while staying under API rate limits
     CACHE_DURATION = int(os.getenv('CACHE_DURATION', '300'))  # 5 min cache for scanning (live data always used for trading)
     STALE_DATA_MULTIPLIER = int(os.getenv('STALE_DATA_MULTIPLIER', '2'))  # 2x CHECK_INTERVAL = reasonable tolerance for opportunity data
+    PRIORITY_PAIRS_REFRESH_INTERVAL = int(os.getenv('PRIORITY_PAIRS_REFRESH_INTERVAL', '3600'))  # 1 hour = refresh priority pairs list hourly to reduce API calls
 
     # DCA Strategy Configuration
     ENABLE_DCA = os.getenv('ENABLE_DCA', 'true').lower() in ('true', '1', 'yes')
