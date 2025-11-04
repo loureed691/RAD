@@ -1,7 +1,7 @@
 # RAD - KuCoin Futures Trading Bot
 
-**Last Updated:** October 14, 2025  
-**Version:** 3.1 (2025 AI Edition)
+**Last Updated:** November 4, 2025  
+**Version:** 3.2 (Clean Production Release)
 
 A production-grade, fully automated, self-learning KuCoin Futures trading bot with **cutting-edge 2025 AI features** for maximum profitability. Features institutional-grade risk management, market microstructure analysis, adaptive strategy selection, advanced performance metrics, and research-backed AI enhancements.
 
@@ -28,17 +28,17 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 - ✅ Activates DCA and hedging strategies
 - ✅ Uses optimal scanning intervals (60s)
 
-**Advanced users**: You can override any setting in `.env` - see [AUTO_CONFIG.md](AUTO_CONFIG.md)
+**Advanced users**: You can override any setting in `.env` - see configuration section below.
 
 ---
 
-👉 **NEW: [ML_COORDINATOR_2025.md](ML_COORDINATOR_2025.md) - Unified ML/AI Strategy Framework** 🆕🔥  
-👉 **NEW: [ML_COORDINATOR_STRATEGY_INTEGRATION.md](ML_COORDINATOR_STRATEGY_INTEGRATION.md) - Integration Guide** 🆕  
-👉 **See [2025_AI_ENHANCEMENTS.md](2025_AI_ENHANCEMENTS.md) for latest AI features** 🆕  
-👉 **See [2025_AI_QUICKSTART.md](2025_AI_QUICKSTART.md) for quick integration guide** 🆕  
-👉 **See [2026_ENHANCEMENTS.md](2026_ENHANCEMENTS.md) for advanced features guide**  
-👉 **See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions**
-👉 **See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for web dashboard details** 🆕
+📖 **Documentation:**
+- 👉 [QUICKSTART.md](QUICKSTART.md) - Detailed setup instructions
+- 👉 [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) - Web dashboard details
+- 👉 [API_SETUP.md](API_SETUP.md) - API configuration guide
+- 👉 [DEPLOYMENT.md](DEPLOYMENT.md) - Production deployment
+- 👉 [STRATEGY.md](STRATEGY.md) - Trading strategy details
+- 👉 [CHANGELOG.md](CHANGELOG.md) - Version history
 
 ---
 
@@ -61,7 +61,6 @@ The ultimate unified ML/AI framework that coordinates ALL advanced components:
 - Works with **Stop Loss & Take Profit** (independent adaptive exits)
 - Works with **Hedging Strategy** (portfolio-level protection)
 - Works with all **Risk Management** systems
-- See [ML_COORDINATOR_STRATEGY_INTEGRATION.md](ML_COORDINATOR_STRATEGY_INTEGRATION.md) for details
 
 ### **🤖 Latest AI Enhancements** (October 2025)
 - **Bayesian Adaptive Kelly Criterion** - Dynamic position sizing with Bayesian win rate estimation
