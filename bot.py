@@ -45,14 +45,15 @@ from dca_strategy import DCAStrategy
 from hedging_strategy import HedgingStrategy
 # Dashboard
 from dashboard import TradingDashboard, FLASK_AVAILABLE
-# Unused but valuable modules
+# Previously unused modules - now integrated for enhanced functionality
 from attention_weighting import AttentionFeatureWeighting
 from correlation_matrix import CorrelationMatrix
 from market_impact import MarketImpact
-from order_manager import OrderManager
-from parameter_sensitivity import ParameterSensitivityAnalyzer
-from profiling_analysis import profile_function
+from order_manager import OrderManager, Order, OrderType, OrderSide
 from strategy_auditor import StrategyAuditor
+# Available for use but not yet automatically triggered
+# from parameter_sensitivity import ParameterSensitivityAnalyzer
+# from profiling_analysis import profile_function
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -1078,8 +1079,6 @@ class TradingBot:
         # Open position (first entry if using DCA, full position otherwise)
         # PRODUCTION ENHANCEMENT: Use OrderManager for robust order handling
         try:
-            from order_manager import Order, OrderType, OrderSide
-            
             # Create order through order manager for deduplication and tracking
             order_side = OrderSide.BUY if signal == 'BUY' else OrderSide.SELL
             order = self.order_manager.create_order(
