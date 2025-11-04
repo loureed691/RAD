@@ -1,7 +1,8 @@
 """
 Risk management system for the trading bot
+Enhanced with Smart Self-Learning 2025 Standard for ML-based risk adaptation
 """
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from logger import Logger
 import joblib
 import os
@@ -10,6 +11,20 @@ try:
 except ImportError as e:
     Logger.get_logger().error("Numpy is required but not installed. Please install numpy to proceed.")
     raise
+
+# Import ML Strategy Coordinator 2025 for smart self-learning
+try:
+    from ml_strategy_coordinator_2025 import MLStrategyCoordinator2025
+    ML_COORDINATOR_AVAILABLE = True
+except ImportError:
+    ML_COORDINATOR_AVAILABLE = False
+
+# Import Bayesian Kelly for advanced position sizing
+try:
+    from bayesian_kelly_2025 import BayesianAdaptiveKelly
+    BAYESIAN_KELLY_AVAILABLE = True
+except ImportError:
+    BAYESIAN_KELLY_AVAILABLE = False
 
 class RiskManager:
     """Manage trading risk and position sizing"""
@@ -44,6 +59,17 @@ class RiskManager:
         self.max_open_positions = max_open_positions
         self.logger = Logger.get_logger()
         self.state_path = 'models/risk_manager_state.pkl'
+
+        # 🤖 2025 AI ENHANCEMENT: Initialize ML-based risk adaptation
+        self.ml_enabled = False
+        self.bayesian_kelly = None
+        if BAYESIAN_KELLY_AVAILABLE:
+            try:
+                self.bayesian_kelly = BayesianAdaptiveKelly(base_kelly_fraction=0.25)
+                self.ml_enabled = True
+                self.logger.info("✅ Smart Self-Learning 2025: Bayesian Kelly enabled for adaptive risk")
+            except Exception as e:
+                self.logger.warning(f"⚠️  Bayesian Kelly unavailable: {e}")
 
         # Drawdown tracking for protection
         self.peak_balance = 0.0
@@ -102,6 +128,7 @@ class RiskManager:
     def record_trade_outcome(self, pnl: float):
         """
         Record trade outcome to track win/loss streaks and performance metrics
+        🤖 Enhanced with Smart Self-Learning 2025 Standard
 
         Args:
             pnl: Profit/loss percentage (positive for win, negative for loss)
@@ -111,6 +138,17 @@ class RiskManager:
 
         # Track total trades
         self.total_trades += 1
+
+        # 🤖 2025 AI ENHANCEMENT: Update Bayesian Kelly with trade outcome
+        if self.ml_enabled and self.bayesian_kelly:
+            try:
+                self.bayesian_kelly.update_trade_outcome(
+                    win=is_win,
+                    profit_loss_pct=pnl
+                )
+                self.logger.debug(f"🤖 ML learning: Updated Bayesian Kelly with trade outcome (PnL: {pnl:.2%})")
+            except Exception as e:
+                self.logger.debug(f"ML update error: {e}")
 
         # Update streaks
         if is_win:
@@ -440,9 +478,10 @@ class RiskManager:
     def calculate_position_size(self, balance: float, entry_price: float,
                                stop_loss_price: float, leverage: int,
                                risk_per_trade: float = None, kelly_fraction: float = None,
-                               confidence: float = 1.0) -> float:
+                               confidence: float = 1.0, volatility: float = 0.03) -> float:
         """
         Calculate safe position size based on risk management with optional Kelly Criterion
+        🤖 Enhanced with Smart Self-Learning 2025 Standard
 
         Args:
             balance: Account balance in USDT
@@ -452,6 +491,7 @@ class RiskManager:
             risk_per_trade: Optional override for risk per trade
             kelly_fraction: Optional Kelly Criterion fraction for optimal sizing
             confidence: Signal confidence (0-1) for position size scaling
+            volatility: Market volatility for ML-based adaptation
 
         Returns:
             Position size in contracts
@@ -460,6 +500,20 @@ class RiskManager:
         if balance <= 0:
             self.logger.error(f"Invalid balance: {balance}. Cannot calculate position size.")
             return 0.0
+
+        # 🤖 2025 AI ENHANCEMENT: Use Bayesian Kelly for optimal position sizing
+        if self.ml_enabled and self.bayesian_kelly and kelly_fraction is None:
+            try:
+                ml_recommendation = self.bayesian_kelly.calculate_optimal_position_size(
+                    balance=balance,
+                    confidence=confidence,
+                    market_volatility=volatility
+                )
+                kelly_fraction = ml_recommendation['kelly_details']['adjusted_kelly_fraction']
+                self.logger.debug(f"🤖 ML-based Kelly fraction: {kelly_fraction:.4f} (confidence: {confidence:.2%}, volatility: {volatility:.2%})")
+            except Exception as e:
+                self.logger.debug(f"ML Kelly calculation fallback: {e}")
+                kelly_fraction = None
 
         # Use Kelly Criterion if provided and valid, otherwise use standard risk
         if kelly_fraction is not None and kelly_fraction > 0:

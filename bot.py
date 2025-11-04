@@ -217,6 +217,32 @@ class TradingBot:
         self.logger.info("   ✅ DCA Strategy (Entry, Accumulation, Range)")
         self.logger.info("   ✅ Hedging Strategy (Portfolio protection)")
 
+        # 🤖 2025 SMART SELF-LEARNING STANDARD: Report ML status across all components
+        self.logger.info("")
+        self.logger.info("=" * 60)
+        self.logger.info("🤖 SMART SELF-LEARNING 2025 STANDARD - ML STATUS")
+        self.logger.info("=" * 60)
+        ml_components = []
+        if hasattr(self.risk_manager, 'ml_enabled') and self.risk_manager.ml_enabled:
+            ml_components.append("Risk Manager (Bayesian Kelly)")
+        if hasattr(self.position_manager, 'ml_enabled') and self.position_manager.ml_enabled:
+            ml_components.append("Position Manager (Adaptive Exits)")
+        if hasattr(self.dca_strategy, 'ml_enabled') and self.dca_strategy.ml_enabled:
+            ml_components.append("DCA Strategy (Timing Optimization)")
+        if hasattr(self.hedging_strategy, 'ml_enabled') and self.hedging_strategy.ml_enabled:
+            ml_components.append("Hedging Strategy (Decision Optimization)")
+        if hasattr(self.signal_generator, 'ml_coordinator_enabled') and self.signal_generator.ml_coordinator_enabled:
+            ml_components.append("Signal Generator (ML Coordinator 2025)")
+        
+        if ml_components:
+            self.logger.info(f"✅ ML-ENHANCED COMPONENTS ({len(ml_components)}):")
+            for component in ml_components:
+                self.logger.info(f"   ✅ {component}")
+        else:
+            self.logger.info("ℹ️  ML components not available - using standard algorithms")
+        
+        self.logger.info("=" * 60)
+
         # State
         self.running = False
         self.last_scan_time = None

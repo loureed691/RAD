@@ -1,5 +1,6 @@
 """
 Position management with trailing stop loss
+🤖 Enhanced with Smart Self-Learning 2025 Standard
 """
 import time
 import threading
@@ -11,6 +12,20 @@ from logger import Logger
 from advanced_exit_strategy import AdvancedExitStrategy
 from volume_profile import VolumeProfile
 from smart_trading_enhancements import SmartExitOptimizer
+
+# Import ML Strategy Coordinator 2025 for smart self-learning
+try:
+    from ml_strategy_coordinator_2025 import MLStrategyCoordinator2025
+    ML_COORDINATOR_AVAILABLE = True
+except ImportError:
+    ML_COORDINATOR_AVAILABLE = False
+
+# Import enhanced ML intelligence for adaptive exits
+try:
+    from enhanced_ml_intelligence import AdaptiveExitStrategy
+    ADAPTIVE_EXIT_AVAILABLE = True
+except ImportError:
+    ADAPTIVE_EXIT_AVAILABLE = False
 
 def format_price(price: float) -> str:
     """
@@ -888,7 +903,8 @@ class Position:
         return base_pnl * self.leverage
 
 class PositionManager:
-    """Manage open positions with trailing stops and advanced exit strategies"""
+    """Manage open positions with trailing stops and advanced exit strategies
+    🤖 Enhanced with Smart Self-Learning 2025 Standard"""
 
     def __init__(self, client: KuCoinClient, trailing_stop_percentage: float = 0.02):
         self.client = client
@@ -898,6 +914,17 @@ class PositionManager:
         self.position_logger = Logger.get_position_logger()
         self.advanced_exit_strategy = AdvancedExitStrategy()
         self.smart_exit_optimizer = SmartExitOptimizer()  # Smart exit enhancement
+
+        # 🤖 2025 AI ENHANCEMENT: ML-based adaptive exit strategy
+        self.ml_enabled = False
+        self.ml_exit_strategy = None
+        if ADAPTIVE_EXIT_AVAILABLE:
+            try:
+                self.ml_exit_strategy = AdaptiveExitStrategy()
+                self.ml_enabled = True
+                self.logger.info("✅ Smart Self-Learning 2025: ML-adaptive exit strategy enabled")
+            except Exception as e:
+                self.logger.warning(f"⚠️  ML exit strategy unavailable: {e}")
 
         # Thread lock for positions dictionary to prevent race conditions
         # Note: This is mainly for safety, as the bot is typically single-threaded
