@@ -482,19 +482,23 @@ class TradingBot:
         
         # PRODUCTION ENHANCEMENT: Apply attention-based feature weighting
         # This dynamically adjusts indicator importance based on market regime
+        # The weighted_indicators include attention metadata for ML models and analysis
         try:
             market_regime = self.scanner.signal_generator.detect_market_regime(df)
             attention_weights = self.attention_weighting.calculate_attention_weights(
                 indicators, market_regime
             )
-            # Apply attention weights to indicators for better signal quality
+            # Apply attention weights to indicators - adds attention metadata
+            # Note: This doesn't modify core values but enriches indicators with attention weights
+            # for potential use by ML models and future enhancements
             weighted_indicators = self.attention_weighting.apply_attention_to_indicators(
                 indicators, attention_weights
             )
             self.logger.debug(f"🎯 Attention weights applied for {market_regime} regime")
+            # Use weighted version for remaining calculations
+            indicators = weighted_indicators
         except Exception as e:
             self.logger.debug(f"Attention weighting error (using unweighted): {e}")
-            weighted_indicators = indicators
         
         # 2025 OPTIMIZATION: Enhanced multi-timeframe analysis
         try:
@@ -1087,7 +1091,7 @@ class TradingBot:
                 side=order_side,
                 amount=position_size,
                 leverage=leverage,
-                stop_loss_price=stop_loss_price if 'stop_loss_price' in locals() else None
+                stop_loss_price=stop_loss_price  # Always defined by this point
             )
             
             # Submit order through manager (handles deduplication)
