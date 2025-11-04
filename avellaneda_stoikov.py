@@ -294,8 +294,8 @@ class AvellanedaStoikovStrategy:
         inventory_ratio = inventory_deviation / self.max_inventory if self.max_inventory > 0 else 0
         
         # Adjust sizes to encourage rebalancing
-        # When long (positive inventory), increase bid size and decrease ask size
-        # When short (negative inventory), decrease bid size and increase ask size
+        # When long (positive inventory), decrease bid size and increase ask size to rebalance
+        # When short (negative inventory), increase bid size and decrease ask size to rebalance
         bid_adjustment = 1.0 - (inventory_ratio * 0.5)  # Reduce bid when long
         ask_adjustment = 1.0 + (inventory_ratio * 0.5)  # Reduce ask when short
         
