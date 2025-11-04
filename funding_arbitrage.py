@@ -10,6 +10,7 @@ This is a natural complement to market making as it provides
 steady returns while maintaining delta-neutral positions.
 """
 import numpy as np
+import uuid
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 from logger import Logger
@@ -239,8 +240,8 @@ class FundingArbitrage:
         Returns:
             Position ID
         """
-        self.position_counter += 1
-        position_id = f"funding_{self.position_counter}"
+        # Use UUID for unique position IDs across instances
+        position_id = f"funding_{uuid.uuid4().hex[:8]}"
         
         position = {
             'id': position_id,

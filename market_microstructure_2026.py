@@ -614,7 +614,7 @@ class MarketMicrostructure2026:
             'short_horizon_volatility': short_vol,
             'order_book_imbalance': order_book_imbalance.get('imbalance', 0.0),
             'spread_bps': order_book_imbalance.get('spread_bps', 0.0),
-            'timestamp': datetime.now()
+            'timestamp': datetime.utcnow()  # Use UTC for consistency
         }
 
     def detect_spoofing(self, orderbook_history: List[Dict]) -> Dict:

@@ -185,7 +185,7 @@ class SmartOrderRouter:
         elif strategy == 'min_cost':
             return self._route_min_cost(venue_costs)
         elif strategy == 'split':
-            return self._route_split(venue_costs, amount)
+            return self._route_split(venue_costs, amount, symbol, side)
         else:
             self.logger.warning(f"Unknown strategy {strategy}, using best_price")
             return self._route_best_price(venue_costs)
@@ -230,7 +230,8 @@ class SmartOrderRouter:
         
         return plan
     
-    def _route_split(self, venue_costs: Dict, total_amount: float) -> List[Dict]:
+    def _route_split(self, venue_costs: Dict, total_amount: float,
+                     symbol: str, side: str) -> List[Dict]:
         """
         Split order across multiple venues
         
@@ -250,11 +251,9 @@ class SmartOrderRouter:
         amount1 = total_amount * 0.7
         amount2 = total_amount * 0.3
         
-        # Re-estimate costs for partial amounts
-        cost1 = self.estimate_execution_cost(venue1_id, venue_costs[venue1_id]['symbol'],
-                                             'buy', amount1)
-        cost2 = self.estimate_execution_cost(venue2_id, venue_costs[venue2_id]['symbol'],
-                                             'buy', amount2)
+        # Re-estimate costs for partial amounts with correct side
+        cost1 = self.estimate_execution_cost(venue1_id, symbol, side, amount1)
+        cost2 = self.estimate_execution_cost(venue2_id, symbol, side, amount2)
         
         if not cost1.get('viable') or not cost2.get('viable'):
             # Fallback to single venue
