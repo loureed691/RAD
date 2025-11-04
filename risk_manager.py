@@ -482,11 +482,14 @@ class RiskManager:
         elif confidence < self.CONFIDENCE_THRESHOLD_MED:
             # 75-80% confidence: moderate reduction
             confidence_multiplier = self.CONFIDENCE_MULTIPLIER_MED  # 75% of normal size
-            self.logger.debug(f"Confidence-based sizing: {confidence:.2%} → {confidence_multiplier:.0%} of normal size")
+            self.logger.info(f"Confidence-based sizing: {confidence:.2%} → {confidence_multiplier:.0%} of normal size")
         elif confidence < self.CONFIDENCE_THRESHOLD_HIGH:
             # 80-85% confidence: slight reduction
             confidence_multiplier = self.CONFIDENCE_MULTIPLIER_HIGH  # 90% of normal size
-        # Above 85% confidence: full size (1.0x)
+            self.logger.info(f"Confidence-based sizing: {confidence:.2%} → {confidence_multiplier:.0%} of normal size")
+        else:
+            # Above 85% confidence: full size (1.0x)
+            self.logger.info(f"Confidence-based sizing: {confidence:.2%} → {confidence_multiplier:.0%} of normal size")
         
         # Apply confidence multiplier to risk
         risk = risk * confidence_multiplier
