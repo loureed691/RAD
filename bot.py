@@ -45,6 +45,14 @@ from dca_strategy import DCAStrategy
 from hedging_strategy import HedgingStrategy
 # Dashboard
 from dashboard import TradingDashboard, FLASK_AVAILABLE
+# Unused but valuable modules
+from attention_weighting import AttentionFeatureWeighting
+from correlation_matrix import CorrelationMatrix
+from market_impact import MarketImpact
+from order_manager import OrderManager
+from parameter_sensitivity import ParameterSensitivityAnalyzer
+from profiling_analysis import profile_function
+from strategy_auditor import StrategyAuditor
 
 class TradingBot:
     """Main trading bot that orchestrates all components"""
@@ -184,6 +192,13 @@ class TradingBot:
         self.dca_strategy = DCAStrategy()
         self.hedging_strategy = HedgingStrategy()
         
+        # Previously unused modules - now integrated for enhanced functionality
+        self.attention_weighting = AttentionFeatureWeighting()
+        self.correlation_matrix = CorrelationMatrix(lookback_periods=100)
+        self.market_impact = MarketImpact()
+        self.order_manager = OrderManager(debounce_window_seconds=1.0)
+        self.strategy_auditor = StrategyAuditor()
+        
         self.logger.info("🚀 2026 Advanced Features Activated:")
         self.logger.info("   ✅ Advanced Risk Manager (Regime-aware Kelly)")
         self.logger.info("   ✅ Market Microstructure (Order flow analysis)")
@@ -216,6 +231,13 @@ class TradingBot:
         self.logger.info("💰 DCA & HEDGING STRATEGIES Activated:")
         self.logger.info("   ✅ DCA Strategy (Entry, Accumulation, Range)")
         self.logger.info("   ✅ Hedging Strategy (Portfolio protection)")
+        
+        self.logger.info("🔧 PRODUCTION ENHANCEMENTS Activated:")
+        self.logger.info("   ✅ Attention-Based Feature Weighting (Dynamic indicator importance)")
+        self.logger.info("   ✅ Correlation Matrix (Multi-asset risk management)")
+        self.logger.info("   ✅ Market Impact Analyzer (Optimal order sizing)")
+        self.logger.info("   ✅ Production Order Manager (Robust order handling)")
+        self.logger.info("   ✅ Strategy Auditor (Quality assurance)")
         
         # State
         self.running = False
@@ -339,6 +361,41 @@ class TradingBot:
             self.logger.info(f"Diversification check failed for {symbol}: {div_reason}")
             return False
         
+        # PRODUCTION ENHANCEMENT: Update correlation matrix and check portfolio correlation
+        try:
+            # Update correlation matrix with current price
+            ticker = self.client.get_ticker(symbol)
+            if ticker:
+                self.correlation_matrix.update_price(symbol, ticker.get('last', 0))
+            
+            # Update prices for existing positions
+            for pos_symbol in open_position_symbols:
+                pos_ticker = self.client.get_ticker(pos_symbol)
+                if pos_ticker:
+                    self.correlation_matrix.update_price(pos_symbol, pos_ticker.get('last', 0))
+            
+            # Check if adding this position maintains good diversification
+            if open_position_symbols:
+                should_add = self.correlation_matrix.should_add_position(
+                    symbol, 
+                    open_position_symbols,
+                    max_correlation=0.7,
+                    min_diversification=0.4
+                )
+                
+                if not should_add:
+                    self.logger.info(f"Correlation check failed for {symbol}: Too correlated with existing positions")
+                    return False
+                
+                # Log correlation insights
+                diversification_score = self.correlation_matrix.get_diversification_score(
+                    {sym: 1.0 for sym in open_position_symbols + [symbol]}
+                )
+                self.logger.info(f"📊 Portfolio diversification score: {diversification_score:.2f}")
+                
+        except Exception as e:
+            self.logger.debug(f"Correlation matrix analysis error: {e}")
+        
         # 2026 FEATURE: Calculate portfolio heat before opening position
         open_positions = list(self.position_manager.positions.values())
         
@@ -421,6 +478,22 @@ class TradingBot:
         df = Indicators.calculate_all(ohlcv)
         indicators = Indicators.get_latest_indicators(df)
         volatility = indicators.get('bb_width', 0.03)
+        
+        # PRODUCTION ENHANCEMENT: Apply attention-based feature weighting
+        # This dynamically adjusts indicator importance based on market regime
+        try:
+            market_regime = self.scanner.signal_generator.detect_market_regime(df)
+            attention_weights = self.attention_weighting.calculate_attention_weights(
+                indicators, market_regime
+            )
+            # Apply attention weights to indicators for better signal quality
+            weighted_indicators = self.attention_weighting.apply_attention_to_indicators(
+                indicators, attention_weights
+            )
+            self.logger.debug(f"🎯 Attention weights applied for {market_regime} regime")
+        except Exception as e:
+            self.logger.debug(f"Attention weighting error (using unweighted): {e}")
+            weighted_indicators = indicators
         
         # 2025 OPTIMIZATION: Enhanced multi-timeframe analysis
         try:
@@ -837,6 +910,46 @@ class TradingBot:
             kelly_fraction=kelly_fraction * risk_adjustment if kelly_fraction is not None else None
         )
         
+        # PRODUCTION ENHANCEMENT: Market Impact Analysis and Optimal Order Sizing
+        try:
+            # Get market data for impact estimation
+            ticker = self.client.get_ticker(symbol)
+            if ticker:
+                avg_volume_24h = ticker.get('vol', 0) * entry_price  # Volume in USDT
+                spread_pct = (ticker.get('ask', entry_price) - ticker.get('bid', entry_price)) / entry_price
+                
+                # Estimate market impact
+                order_value = position_size * entry_price * leverage
+                price_impact = self.market_impact.estimate_price_impact(
+                    order_size=order_value,
+                    avg_volume=avg_volume_24h,
+                    volatility=volatility,
+                    spread_pct=spread_pct
+                )
+                
+                # Calculate optimal order size to minimize impact
+                optimal_size = self.market_impact.calculate_optimal_order_size(
+                    desired_size=order_value,
+                    avg_volume=avg_volume_24h,
+                    volatility=volatility,
+                    spread_pct=spread_pct,
+                    max_impact_pct=0.005  # Max 0.5% impact
+                )
+                
+                # If our order is too large, reduce it
+                if optimal_size['recommended_size'] < order_value:
+                    original_position = position_size
+                    position_size = optimal_size['recommended_size'] / (entry_price * leverage)
+                    self.logger.info(f"📊 Market Impact Analysis:")
+                    self.logger.info(f"   Estimated impact: {price_impact:.3%}")
+                    self.logger.info(f"   Position adjusted: {original_position:.4f} → {position_size:.4f}")
+                    self.logger.info(f"   Reason: {optimal_size['reasoning']}")
+                else:
+                    self.logger.debug(f"📊 Market impact acceptable: {price_impact:.3%}")
+                    
+        except Exception as e:
+            self.logger.debug(f"Market impact analysis error: {e}")
+        
         # 2025 OPTIMIZATION: Correlation-based position sizing adjustment
         try:
             # Update price history for correlation tracking
@@ -963,9 +1076,40 @@ class TradingBot:
                     use_dca = False
         
         # Open position (first entry if using DCA, full position otherwise)
-        success = self.position_manager.open_position(
-            symbol, signal, position_size, leverage, stop_loss_percentage
-        )
+        # PRODUCTION ENHANCEMENT: Use OrderManager for robust order handling
+        try:
+            from order_manager import Order, OrderType, OrderSide
+            
+            # Create order through order manager for deduplication and tracking
+            order_side = OrderSide.BUY if signal == 'BUY' else OrderSide.SELL
+            order = self.order_manager.create_order(
+                symbol=symbol,
+                order_type=OrderType.MARKET,
+                side=order_side,
+                amount=position_size,
+                leverage=leverage,
+                stop_loss_price=stop_loss_price if 'stop_loss_price' in locals() else None
+            )
+            
+            # Submit order through manager (handles deduplication)
+            order_success, order_id = self.order_manager.submit_order(order, self.client)
+            
+            if order_success:
+                self.logger.info(f"✅ Order submitted through OrderManager: {order_id}")
+                # Still open through position_manager for compatibility
+                success = self.position_manager.open_position(
+                    symbol, signal, position_size, leverage, stop_loss_percentage
+                )
+            else:
+                self.logger.warning(f"❌ Order submission failed: {order_id}")
+                success = False
+                
+        except Exception as e:
+            self.logger.debug(f"OrderManager error, using direct position open: {e}")
+            # Fallback to direct position opening
+            success = self.position_manager.open_position(
+                symbol, signal, position_size, leverage, stop_loss_percentage
+            )
         
         # If DCA plan created and first entry successful, record it
         if use_dca and success and dca_plan:
@@ -1175,6 +1319,39 @@ class TradingBot:
                     is_healthy, reason = self.perf_monitor.check_health()
                     if not is_healthy:
                         self.logger.warning(f"⚠️  PERFORMANCE WARNING: {reason}")
+                    
+                    # PRODUCTION ENHANCEMENT: Run strategy audit periodically (every 4 hours)
+                    try:
+                        if not hasattr(self, '_last_audit_time'):
+                            self._last_audit_time = datetime.now() - timedelta(hours=5)  # Force first audit
+                        
+                        if (datetime.now() - self._last_audit_time).total_seconds() >= 14400:  # 4 hours
+                            self.logger.info("🔍 Running strategy audit...")
+                            
+                            # Run various audits
+                            self.strategy_auditor.audit_signal_generation()
+                            self.strategy_auditor.audit_risk_management()
+                            self.strategy_auditor.audit_execution_quality()
+                            
+                            # Get and log critical findings
+                            critical_findings = self.strategy_auditor.severity_levels.get('CRITICAL', [])
+                            high_findings = self.strategy_auditor.severity_levels.get('HIGH', [])
+                            
+                            if critical_findings:
+                                self.logger.warning(f"🚨 CRITICAL AUDIT FINDINGS: {len(critical_findings)} issues detected")
+                                for finding in critical_findings[:3]:  # Log top 3
+                                    self.logger.warning(f"   - {finding['component']}: {finding['issue']}")
+                            
+                            if high_findings:
+                                self.logger.info(f"⚠️  HIGH PRIORITY AUDIT FINDINGS: {len(high_findings)} issues detected")
+                            
+                            if not critical_findings and not high_findings:
+                                self.logger.info("✅ Strategy audit passed - no critical issues found")
+                            
+                            self._last_audit_time = datetime.now()
+                            
+                    except Exception as e:
+                        self.logger.debug(f"Strategy audit error: {e}")
                 
                 # Sleep for the configured scan interval before next scan
                 # Check periodically if we should stop - yield control more frequently
