@@ -509,8 +509,10 @@ class RiskManager:
                     confidence=confidence,
                     market_volatility=volatility
                 )
-                kelly_fraction = ml_recommendation['kelly_details']['adjusted_kelly_fraction']
-                self.logger.debug(f"🤖 ML-based Kelly fraction: {kelly_fraction:.4f} (confidence: {confidence:.2%}, volatility: {volatility:.2%})")
+                # Use the adjusted Kelly percentage as the kelly_fraction
+                kelly_fraction = ml_recommendation.get('adjusted_kelly_pct', None)
+                if kelly_fraction:
+                    self.logger.debug(f"🤖 ML-based Kelly fraction: {kelly_fraction:.4f} (confidence: {confidence:.2%}, volatility: {volatility:.2%})")
             except Exception as e:
                 self.logger.debug(f"ML Kelly calculation fallback: {e}")
                 kelly_fraction = None
