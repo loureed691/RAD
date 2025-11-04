@@ -32,6 +32,7 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 
 ---
 
+👉 **NEW: [INTEGRATED_MODULES.md](INTEGRATED_MODULES.md) - Previously Unused Modules Now Active** 🆕🔥  
 👉 **NEW: [ML_COORDINATOR_2025.md](ML_COORDINATOR_2025.md) - Unified ML/AI Strategy Framework** 🆕🔥  
 👉 **NEW: [ML_COORDINATOR_STRATEGY_INTEGRATION.md](ML_COORDINATOR_STRATEGY_INTEGRATION.md) - Integration Guide** 🆕  
 👉 **See [2025_AI_ENHANCEMENTS.md](2025_AI_ENHANCEMENTS.md) for latest AI features** 🆕  
@@ -94,6 +95,14 @@ The ultimate unified ML/AI framework that coordinates ALL advanced components:
 - Learns which indicators matter most in current market
 - 3-7% improvement in signal quality
 - Regime-specific feature boosting
+
+#### 🔧 **Production Enhancements** (November 2025) 🆕
+- **Attention-Based Feature Weighting**: Dynamic indicator importance based on market regime
+- **Correlation Matrix**: Multi-asset correlation tracking for portfolio diversification
+- **Market Impact Analysis**: Optimal order sizing to minimize price impact
+- **Production Order Manager**: Robust order handling with deduplication
+- **Strategy Auditor**: Automated quality assurance every 4 hours
+- See [INTEGRATED_MODULES.md](INTEGRATED_MODULES.md) for full details
 
 ### Advanced Features (2026)
 
