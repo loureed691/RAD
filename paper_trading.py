@@ -16,12 +16,10 @@ Features:
 - Performance metrics
 """
 
-import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
 from datetime import datetime
 from collections import defaultdict
 from logger import Logger
-import numpy as np
 
 
 class PaperTradingEngine:

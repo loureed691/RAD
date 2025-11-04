@@ -3,8 +3,6 @@ Unit tests for Avellaneda-Stoikov market making strategy
 """
 
 import pytest
-import numpy as np
-from datetime import datetime, timedelta
 from avellaneda_stoikov import AvellanedaStoikovStrategy
 
 

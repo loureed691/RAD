@@ -14,8 +14,7 @@ Features:
 - Position aggregation across symbols
 """
 
-import numpy as np
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 from datetime import datetime
 from logger import Logger
 

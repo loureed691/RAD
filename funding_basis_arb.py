@@ -15,8 +15,8 @@ Features:
 """
 
 import numpy as np
-from typing import Dict, List, Optional, Tuple
-from datetime import datetime, timedelta
+from typing import Dict, Optional
+from datetime import datetime
 from collections import deque
 from logger import Logger
 
@@ -129,7 +129,6 @@ class FundingBasisArbitrage:
         # Simple moving average of recent funding rates
         recent_rates = [entry['rate'] for entry in list(self.funding_rate_history[symbol])[-20:]]
         avg_rate = np.mean(recent_rates)
-        std_rate = np.std(recent_rates)
         
         # Mean reversion assumption: extreme rates revert to mean
         current_rate = recent_rates[-1]
@@ -251,14 +250,14 @@ class FundingBasisArbitrage:
             strategy = 'short_perp_long_spot'
             perp_side = 'short'
             spot_side = 'long'
-            expected_funding_pnl = funding_rate  # We receive funding
+            # We receive funding
         else:
             # Negative funding: shorts pay longs
             # Strategy: Long perp, short spot
             strategy = 'long_perp_short_spot'
             perp_side = 'long'
             spot_side = 'short'
-            expected_funding_pnl = -funding_rate  # We receive funding (negative of negative)
+            # We receive funding (negative of negative)
         
         # Calculate position size
         max_position_value = capital_available * self.capital_allocation * self.max_leverage

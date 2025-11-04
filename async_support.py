@@ -11,9 +11,10 @@ Features:
 """
 
 import asyncio
-from typing import Dict, List, Optional, Callable, Any, Coroutine
+from typing import Dict, List, Optional, Callable, Any
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
+from collections import deque
 import time
 from logger import Logger
 
@@ -323,7 +324,7 @@ class RateLimiter:
         """
         self.max_calls = max_calls
         self.period = period
-        self.calls = []  # Using list, but will optimize removal in acquire()
+        self.calls = deque()  # Using deque for O(1) popleft operations
         self.lock = asyncio.Lock()
         self.logger = Logger.get_logger()
     
@@ -336,10 +337,9 @@ class RateLimiter:
         async with self.lock:
             now = time.time()
             
-            # Remove old calls outside the time window using deque for efficiency
-            # Filter in place rather than list comprehension
+            # Remove old calls outside the time window using deque for O(1) popleft
             while self.calls and now - self.calls[0] >= self.period:
-                self.calls.pop(0)
+                self.calls.popleft()
             
             # Check if we need to wait
             if len(self.calls) >= self.max_calls:

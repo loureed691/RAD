@@ -13,7 +13,7 @@ Features:
 """
 
 import sqlite3
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 from datetime import datetime
 from logger import Logger
 import json

@@ -11,20 +11,19 @@ Features:
 - Integration with Grafana
 """
 
-from typing import Dict, List, Optional
-from datetime import datetime
+from typing import Dict
 from logger import Logger
 import threading
 import time
 
 # Try to import prometheus client
 try:
-    from prometheus_client import Counter, Gauge, Histogram, Summary, start_http_server
+    from prometheus_client import Counter, Gauge, Histogram, start_http_server
     from prometheus_client import CollectorRegistry, generate_latest
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
-    Counter = Gauge = Histogram = Summary = None
+    Counter = Gauge = Histogram = None
 
 
 class PrometheusMetrics:

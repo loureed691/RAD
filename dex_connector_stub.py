@@ -8,7 +8,7 @@ This is a stub implementation that defines the interface.
 Actual implementations would connect to specific DEX protocols via Web3.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from datetime import datetime
 from logger import Logger
 

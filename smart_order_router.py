@@ -11,8 +11,7 @@ Features:
 - Adaptive routing based on market conditions
 """
 
-import numpy as np
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 from datetime import datetime
 from logger import Logger
 
