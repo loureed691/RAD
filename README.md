@@ -1,9 +1,9 @@
 # RAD - KuCoin Futures Trading Bot
 
 **Last Updated:** November 4, 2025  
-**Version:** 3.2 (2025 AI Edition + Continuous Scanning)
+**Version:** 3.3 (2025 AI Edition + Market Making)
 
-A production-grade, fully automated, self-learning KuCoin Futures trading bot with **cutting-edge 2025 AI features** for maximum profitability. Features institutional-grade risk management, market microstructure analysis, adaptive strategy selection, advanced performance metrics, and research-backed AI enhancements.
+A production-grade, fully automated, self-learning KuCoin Futures trading bot with **cutting-edge 2025 AI features** and **institutional-grade market making** for maximum profitability. Features institutional-grade risk management, Avellaneda-Stoikov market making, market microstructure analysis, adaptive strategy selection, advanced performance metrics, and research-backed AI enhancements.
 
 ## 🚀 Quick Start
 
@@ -33,6 +33,7 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 
 ---
 
+👉 **NEW: [MARKET_MAKING_GUIDE.md](MARKET_MAKING_GUIDE.md) - Avellaneda-Stoikov Market Making System** 🆕🔥🔥🔥  
 👉 **NEW: [CONTINUOUS_SCANNING_ENHANCEMENTS.md](CONTINUOUS_SCANNING_ENHANCEMENTS.md) - Continuous Scanning & Smarter Trading** 🆕🔥🔥  
 👉 **NEW: [ML_COORDINATOR_2025.md](ML_COORDINATOR_2025.md) - Unified ML/AI Strategy Framework** 🆕🔥  
 👉 **NEW: [ML_COORDINATOR_STRATEGY_INTEGRATION.md](ML_COORDINATOR_STRATEGY_INTEGRATION.md) - Integration Guide** 🆕  
@@ -44,9 +45,22 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 
 ---
 
-## 🆕 What's New in Version 3.2 (November 2025)
+## 🆕 What's New in Version 3.3 (November 2025)
 
-### **🔥 Continuous Scanning & Smarter Trading** (Latest - November 2025) 🆕🔥🔥
+### **💱 Avellaneda-Stoikov Market Making** (Latest - November 2025) 🆕🔥🔥🔥
+Professional-grade market making system with institutional features:
+- **Research-Backed A-S Model** - Optimal bid/ask quoting with inventory management
+- **Microstructure Signals** - Microprice, Kyle's λ, order flow imbalance, short-term volatility
+- **Automatic Delta Hedging** - Maintain near-flat delta exposure with smart hedging
+- **Funding Arbitrage** - Capture basis/funding premiums (perp-spot, cross-venue)
+- **Cross-Venue Connectors** - CEX via CCXT, DEX stubs (dYdX v4, Hyperliquid)
+- **Smart Order Router** - Optimal execution across multiple venues
+- **Realistic Backtesting** - Fill simulation, queue modeling, transaction costs
+- **Expected Performance**: Steady returns from spread capture + funding
+
+See [MARKET_MAKING_GUIDE.md](MARKET_MAKING_GUIDE.md) for complete documentation.
+
+### **🔥 Continuous Scanning & Smarter Trading** (November 2025) 🆕🔥🔥
 Revolutionary enhancements for maximum profitability:
 - **6x Faster Scanning** - Base scan interval reduced from 60s to 10s
 - **Adaptive Intervals** - Speeds up to 5s when opportunities detected
