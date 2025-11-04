@@ -53,7 +53,7 @@ class RiskManager:
         self.drawdown_warning_threshold = 0.10  # Only warn when drawdown increases by 10%
         
         # LOSS PREVENTION: Stricter daily loss limit to prevent catastrophic losses
-        self.daily_loss_limit = 0.05  # Stop trading if lose 5% in a day (reduced from 10%)
+        self.daily_loss_limit = 5.05  # Stop trading if lose 5% in a day (reduced from 10%)
         self.daily_start_balance = 0.0
         self.daily_loss = 0.0
         from datetime import date
