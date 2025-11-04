@@ -183,13 +183,21 @@ class PaperTradingEngine:
             else:
                 fill_price = max(fill_price, order['limit_price'])
         
-        # Calculate fees
+        # Calculate trade value and fees
         trade_value = fill_price * order['size']
-        fees = trade_value * self.fee_rate
+        
+        # Fees are calculated on trade value
+        # For buys: fee added to cost
+        # For sells: fee deducted from proceeds
+        if order['side'] == 'buy':
+            fees = trade_value * self.fee_rate
+            total_cost = trade_value + fees
+        else:
+            fees = trade_value * self.fee_rate
+            net_proceeds = trade_value - fees
         
         # Check if we have enough balance for buy orders
         if order['side'] == 'buy':
-            total_cost = trade_value + fees
             if total_cost > self.balance:
                 order['status'] = 'rejected'
                 order['reject_reason'] = 'Insufficient balance'
@@ -213,9 +221,9 @@ class PaperTradingEngine:
         
         # Update balance
         if order['side'] == 'buy':
-            self.balance -= (trade_value + fees)
+            self.balance -= total_cost  # Already calculated above
         else:
-            self.balance += (trade_value - fees)
+            self.balance += net_proceeds  # Net after fees
         
         self.total_fees += fees
         

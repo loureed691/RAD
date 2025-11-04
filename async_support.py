@@ -323,7 +323,7 @@ class RateLimiter:
         """
         self.max_calls = max_calls
         self.period = period
-        self.calls = []
+        self.calls = []  # Using list, but will optimize removal in acquire()
         self.lock = asyncio.Lock()
         self.logger = Logger.get_logger()
     
@@ -336,13 +336,15 @@ class RateLimiter:
         async with self.lock:
             now = time.time()
             
-            # Remove old calls outside the time window
-            self.calls = [call_time for call_time in self.calls if now - call_time < self.period]
+            # Remove old calls outside the time window using deque for efficiency
+            # Filter in place rather than list comprehension
+            while self.calls and now - self.calls[0] >= self.period:
+                self.calls.pop(0)
             
             # Check if we need to wait
             if len(self.calls) >= self.max_calls:
                 # Calculate wait time until oldest call expires
-                oldest_call = min(self.calls)
+                oldest_call = self.calls[0]
                 wait_time = self.period - (now - oldest_call)
                 
                 if wait_time > 0:

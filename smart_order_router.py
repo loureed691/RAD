@@ -98,6 +98,9 @@ class SmartOrderRouter:
         self.logger.info(f"   Max Venues/Order: {max_venues_per_order}")
         self.logger.info(f"   Latency Weight: {latency_weight:.2f}")
     
+    # Slippage factor for price impact estimation
+    SLIPPAGE_FACTOR = 0.001  # 0.1% per 1x overflow
+    
     def calculate_effective_price(
         self,
         venue: Venue,
@@ -136,7 +139,7 @@ class SmartOrderRouter:
         size_ratio = size / available_size if available_size > 0 else 1.0
         if size_ratio > 1.0:
             # Order larger than available - significant slippage expected
-            slippage_factor = 1 + (size_ratio - 1) * 0.001  # 0.1% per 1x overflow
+            slippage_factor = 1 + (size_ratio - 1) * self.SLIPPAGE_FACTOR
             if side.lower() == 'buy':
                 effective_price *= slippage_factor
             else:

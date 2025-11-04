@@ -26,19 +26,23 @@ jobs:
       
       - name: Run Black (code formatter check)
         run: |
-          black --check --line-length 120 *.py || true
+          black --check --line-length 120 *.py
+        continue-on-error: true
       
       - name: Run Flake8
         run: |
-          flake8 *.py --count --max-line-length=120 --statistics || true
+          flake8 *.py --count --max-line-length=120 --statistics
+        continue-on-error: true
       
       - name: Run Pylint
         run: |
-          pylint *.py --max-line-length=120 || true
+          pylint *.py --max-line-length=120
+        continue-on-error: true
       
       - name: Run MyPy (type checking)
         run: |
-          mypy --ignore-missing-imports *.py || true
+          mypy --ignore-missing-imports *.py
+        continue-on-error: true
 
   test:
     name: Tests

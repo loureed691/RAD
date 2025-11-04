@@ -161,9 +161,21 @@ class AvellanedaStoikovStrategy:
             elapsed = (datetime.now() - self.session_start_time).total_seconds()
             time_remaining = max(0, self.T - elapsed)
         
+        # Bounds checking for numerical stability
+        if self.gamma <= 0 or self.k <= 0:
+            self.logger.warning(f"Invalid parameters: gamma={self.gamma}, k={self.k}")
+            return self.min_spread * mid_price
+        
+        # Prevent numerical overflow in log calculation
+        gamma_over_k = self.gamma / self.k
+        if gamma_over_k > 100:
+            # Use approximation for large gamma/k
+            term2 = (2 / self.gamma) * np.log(gamma_over_k)
+        else:
+            term2 = (2 / self.gamma) * np.log(1 + gamma_over_k)
+        
         # Calculate optimal spread using the AS formula
         term1 = self.gamma * (self.volatility_estimate ** 2) * time_remaining
-        term2 = (2 / self.gamma) * np.log(1 + self.gamma / self.k)
         
         half_spread = (term1 + term2) / 2
         
