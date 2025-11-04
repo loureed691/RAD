@@ -143,11 +143,11 @@ class Config:
             cls.LEVERAGE = int(cls._LEVERAGE_OVERRIDE)
             logger.info(f"📌 Using user-defined LEVERAGE: {cls.LEVERAGE}x")
         else:
-            # LOSS PREVENTION FIX: Reduced leverage from 10x to 5x
-            # This cuts position risk by 50% and reduces liquidation risk
-            # Lower leverage = more stable trading, less catastrophic losses
-            cls.LEVERAGE = 5
-            logger.info(f"🤖 Using default LEVERAGE: {cls.LEVERAGE}x (reduced from 10x for stability)")
+            # Default leverage set to 10x for optimal performance
+            # This provides good leverage while maintaining safety margins
+            # Can be overridden with LEVERAGE environment variable
+            cls.LEVERAGE = 10
+            logger.info(f"🤖 Using default LEVERAGE: {cls.LEVERAGE}x")
 
         if cls._MAX_POSITION_SIZE_OVERRIDE:
             cls.MAX_POSITION_SIZE = float(cls._MAX_POSITION_SIZE_OVERRIDE)
