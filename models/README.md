@@ -58,7 +58,7 @@ Although your models are protected from git operations, it's good practice to ba
 ./backup_models.sh
 
 # Or manually backup the entire directory
-cp -r models/ models_backup_$(date +%Y%m%d_%H%M%S)/
+cp -r models/ "models_backup_$(date +%Y%m%d_%H%M%S)/"
 ```
 
 ## 🆕 First Time Setup

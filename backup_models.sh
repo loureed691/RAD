@@ -102,13 +102,15 @@ restore() {
     fi
     
     # Copy backup files to models directory (check if files exist first)
-    FILE_COUNT=$(find "$RESTORE_PATH" -maxdepth 1 -type f | wc -l)
+    # Check if there are model files to restore
+    FILE_COUNT=$(find "$RESTORE_PATH" -maxdepth 1 -type f \( -name "*.pkl" -o -name "*.keras" -o -name "*.h5" -o -name "*.pt" -o -name "*.npy" -o -name "*.joblib" \) | wc -l)
     if [ "$FILE_COUNT" -eq 0 ]; then
-        echo -e "${RED}Error: No files found in backup${NC}"
+        echo -e "${RED}Error: No model files found in backup${NC}"
         exit 1
     fi
     
-    find "$RESTORE_PATH" -maxdepth 1 -type f -exec cp -v {} "$MODELS_DIR/" \;
+    # Restore only model files (matching backup logic)
+    find "$RESTORE_PATH" -maxdepth 1 -type f \( -name "*.pkl" -o -name "*.keras" -o -name "*.h5" -o -name "*.pt" -o -name "*.npy" -o -name "*.joblib" \) -exec cp -v {} "$MODELS_DIR/" \;
     
     echo -e "${GREEN}✓ Models restored successfully!${NC}"
     echo "Restored from: $RESTORE_PATH"
@@ -144,19 +146,18 @@ cleanup() {
         exit 0
     fi
     
-    # Keep only the last 5 backups (handle empty directory and spaces in filenames safely)
+    # Keep only the last 5 backups (portable approach for both Linux and macOS)
     BACKUP_COUNT=$(find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
     
     if [ "$BACKUP_COUNT" -gt 5 ]; then
         echo "Found $BACKUP_COUNT backups, keeping 5 most recent..."
-        # Use find with null delimiter for safe filename handling
-        find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\0' 2>/dev/null | \
-            sort -zrn | tail -zn +6 | while IFS= read -r -d '' entry; do
-                # Extract path (skip timestamp)
-                old_backup="${entry#* }"
-                rm -rf "$old_backup"
-                echo "Removed: $(basename "$old_backup")"
-            done
+        # Portable approach: use ls with modification time and proper quoting
+        cd "$BACKUP_DIR" || exit 1
+        ls -1t | tail -n +6 | while IFS= read -r old_backup; do
+            rm -rf "$old_backup"
+            echo "Removed: $old_backup"
+        done
+        cd - > /dev/null || exit 1
         echo -e "${GREEN}✓ Cleanup complete${NC}"
     else
         echo "Only $BACKUP_COUNT backups found, no cleanup needed"
