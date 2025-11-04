@@ -54,6 +54,7 @@ This directory contains comprehensive documentation about the RAD KuCoin Futures
 - **THREAD_SAFETY.md** - Thread safety implementation
 - **UNIFIED_LOGGING.md** - Unified logging system
 - **STATE_PERSISTENCE.md** - State tracking and persistence guide 🆕
+- **MODEL_PROTECTION.md** - ML model protection & backup guide 🛡️ 🆕
 
 ### Testing & Development
 - **TESTING_README.md** - Testing guide and best practices
@@ -69,6 +70,9 @@ This directory contains comprehensive documentation about the RAD KuCoin Futures
 
 #### ...understand the AI features
 → Read `README.md`, `2025_AI_ENHANCEMENTS.md`, and `2026_ENHANCEMENTS.md`
+
+#### ...protect my ML learning data
+→ Read `MODEL_PROTECTION.md` and `STATE_PERSISTENCE.md` 🛡️
 
 #### ...optimize performance
 → Read `PERFORMANCE_OPTIMIZATION.md`, `PERFORMANCE_GUIDE.md`, and `STRATEGY.md`
