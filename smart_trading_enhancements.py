@@ -14,13 +14,13 @@ class SmartTradeFilter:
     ML-based trade quality prediction to filter low-quality trades before entry.
     Analyzes historical patterns to predict trade outcome probability.
     """
-    
+
     def __init__(self):
         self.logger = Logger.get_logger()
         self.min_quality_score = 0.65  # Minimum quality score to take trade
         self.trade_history = []
-        
-    def calculate_trade_quality_score(self, 
+
+    def calculate_trade_quality_score(self,
                                      signal_confidence: float,
                                      volatility: float,
                                      volume_ratio: float,
@@ -30,19 +30,19 @@ class SmartTradeFilter:
                                      market_regime: str) -> Dict:
         """
         Calculate comprehensive trade quality score (0-1) based on multiple factors.
-        
+
         Returns:
             Dict with quality_score, components, and recommendation
         """
         try:
             components = {}
             total_score = 0.0
-            
+
             # 1. Signal Confidence Component (30% weight)
             signal_score = signal_confidence
             components['signal_confidence'] = signal_score * 0.30
             total_score += components['signal_confidence']
-            
+
             # 2. Market Conditions Component (25% weight)
             # Optimal volatility: 0.02-0.05 (2-5%)
             if 0.02 <= volatility <= 0.05:
@@ -53,7 +53,7 @@ class SmartTradeFilter:
                 volatility_score = 0.4  # Too high - risky
             else:
                 volatility_score = 0.8
-            
+
             # Volume confirmation
             if volume_ratio > 1.5:
                 volume_score = 1.0
@@ -63,11 +63,11 @@ class SmartTradeFilter:
                 volume_score = 0.6
             else:
                 volume_score = 0.3  # Low volume - risky
-            
+
             market_conditions_score = (volatility_score + volume_score) / 2
             components['market_conditions'] = market_conditions_score * 0.25
             total_score += components['market_conditions']
-            
+
             # 3. Trend Alignment Component (20% weight)
             # Strong trend + extreme RSI = contrarian risk
             # Strong trend + moderate RSI = good
@@ -82,10 +82,10 @@ class SmartTradeFilter:
                 trend_score = 0.8  # Moderate trend
             else:
                 trend_score = 0.5  # Weak trend - mean reversion opportunity
-            
+
             components['trend_alignment'] = trend_score * 0.20
             total_score += components['trend_alignment']
-            
+
             # 4. Recent Performance Component (15% weight)
             # Recent wins boost confidence, recent losses reduce it
             if recent_win_rate > 0.70:
@@ -96,10 +96,10 @@ class SmartTradeFilter:
                 performance_score = 0.7
             else:
                 performance_score = 0.5  # Below 50% - be cautious
-            
+
             components['recent_performance'] = performance_score * 0.15
             total_score += components['recent_performance']
-            
+
             # 5. Market Regime Component (10% weight)
             # Trending markets: favor trend-following
             # Ranging markets: be more selective
@@ -115,7 +115,7 @@ class SmartTradeFilter:
             regime_score = regime_scores.get(market_regime, 0.7)
             components['market_regime'] = regime_score * 0.10
             total_score += components['market_regime']
-            
+
             # Determine recommendation
             if total_score >= 0.75:
                 recommendation = 'EXCELLENT'
@@ -129,7 +129,7 @@ class SmartTradeFilter:
             else:
                 recommendation = 'SKIP'
                 multiplier = 0.0  # Skip trade
-            
+
             return {
                 'quality_score': total_score,
                 'components': components,
@@ -137,7 +137,7 @@ class SmartTradeFilter:
                 'position_multiplier': multiplier,
                 'passed': total_score >= self.min_quality_score
             }
-            
+
         except Exception as e:
             self.logger.error(f"Error calculating trade quality: {e}")
             return {
@@ -147,7 +147,7 @@ class SmartTradeFilter:
                 'position_multiplier': 0.0,
                 'passed': False
             }
-    
+
     def record_trade_outcome(self, quality_score: float, profit_pct: float):
         """Record trade outcome for learning"""
         self.trade_history.append({
@@ -155,7 +155,7 @@ class SmartTradeFilter:
             'profit_pct': profit_pct,
             'timestamp': datetime.now()
         })
-        
+
         # Keep last 200 trades
         if len(self.trade_history) > 200:
             self.trade_history = self.trade_history[-200:]
@@ -166,10 +166,10 @@ class SmartPositionSizer:
     Intelligent position sizing that considers multiple risk factors
     and dynamically adjusts position size for optimal risk/reward.
     """
-    
+
     def __init__(self):
         self.logger = Logger.get_logger()
-        
+
     def calculate_optimal_position_size(self,
                                        base_position_size: float,
                                        signal_confidence: float,
@@ -180,14 +180,14 @@ class SmartPositionSizer:
                                        recent_win_rate: float) -> Dict:
         """
         Calculate optimal position size with multi-factor adjustment.
-        
+
         Returns:
             Dict with adjusted_size, factors, and reasoning
         """
         try:
             adjustments = {}
             multiplier = 1.0
-            
+
             # 1. Signal Confidence Adjustment (±30%)
             if signal_confidence > 0.80:
                 conf_mult = 1.3
@@ -197,15 +197,15 @@ class SmartPositionSizer:
                 conf_mult = 1.0
             else:
                 conf_mult = 0.8
-            
+
             multiplier *= conf_mult
             adjustments['confidence'] = conf_mult
-            
+
             # 2. Trade Quality Adjustment (±25%)
             quality_mult = 0.75 + (trade_quality_score * 0.5)  # 0.75 - 1.25
             multiplier *= quality_mult
             adjustments['quality'] = quality_mult
-            
+
             # 3. Volatility Adjustment (±30%)
             # Higher volatility = smaller position
             if volatility > 0.08:
@@ -216,10 +216,10 @@ class SmartPositionSizer:
                 vol_mult = 1.0  # Normal vol
             else:
                 vol_mult = 0.9  # Very low vol - slightly reduce (choppy)
-            
+
             multiplier *= vol_mult
             adjustments['volatility'] = vol_mult
-            
+
             # 4. Correlation Risk Adjustment (±20%)
             # High correlation with existing positions = reduce size
             if correlation_risk > 0.7:
@@ -230,10 +230,10 @@ class SmartPositionSizer:
                 corr_mult = 0.95
             else:
                 corr_mult = 1.0  # Low correlation - full size
-            
+
             multiplier *= corr_mult
             adjustments['correlation'] = corr_mult
-            
+
             # 5. Portfolio Heat Adjustment (±40%)
             # Total portfolio risk - reduce when already at risk
             if portfolio_heat > 0.8:
@@ -244,10 +244,10 @@ class SmartPositionSizer:
                 heat_mult = 0.9
             else:
                 heat_mult = 1.0
-            
+
             multiplier *= heat_mult
             adjustments['portfolio_heat'] = heat_mult
-            
+
             # 6. Recent Performance Adjustment (±20%)
             # Recent wins = can increase size, recent losses = reduce
             if recent_win_rate > 0.75:
@@ -260,17 +260,17 @@ class SmartPositionSizer:
                 perf_mult = 0.9
             else:
                 perf_mult = 0.8  # Struggling - reduce size
-            
+
             multiplier *= perf_mult
             adjustments['performance'] = perf_mult
-            
+
             # Calculate final position size
             adjusted_size = base_position_size * multiplier
-            
+
             # Safety bounds (don't go below 25% or above 200% of base)
             adjusted_size = max(base_position_size * 0.25, adjusted_size)
             adjusted_size = min(base_position_size * 2.0, adjusted_size)
-            
+
             return {
                 'original_size': base_position_size,
                 'adjusted_size': adjusted_size,
@@ -278,7 +278,7 @@ class SmartPositionSizer:
                 'adjustments': adjustments,
                 'reasoning': self._generate_reasoning(adjustments)
             }
-            
+
         except Exception as e:
             self.logger.error(f"Error calculating position size: {e}")
             return {
@@ -288,20 +288,20 @@ class SmartPositionSizer:
                 'adjustments': {},
                 'reasoning': 'Error - using base size'
             }
-    
+
     def _generate_reasoning(self, adjustments: Dict) -> str:
         """Generate human-readable reasoning for adjustments"""
         reasons = []
-        
+
         for factor, mult in adjustments.items():
             if mult > 1.05:
                 reasons.append(f"+{factor}")
             elif mult < 0.95:
                 reasons.append(f"-{factor}")
-        
+
         if not reasons:
             return "No significant adjustments"
-        
+
         return "Adjusted: " + ", ".join(reasons)
 
 
@@ -310,10 +310,10 @@ class SmartExitOptimizer:
     Intelligent exit timing optimization using ML predictions
     and multi-factor analysis.
     """
-    
+
     def __init__(self):
         self.logger = Logger.get_logger()
-        
+
     def should_exit_early(self,
                          position_pnl: float,
                          position_duration_minutes: int,
@@ -324,14 +324,14 @@ class SmartExitOptimizer:
                          trend_weakening: bool) -> Dict:
         """
         Determine if position should exit early (before stop/target).
-        
+
         Returns:
             Dict with should_exit, confidence, and reason
         """
         try:
             exit_score = 0.0
             reasons = []
-            
+
             # 1. Momentum Reversal Detection
             if position_pnl > 0:
                 # In profit - watch for momentum reversal
@@ -341,42 +341,42 @@ class SmartExitOptimizer:
                 elif current_momentum < -0.015 and current_rsi > 70:
                     exit_score += 40
                     reasons.append("strong_momentum_reversal")
-            
+
             # 2. Profit Protection
             if position_pnl > 0.03:  # >3% profit
                 # Large profit - consider taking it
                 if current_momentum < 0:
                     exit_score += 25
                     reasons.append("protect_large_profit")
-                    
+
                 # Very large profit - strongly consider exit
                 if position_pnl > 0.07:  # >7%
                     exit_score += 30
                     reasons.append("exceptional_profit")
-            
+
             # 3. Time-based Exit (stalled position)
             if position_duration_minutes > 480:  # >8 hours
                 if abs(position_pnl) < 0.01:  # <1% move
                     exit_score += 20
                     reasons.append("stalled_position")
-            
+
             # 4. Volatility Spike
             if volatility > 0.08:  # High volatility
                 if position_pnl > 0:  # In profit
                     exit_score += 15
                     reasons.append("volatility_spike")
-            
+
             # 5. Volume Drying Up
             if volume_ratio < 0.6:  # Very low volume
                 if position_pnl > 0:
                     exit_score += 15
                     reasons.append("low_volume")
-            
+
             # 6. Trend Weakening
             if trend_weakening and position_pnl > 0.015:
                 exit_score += 20
                 reasons.append("trend_weakening")
-            
+
             # 7. RSI Extremes (overbought/oversold)
             if current_rsi > 80 and position_pnl > 0:
                 exit_score += 25
@@ -384,11 +384,11 @@ class SmartExitOptimizer:
             elif current_rsi < 20 and position_pnl < 0:
                 exit_score += 25
                 reasons.append("extreme_oversold")
-            
+
             # Decision threshold
             should_exit = exit_score >= 50
             confidence = min(exit_score / 100.0, 1.0)
-            
+
             return {
                 'should_exit': should_exit,
                 'confidence': confidence,
@@ -396,7 +396,7 @@ class SmartExitOptimizer:
                 'reasons': reasons,
                 'reason_text': ', '.join(reasons) if reasons else 'no clear exit signal'
             }
-            
+
         except Exception as e:
             self.logger.error(f"Error in exit optimization: {e}")
             return {
@@ -413,11 +413,11 @@ class MarketContextAnalyzer:
     Analyzes broader market context to improve trading decisions.
     Considers market-wide conditions, correlations, and sentiment.
     """
-    
+
     def __init__(self):
         self.logger = Logger.get_logger()
         self.market_state_history = []
-        
+
     def analyze_market_context(self,
                                current_pairs_analyzed: int,
                                bullish_signals: int,
@@ -426,13 +426,13 @@ class MarketContextAnalyzer:
                                avg_volume_ratio: float) -> Dict:
         """
         Analyze overall market context for better decision making.
-        
+
         Returns:
             Dict with market health, sentiment, and recommendations
         """
         try:
             total_signals = bullish_signals + bearish_signals
-            
+
             # 1. Market Sentiment
             if total_signals > 0:
                 bullish_pct = bullish_signals / total_signals
@@ -454,7 +454,7 @@ class MarketContextAnalyzer:
             else:
                 sentiment = 'unknown'
                 sentiment_score = 0.5
-            
+
             # 2. Market Activity Level
             signal_density = total_signals / max(current_pairs_analyzed, 1)
             if signal_density > 0.3:
@@ -469,7 +469,7 @@ class MarketContextAnalyzer:
             else:
                 activity = 'low'
                 activity_multiplier = 0.9  # Few opportunities - be selective
-            
+
             # 3. Market Volatility Assessment
             if avg_volatility > 0.06:
                 vol_state = 'high'
@@ -480,7 +480,7 @@ class MarketContextAnalyzer:
             else:
                 vol_state = 'low'
                 vol_recommendation = 'possible_breakout_watch'
-            
+
             # 4. Volume Health
             if avg_volume_ratio > 1.3:
                 volume_health = 'strong'
@@ -488,14 +488,14 @@ class MarketContextAnalyzer:
                 volume_health = 'healthy'
             else:
                 volume_health = 'weak'
-            
+
             # 5. Overall Market Health Score
             health_score = 0.0
             health_score += sentiment_score * 0.3
             health_score += (1.0 if volume_health == 'strong' else 0.7 if volume_health == 'healthy' else 0.4) * 0.3
             health_score += (1.0 if vol_state == 'normal' else 0.7) * 0.2
             health_score += min(signal_density * 3, 1.0) * 0.2
-            
+
             return {
                 'sentiment': sentiment,
                 'sentiment_score': sentiment_score,
@@ -507,7 +507,7 @@ class MarketContextAnalyzer:
                 'market_health_score': health_score,
                 'recommendation': self._generate_market_recommendation(health_score, sentiment, vol_state)
             }
-            
+
         except Exception as e:
             self.logger.error(f"Error analyzing market context: {e}")
             return {
@@ -521,7 +521,7 @@ class MarketContextAnalyzer:
                 'market_health_score': 0.5,
                 'recommendation': 'proceed_with_caution'
             }
-    
+
     def _generate_market_recommendation(self, health_score: float, sentiment: str, vol_state: str) -> str:
         """Generate actionable recommendation based on market context"""
         if health_score > 0.75:
@@ -538,24 +538,24 @@ class VolatilityAdaptiveParameters:
     """
     Dynamically adjusts trading parameters based on market volatility.
     """
-    
+
     def __init__(self):
         self.logger = Logger.get_logger()
-        
+
     def adjust_parameters(self, current_volatility: float, base_params: Dict) -> Dict:
         """
         Adjust trading parameters based on volatility regime.
-        
+
         Args:
             current_volatility: Current market volatility (0-1)
             base_params: Base parameter values
-            
+
         Returns:
             Adjusted parameters
         """
         try:
             adjusted = base_params.copy()
-            
+
             # Volatility regimes
             if current_volatility > 0.08:
                 # High volatility regime
@@ -564,7 +564,7 @@ class VolatilityAdaptiveParameters:
                 adjusted['position_size_multiplier'] = 0.7  # Smaller positions
                 adjusted['trailing_stop_distance'] = 0.035  # Wider trailing stop
                 regime = 'high_volatility'
-                
+
             elif current_volatility > 0.05:
                 # Elevated volatility
                 adjusted['confidence_threshold'] = base_params.get('confidence_threshold', 0.62) * 1.08
@@ -572,7 +572,7 @@ class VolatilityAdaptiveParameters:
                 adjusted['position_size_multiplier'] = 0.85
                 adjusted['trailing_stop_distance'] = 0.025
                 regime = 'elevated_volatility'
-                
+
             elif current_volatility > 0.02:
                 # Normal volatility
                 adjusted['confidence_threshold'] = base_params.get('confidence_threshold', 0.62)
@@ -580,7 +580,7 @@ class VolatilityAdaptiveParameters:
                 adjusted['position_size_multiplier'] = 1.0
                 adjusted['trailing_stop_distance'] = 0.02
                 regime = 'normal_volatility'
-                
+
             else:
                 # Low volatility regime
                 adjusted['confidence_threshold'] = base_params.get('confidence_threshold', 0.62) * 1.1
@@ -588,11 +588,11 @@ class VolatilityAdaptiveParameters:
                 adjusted['position_size_multiplier'] = 0.9  # Slightly smaller (choppy)
                 adjusted['trailing_stop_distance'] = 0.015  # Tighter trailing
                 regime = 'low_volatility'
-            
+
             adjusted['volatility_regime'] = regime
-            
+
             return adjusted
-            
+
         except Exception as e:
             self.logger.error(f"Error adjusting parameters: {e}")
             return base_params

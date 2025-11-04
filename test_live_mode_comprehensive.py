@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 
 class TestLiveModeComprehensive(unittest.TestCase):
     """Comprehensive tests for live mode functionality"""
-    
+
     def test_threading_initialization(self):
         """Test that threading components are properly initialized"""
         with patch('bot.Config.validate'):
@@ -27,17 +27,17 @@ class TestLiveModeComprehensive(unittest.TestCase):
                                         mock_logger.return_value = Mock()
                                         with patch('bot.Logger.setup_specialized_logger') as mock_spec_logger:
                                             mock_spec_logger.return_value = Mock()
-                                            
+
                                             from bot import TradingBot
                                             bot = TradingBot()
-                                            
+
                                             # Check threading attributes exist
                                             self.assertTrue(hasattr(bot, '_scan_thread'))
                                             self.assertTrue(hasattr(bot, '_scan_thread_running'))
                                             self.assertTrue(hasattr(bot, '_scan_lock'))
                                             self.assertTrue(hasattr(bot, '_latest_opportunities'))
                                             self.assertTrue(hasattr(bot, '_last_opportunity_update'))
-    
+
     def test_background_scanner_thread_safety(self):
         """Test that background scanner uses proper thread synchronization"""
         with patch('bot.Config.validate'):
@@ -56,16 +56,16 @@ class TestLiveModeComprehensive(unittest.TestCase):
                                         mock_logger.return_value = Mock()
                                         with patch('bot.Logger.setup_specialized_logger') as mock_spec_logger:
                                             mock_spec_logger.return_value = Mock()
-                                            
+
                                             from bot import TradingBot
                                             bot = TradingBot()
-                                            
+
                                             # Verify lock exists and is a proper lock type
                                             self.assertTrue(hasattr(bot, '_scan_lock'))
                                             # Lock should be callable (has acquire/release methods)
                                             self.assertTrue(hasattr(bot._scan_lock, 'acquire'))
                                             self.assertTrue(hasattr(bot._scan_lock, 'release'))
-    
+
     def test_graceful_shutdown_stops_thread(self):
         """Test that shutdown properly stops background thread"""
         with patch('bot.Config.validate'):
@@ -83,10 +83,10 @@ class TestLiveModeComprehensive(unittest.TestCase):
                                         mock_logger.return_value = Mock()
                                         with patch('bot.Logger.setup_specialized_logger') as mock_spec_logger:
                                             mock_spec_logger.return_value = Mock()
-                                            
+
                                             from bot import TradingBot
                                             bot = TradingBot()
-                                            
+
                                             # Start the thread
                                             bot._scan_thread_running = True
                                             bot._scan_thread = threading.Thread(
@@ -94,13 +94,13 @@ class TestLiveModeComprehensive(unittest.TestCase):
                                                 daemon=True
                                             )
                                             bot._scan_thread.start()
-                                            
+
                                             # Call shutdown
                                             bot.shutdown()
-                                            
+
                                             # Verify thread flag is set to False
                                             self.assertFalse(bot._scan_thread_running)
-    
+
     def test_opportunity_validation(self):
         """Test that invalid opportunity data is handled"""
         with patch('bot.Config.validate'):
@@ -118,10 +118,10 @@ class TestLiveModeComprehensive(unittest.TestCase):
                                         mock_logger.return_value = logger_mock
                                         with patch('bot.Logger.setup_specialized_logger') as mock_spec_logger:
                                             mock_spec_logger.return_value = Mock()
-                                            
+
                                             from bot import TradingBot
                                             bot = TradingBot()
-                                            
+
                                             # Set invalid opportunities
                                             bot._latest_opportunities = [
                                                 None,  # Invalid
@@ -129,13 +129,13 @@ class TestLiveModeComprehensive(unittest.TestCase):
                                                 {'symbol': 'BTC-USDT', 'score': 85},  # Valid
                                             ]
                                             bot._last_opportunity_update = datetime.now()
-                                            
+
                                             # Should not crash
                                             bot.scan_for_opportunities()
-                                            
+
                                             # Should log warnings for invalid data
                                             self.assertTrue(logger_mock.warning.called or logger_mock.info.called)
-    
+
     def test_position_update_error_handling(self):
         """Test that errors in position updates don't crash the bot"""
         with patch('bot.Config.validate'):
@@ -157,16 +157,16 @@ class TestLiveModeComprehensive(unittest.TestCase):
                                         mock_logger.return_value = logger_mock
                                         with patch('bot.Logger.setup_specialized_logger') as mock_spec_logger:
                                             mock_spec_logger.return_value = Mock()
-                                            
+
                                             from bot import TradingBot
                                             bot = TradingBot()
-                                            
+
                                             # Should not crash
                                             bot.update_open_positions()
-                                            
+
                                             # Should log the error
                                             self.assertTrue(logger_mock.error.called)
-    
+
     def test_run_cycle_error_recovery(self):
         """Test that errors in run_cycle are handled and don't stop the bot"""
         with patch('bot.Config.validate'):
@@ -188,27 +188,27 @@ class TestLiveModeComprehensive(unittest.TestCase):
                                         mock_logger.return_value = logger_mock
                                         with patch('bot.Logger.setup_specialized_logger') as mock_spec_logger:
                                             mock_spec_logger.return_value = Mock()
-                                            
+
                                             from bot import TradingBot
                                             bot = TradingBot()
-                                            
+
                                             # Should not crash even with errors
                                             try:
                                                 bot.run_cycle()
                                             except Exception as e:
                                                 self.fail(f"run_cycle should not raise exception: {e}")
-    
+
     def test_live_monitoring_intervals(self):
         """Test that monitoring intervals are correctly configured"""
         from config import Config
-        
+
         # Position updates should be more frequent than full cycles
         self.assertLess(Config.POSITION_UPDATE_INTERVAL, Config.CHECK_INTERVAL)
-        
+
         # Intervals should be reasonable (not too fast, not too slow)
         self.assertGreaterEqual(Config.POSITION_UPDATE_INTERVAL, 1)  # At least 1 second
         self.assertLessEqual(Config.POSITION_UPDATE_INTERVAL, 30)  # At most 30 seconds
-        
+
         self.assertGreaterEqual(Config.CHECK_INTERVAL, 10)  # At least 10 seconds
         self.assertLessEqual(Config.CHECK_INTERVAL, 300)  # At most 5 minutes
 
@@ -235,9 +235,9 @@ if __name__ == '__main__':
     suite = loader.loadTestsFromTestCase(TestLiveModeComprehensive)
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
-    
+
     # Print summary
     if result.wasSuccessful():
         print_results()
-    
+
     exit(0 if result.wasSuccessful() else 1)

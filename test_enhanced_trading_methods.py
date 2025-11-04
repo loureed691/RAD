@@ -52,22 +52,22 @@ def test_limit_order_with_post_only():
                 'price': 50000,
                 'amount': 1.0
             })
-            
+
             client = KuCoinClient('key', 'secret', 'pass')
-            
+
             # Test post_only order
             order = client.create_limit_order(
                 'BTC-USDT', 'buy', 1.0, 50000, leverage=10, post_only=True
             )
-            
+
             assert order is not None, "Order should be created"
             assert mock_exchange.create_order.called, "create_order should be called"
-            
+
             # Check that post_only was passed in params
             call_args = mock_exchange.create_order.call_args
             params = call_args[1]['params']
-            assert params.get('postOnly') == True, "postOnly should be in params"
-            
+            assert params.get('postOnly') is True, "postOnly should be in params"
+
             print("  ✓ Limit order with post_only created successfully")
             return True
     except Exception as e:
@@ -99,21 +99,21 @@ def test_limit_order_with_reduce_only():
                 'price': 50000,
                 'amount': 1.0
             })
-            
+
             client = KuCoinClient('key', 'secret', 'pass')
-            
+
             # Test reduce_only order
             order = client.create_limit_order(
                 'BTC-USDT', 'sell', 1.0, 51000, leverage=10, reduce_only=True
             )
-            
+
             assert order is not None, "Order should be created"
-            
+
             # Check that reduce_only was passed in params
             call_args = mock_exchange.create_order.call_args
             params = call_args[1]['params']
-            assert params.get('reduceOnly') == True, "reduceOnly should be in params"
-            
+            assert params.get('reduceOnly') is True, "reduceOnly should be in params"
+
             print("  ✓ Limit order with reduce_only created successfully")
             return True
     except Exception as e:
@@ -145,23 +145,23 @@ def test_stop_limit_order_creation():
                 'price': 48000,
                 'amount': 1.0
             })
-            
+
             client = KuCoinClient('key', 'secret', 'pass')
-            
+
             # Test stop-limit order
             order = client.create_stop_limit_order(
-                'BTC-USDT', 'sell', 1.0, stop_price=49000, 
+                'BTC-USDT', 'sell', 1.0, stop_price=49000,
                 limit_price=48500, leverage=10, reduce_only=True
             )
-            
+
             assert order is not None, "Stop-limit order should be created"
-            
+
             # Check that stopPrice and reduceOnly were passed
             call_args = mock_exchange.create_order.call_args
             params = call_args[1]['params']
             assert params.get('stopPrice') == 49000, "stopPrice should be in params"
-            assert params.get('reduceOnly') == True, "reduceOnly should be in params"
-            
+            assert params.get('reduceOnly') is True, "reduceOnly should be in params"
+
             print("  ✓ Stop-limit order created successfully")
             return True
     except Exception as e:
@@ -187,16 +187,16 @@ def test_order_status_checking():
                 'cost': 50050,
                 'timestamp': 1234567890
             })
-            
+
             client = KuCoinClient('key', 'secret', 'pass')
-            
+
             status = client.get_order_status('12345', 'BTC-USDT')
-            
+
             assert status is not None, "Status should be returned"
             assert status['status'] == 'closed', "Status should be closed"
             assert status['filled'] == 1.0, "Filled amount should match"
             assert status['remaining'] == 0, "Remaining should be 0"
-            
+
             print("  ✓ Order status checked successfully")
             return True
     except Exception as e:
@@ -216,16 +216,16 @@ def test_order_book_fetching():
                 'asks': [[50010, 10], [50020, 20], [50030, 30]],
                 'timestamp': 1234567890
             })
-            
+
             client = KuCoinClient('key', 'secret', 'pass')
-            
+
             order_book = client.get_order_book('BTC-USDT', limit=20)
-            
+
             assert order_book is not None, "Order book should be returned"
             assert len(order_book['bids']) == 3, "Should have 3 bid levels"
             assert len(order_book['asks']) == 3, "Should have 3 ask levels"
             assert order_book['bids'][0][0] == 50000, "Best bid should be 50000"
-            
+
             print("  ✓ Order book fetched successfully")
             return True
     except Exception as e:
@@ -245,24 +245,24 @@ def test_slippage_validation():
                 'bid': 50490,
                 'ask': 50510
             })
-            
+
             client = KuCoinClient('key', 'secret', 'pass')
-            
+
             # Test buy with acceptable slippage
             is_valid, price = client.validate_price_with_slippage(
                 'BTC-USDT', 'buy', 50000, max_slippage=0.01
             )
-            
-            assert is_valid == True, "Slippage should be acceptable"
+
+            assert is_valid is True, "Slippage should be acceptable"
             assert price == 50500, "Current price should be returned"
-            
+
             # Test buy with excessive slippage
             is_valid, price = client.validate_price_with_slippage(
                 'BTC-USDT', 'buy', 50000, max_slippage=0.005
             )
-            
-            assert is_valid == False, "Slippage should exceed limit"
-            
+
+            assert is_valid is False, "Slippage should exceed limit"
+
             print("  ✓ Slippage validation working correctly")
             return True
     except Exception as e:
@@ -317,17 +317,17 @@ def test_market_order_with_depth_check():
                 'cost': 7500000.0,
                 'timestamp': 1234567890
             })
-            
+
             client = KuCoinClient('key', 'secret', 'pass')
-            
+
             # Test large order - should check depth
             order = client.create_market_order(
                 'BTC-USDT', 'buy', 150.0, leverage=10, validate_depth=True
             )
-            
+
             assert order is not None, "Order should be created"
             assert mock_exchange.fetch_order_book.called, "Order book should be checked"
-            
+
             print("  ✓ Market order with depth check created successfully")
             return True
     except Exception as e:
@@ -375,10 +375,10 @@ def test_position_scaling_in():
                 'used': {'USDT': 0.0},
                 'total': {'USDT': 100000.0}
             })
-            
+
             client = KuCoinClient('key', 'secret', 'pass')
             manager = PositionManager(client)
-            
+
             # Create initial position
             position = Position(
                 symbol='BTC-USDT',
@@ -390,15 +390,15 @@ def test_position_scaling_in():
                 take_profit=55000
             )
             manager.positions['BTC-USDT'] = position
-            
+
             # Scale in
             success = manager.scale_in_position('BTC-USDT', 1.0, 51000)
-            
-            assert success == True, "Scale in should succeed"
+
+            assert success is True, "Scale in should succeed"
             assert manager.positions['BTC-USDT'].amount == 2.0, "Amount should double"
             # Average entry should be (50000 + 51000) / 2 = 50500
             assert manager.positions['BTC-USDT'].entry_price == 50500, "Entry price should be averaged"
-            
+
             print("  ✓ Position scaled in successfully")
             return True
     except Exception as e:
@@ -446,10 +446,10 @@ def test_position_scaling_out():
                 'used': {'USDT': 0.0},
                 'total': {'USDT': 100000.0}
             })
-            
+
             client = KuCoinClient('key', 'secret', 'pass')
             manager = PositionManager(client)
-            
+
             # Create position
             position = Position(
                 symbol='BTC-USDT',
@@ -461,14 +461,14 @@ def test_position_scaling_out():
                 take_profit=55000
             )
             manager.positions['BTC-USDT'] = position
-            
+
             # Scale out half
             pnl = manager.scale_out_position('BTC-USDT', 1.0, 'partial_take_profit')
-            
+
             assert pnl is not None, "Scale out should succeed"
             assert pnl > 0, "Should be profitable"
             assert manager.positions['BTC-USDT'].amount == 1.0, "Amount should be halved"
-            
+
             print("  ✓ Position scaled out successfully")
             return True
     except Exception as e:
@@ -483,10 +483,10 @@ def test_position_target_modification():
             mock_exchange = Mock()
             mock_exchange_class.return_value = mock_exchange
             mock_exchange.set_position_mode = Mock()
-            
+
             client = KuCoinClient('key', 'secret', 'pass')
             manager = PositionManager(client)
-            
+
             # Create position
             position = Position(
                 symbol='BTC-USDT',
@@ -498,18 +498,18 @@ def test_position_target_modification():
                 take_profit=55000
             )
             manager.positions['BTC-USDT'] = position
-            
+
             # Modify targets
             success = manager.modify_position_targets(
                 'BTC-USDT',
                 new_stop_loss=48000,
                 new_take_profit=56000
             )
-            
-            assert success == True, "Modification should succeed"
+
+            assert success is True, "Modification should succeed"
             assert manager.positions['BTC-USDT'].stop_loss == 48000, "Stop loss should be updated"
             assert manager.positions['BTC-USDT'].take_profit == 56000, "Take profit should be updated"
-            
+
             print("  ✓ Position targets modified successfully")
             return True
     except Exception as e:
@@ -541,20 +541,20 @@ def test_close_position_with_limit_order():
                     'side': 'long'
                 }
             ])
-            
+
             client = KuCoinClient('key', 'secret', 'pass')
-            
+
             # Close with limit order
             success = client.close_position('BTC-USDT', use_limit=True, slippage_tolerance=0.002)
-            
-            assert success == True, "Close should succeed"
-            
+
+            assert success is True, "Close should succeed"
+
             # Verify limit order was created
             call_args = mock_exchange.create_order.call_args
             assert call_args[1]['type'] == 'limit', "Should be limit order"
             params = call_args[1]['params']
-            assert params.get('reduceOnly') == True, "Should have reduceOnly flag"
-            
+            assert params.get('reduceOnly') is True, "Should have reduceOnly flag"
+
             print("  ✓ Position closed with limit order successfully")
             return True
     except Exception as e:
@@ -566,7 +566,7 @@ def main():
     print("=" * 60)
     print("Running Enhanced Trading Methods Tests")
     print("=" * 60)
-    
+
     tests = [
         test_limit_order_with_post_only,
         test_limit_order_with_reduce_only,
@@ -580,7 +580,7 @@ def main():
         test_position_target_modification,
         test_close_position_with_limit_order,
     ]
-    
+
     results = []
     for test in tests:
         try:
@@ -589,11 +589,11 @@ def main():
         except Exception as e:
             print(f"✗ Test failed with exception: {e}")
             results.append(False)
-    
+
     print("\n" + "=" * 60)
     print(f"Test Results: {sum(results)}/{len(results)} passed")
     print("=" * 60)
-    
+
     if all(results):
         print("\n✓ All enhanced trading methods tests passed!")
         return 0
