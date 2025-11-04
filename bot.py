@@ -1171,7 +1171,7 @@ class TradingBot:
                     self.logger.info(f"✅ [Background] Found {len(opportunities)} opportunities (scan took {scan_duration:.1f}s)")
                     consecutive_no_opportunities = 0
                     # Speed up scanning when opportunities exist (continuous mode)
-                    adaptive_interval = max(5, Config.CHECK_INTERVAL // 2)  # At least 5s, or half configured interval
+                    adaptive_interval = max(5, int(Config.CHECK_INTERVAL / 2))  # At least 5s, or half configured interval
                     self.logger.info(f"🔥 [Adaptive] Speeding up scans to {adaptive_interval}s (opportunities detected)")
                 else:
                     self.logger.debug("[Background] No opportunities found in this scan")
