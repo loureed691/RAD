@@ -13,7 +13,7 @@ from datetime import datetime
 
 class StrategyAuditor:
     """Audit trading strategies for correctness, biases, and robustness"""
-    
+
     def __init__(self):
         self.findings = []
         self.severity_levels = {
@@ -22,8 +22,8 @@ class StrategyAuditor:
             'MEDIUM': [],    # Could be improved
             'LOW': [],       # Nice to have
         }
-    
-    def add_finding(self, severity: str, component: str, issue: str, 
+
+    def add_finding(self, severity: str, component: str, issue: str,
                     recommendation: str, impact: str = ""):
         """Add an audit finding"""
         finding = {
@@ -36,11 +36,11 @@ class StrategyAuditor:
         }
         self.findings.append(finding)
         self.severity_levels[severity].append(finding)
-    
+
     def audit_look_ahead_bias(self) -> Dict:
         """
         Audit for look-ahead bias in signals and indicators
-        
+
         Look-ahead bias occurs when future data is used to make past decisions.
         Common patterns:
         - Using .iloc[-1] in backtesting without proper time separation
@@ -48,7 +48,7 @@ class StrategyAuditor:
         - Using future candle data to make current decisions
         """
         findings = {}
-        
+
         # FINDING 1: signals.py uses iloc[-1] on recent_df which is acceptable
         # in live trading but needs care in backtesting
         self.add_finding(
@@ -60,7 +60,7 @@ class StrategyAuditor:
                           'bar only, not including future bars',
             impact='Could cause overly optimistic backtest results if not handled properly'
         )
-        
+
         # FINDING 2: indicators.py uses rolling calculations which are correct
         self.add_finding(
             severity='LOW',
@@ -69,19 +69,19 @@ class StrategyAuditor:
             recommendation='Current implementation is correct - no changes needed',
             impact='None - indicators are properly calculated'
         )
-        
+
         return findings
-    
+
     def audit_data_alignment(self) -> Dict:
         """
         Audit for data alignment issues across timeframes
-        
+
         Issues to check:
         - Multi-timeframe data synchronization
         - Timestamp alignment between different sources
         - Gap handling in historical data
         """
-        
+
         # FINDING 3: Multi-timeframe analysis looks correct
         self.add_finding(
             severity='LOW',
@@ -90,7 +90,7 @@ class StrategyAuditor:
             recommendation='Current implementation is acceptable',
             impact='None - timeframes are properly separated'
         )
-        
+
         # FINDING 4: Need to verify timestamp alignment in live trading
         self.add_finding(
             severity='MEDIUM',
@@ -101,18 +101,18 @@ class StrategyAuditor:
                           'Ensure 4h and 1d data timestamps align with 1h data.',
             impact='Could cause trading on stale higher timeframe data'
         )
-    
+
     def audit_indicator_calculations(self) -> Dict:
         """
         Audit indicator calculations for correctness
-        
+
         Common issues:
         - Incorrect period parameters
         - Missing data handling
         - Division by zero
         - NaN propagation
         """
-        
+
         # FINDING 5: Good handling of NaN values
         self.add_finding(
             severity='LOW',
@@ -121,7 +121,7 @@ class StrategyAuditor:
             recommendation='Current implementation is good - maintains defensive programming',
             impact='Positive - prevents NaN propagation issues'
         )
-        
+
         # FINDING 6: Minimum data requirements
         self.add_finding(
             severity='LOW',
@@ -130,7 +130,7 @@ class StrategyAuditor:
             recommendation='Current implementation is correct',
             impact='Positive - prevents unreliable indicators from insufficient data'
         )
-        
+
         # FINDING 7: RSI calculation is optimized and correct
         self.add_finding(
             severity='LOW',
@@ -139,18 +139,18 @@ class StrategyAuditor:
             recommendation='Implementation follows standard RSI formula - no changes needed',
             impact='None - correct implementation'
         )
-    
+
     def audit_signal_generation(self) -> Dict:
         """
         Audit signal generation logic for robustness
-        
+
         Issues to check:
         - Signal threshold sensitivity
         - Confluence requirements
         - Market regime adaptation
         - Signal strength calculation
         """
-        
+
         # FINDING 8: Adaptive threshold is good but could be more dynamic
         self.add_finding(
             severity='MEDIUM',
@@ -162,7 +162,7 @@ class StrategyAuditor:
                           'regimes, raise in uncertain periods.',
             impact='Could miss trades in strong trends or take too many in choppy markets'
         )
-        
+
         # FINDING 9: Good market regime detection
         self.add_finding(
             severity='LOW',
@@ -172,7 +172,7 @@ class StrategyAuditor:
                           'market structure awareness',
             impact='Current implementation is acceptable'
         )
-        
+
         # FINDING 10: Multi-timeframe weighting
         self.add_finding(
             severity='MEDIUM',
@@ -183,10 +183,10 @@ class StrategyAuditor:
                           'of each timeframe\'s signals',
             impact='Could over-rely on longer timeframes in fast-changing markets'
         )
-    
+
     def audit_risk_management(self) -> Dict:
         """Audit risk management and position sizing"""
-        
+
         # FINDING 11: Kelly Criterion implementation
         self.add_finding(
             severity='MEDIUM',
@@ -196,7 +196,7 @@ class StrategyAuditor:
                           'and includes volatility adjustment. Add safety bounds (0.5-5% max).',
             impact='Unconstrained Kelly can lead to excessive position sizes'
         )
-        
+
         # FINDING 12: Correlation tracking
         self.add_finding(
             severity='MEDIUM',
@@ -206,10 +206,10 @@ class StrategyAuditor:
                           'Reduce position sizing when correlation exceeds threshold (e.g., 0.7).',
             impact='Portfolio could become overly concentrated in correlated assets'
         )
-    
+
     def audit_execution_quality(self) -> Dict:
         """Audit order execution and market impact"""
-        
+
         # FINDING 13: Need slippage estimation
         self.add_finding(
             severity='HIGH',
@@ -219,7 +219,7 @@ class StrategyAuditor:
                           'estimation. Reject trades when spread > 0.1% or volume insufficient.',
             impact='Could experience significant slippage on illiquid pairs'
         )
-        
+
         # FINDING 14: Order type selection
         self.add_finding(
             severity='MEDIUM',
@@ -229,10 +229,10 @@ class StrategyAuditor:
                           'Use market orders only for urgent exits (stop loss).',
             impact='Market orders can experience higher slippage'
         )
-    
+
     def audit_backtest_realism(self) -> Dict:
         """Audit backtest engine for realism"""
-        
+
         # FINDING 15: Fees included
         self.add_finding(
             severity='LOW',
@@ -242,7 +242,7 @@ class StrategyAuditor:
                           'frequency (every 8 hours) is accurate.',
             impact='Positive - realistic P&L estimation'
         )
-        
+
         # FINDING 16: Need latency simulation
         self.add_finding(
             severity='HIGH',
@@ -252,7 +252,7 @@ class StrategyAuditor:
                           'Use next bar\'s open price instead of current bar\'s close.',
             impact='Backtest results may be overly optimistic without latency'
         )
-        
+
         # FINDING 17: Partial fill simulation
         self.add_finding(
             severity='MEDIUM',
@@ -262,10 +262,10 @@ class StrategyAuditor:
                           'Fill order over multiple bars if needed.',
             impact='Large orders may not fill at expected prices in live trading'
         )
-    
+
     def audit_strategy_robustness(self) -> Dict:
         """Audit strategy robustness across market conditions"""
-        
+
         # FINDING 18: Parameter sensitivity
         self.add_finding(
             severity='HIGH',
@@ -276,7 +276,7 @@ class StrategyAuditor:
                           'Those are fragile and need robust defaults.',
             impact='Strategy may fail if parameters are slightly mistuned'
         )
-        
+
         # FINDING 19: Market regime adaptation
         self.add_finding(
             severity='MEDIUM',
@@ -287,7 +287,7 @@ class StrategyAuditor:
                           'Different strategies for each regime.',
             impact='Strategy may underperform in specific market conditions'
         )
-        
+
         # FINDING 20: Overfitting risk
         self.add_finding(
             severity='HIGH',
@@ -298,7 +298,7 @@ class StrategyAuditor:
                           'Report degradation from in-sample to out-of-sample.',
             impact='Strategy may work on historical data but fail on live data'
         )
-    
+
     def generate_report(self) -> str:
         """Generate comprehensive audit report"""
         lines = [
@@ -309,7 +309,7 @@ class StrategyAuditor:
             f"Total Findings: {len(self.findings)}",
             "",
         ]
-        
+
         # Summary by severity
         lines.append("FINDINGS SUMMARY BY SEVERITY")
         lines.append("-" * 80)
@@ -317,30 +317,30 @@ class StrategyAuditor:
             count = len(self.severity_levels[severity])
             lines.append(f"{severity:10s}: {count} findings")
         lines.append("")
-        
+
         # Detailed findings by severity
         for severity in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']:
             if not self.severity_levels[severity]:
                 continue
-            
+
             lines.append("")
             lines.append("=" * 80)
             lines.append(f"{severity} PRIORITY FINDINGS")
             lines.append("=" * 80)
-            
+
             for i, finding in enumerate(self.severity_levels[severity], 1):
                 lines.append(f"\n{severity}-{i}: {finding['component']}")
                 lines.append(f"  Issue: {finding['issue']}")
                 lines.append(f"  Recommendation: {finding['recommendation']}")
                 if finding['impact']:
                     lines.append(f"  Impact: {finding['impact']}")
-        
+
         lines.append("\n" + "=" * 80)
         lines.append("END OF AUDIT REPORT")
         lines.append("=" * 80)
-        
+
         return "\n".join(lines)
-    
+
     def get_action_items(self) -> List[Dict]:
         """Get prioritized action items"""
         # Sort by severity
@@ -349,7 +349,7 @@ class StrategyAuditor:
             self.findings,
             key=lambda x: severity_order[x['severity']]
         )
-        
+
         action_items = []
         for finding in sorted_findings:
             if finding['severity'] in ['CRITICAL', 'HIGH']:
@@ -358,14 +358,14 @@ class StrategyAuditor:
                     'task': finding['recommendation'],
                     'component': finding['component']
                 })
-        
+
         return action_items
 
 
 def run_full_audit() -> Tuple[str, List[Dict]]:
     """Run complete strategy audit and return report + action items"""
     auditor = StrategyAuditor()
-    
+
     # Run all audit checks
     auditor.audit_look_ahead_bias()
     auditor.audit_data_alignment()
@@ -375,20 +375,20 @@ def run_full_audit() -> Tuple[str, List[Dict]]:
     auditor.audit_execution_quality()
     auditor.audit_backtest_realism()
     auditor.audit_strategy_robustness()
-    
+
     # Generate report
     report = auditor.generate_report()
     action_items = auditor.get_action_items()
-    
+
     return report, action_items
 
 
 if __name__ == "__main__":
     # Run audit and print report
     report, action_items = run_full_audit()
-    
+
     print(report)
-    
+
     print("\n\nPRIORITIZED ACTION ITEMS")
     print("=" * 80)
     for i, item in enumerate(action_items, 1):

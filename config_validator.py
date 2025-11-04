@@ -39,7 +39,7 @@ class ConfigParameter:
 
 class ConfigValidator:
     """Validates trading bot configuration against safety constraints"""
-    
+
     # Define all configuration parameters with validation rules
     PARAMETERS = {
         # API Configuration (Required, Sensitive)
@@ -64,7 +64,7 @@ class ConfigValidator:
             description='KuCoin API Passphrase',
             sensitive=True
         ),
-        
+
         # WebSocket Configuration
         'ENABLE_WEBSOCKET': ConfigParameter(
             name='ENABLE_WEBSOCKET',
@@ -73,7 +73,7 @@ class ConfigValidator:
             default=True,
             description='Enable WebSocket for real-time data'
         ),
-        
+
         # Trading Parameters (Auto-configured but can be overridden)
         'LEVERAGE': ConfigParameter(
             name='LEVERAGE',
@@ -111,7 +111,7 @@ class ConfigValidator:
             default=None,
             description='Minimum profit threshold to enter trade'
         ),
-        
+
         # Bot Timing Parameters
         'CHECK_INTERVAL': ConfigParameter(
             name='CHECK_INTERVAL',
@@ -185,7 +185,7 @@ class ConfigValidator:
             default=2,
             description='Multiplier for max age of opportunity data'
         ),
-        
+
         # Logging Configuration
         'LOG_LEVEL': ConfigParameter(
             name='LOG_LEVEL',
@@ -208,7 +208,7 @@ class ConfigValidator:
             default='DEBUG',
             description='Detailed log level for specialized loggers'
         ),
-        
+
         # ML Configuration
         'RETRAIN_INTERVAL': ConfigParameter(
             name='RETRAIN_INTERVAL',
@@ -226,7 +226,7 @@ class ConfigValidator:
             default='models/signal_model.pkl',
             description='ML model file path'
         ),
-        
+
         # Reproducibility
         'RANDOM_SEED': ConfigParameter(
             name='RANDOM_SEED',
@@ -238,47 +238,47 @@ class ConfigValidator:
             description='Random seed for reproducibility'
         ),
     }
-    
+
     @classmethod
     def validate_config(cls, env_dict: Optional[Dict[str, str]] = None) -> Tuple[bool, List[str]]:
         """
         Validate configuration from environment variables or provided dict
-        
+
         Args:
             env_dict: Optional dict of config values (uses os.environ if None)
-            
+
         Returns:
             Tuple of (is_valid: bool, errors: List[str])
         """
         if env_dict is None:
             env_dict = dict(os.environ)
-        
+
         errors = []
         warnings = []
-        
+
         # Check required parameters
         for param_name, param in cls.PARAMETERS.items():
             if param.required:
                 value = env_dict.get(param_name, '').strip()
-                if not value or value in ('your_api_key_here', 'your_api_secret_here', 
+                if not value or value in ('your_api_key_here', 'your_api_secret_here',
                                          'your_api_passphrase_here'):
                     errors.append(
                         f"Required parameter '{param_name}' is missing or has placeholder value. "
                         f"Description: {param.description}"
                     )
-        
+
         # Validate parameter types and ranges
         for param_name, param in cls.PARAMETERS.items():
             value_str = env_dict.get(param_name, '').strip()
-            
+
             # Skip if not provided and not required
             if not value_str and not param.required:
                 continue
-            
+
             # Skip if empty (will use default)
             if not value_str:
                 continue
-            
+
             try:
                 # Type conversion
                 if param.param_type == bool:
@@ -289,7 +289,7 @@ class ConfigValidator:
                     value = float(value_str)
                 else:
                     value = value_str
-                
+
                 # Range validation
                 if param.param_type in (int, float):
                     if param.min_value is not None and value < param.min_value:
@@ -300,30 +300,30 @@ class ConfigValidator:
                         errors.append(
                             f"Parameter '{param_name}' value {value} exceeds maximum {param.max_value}"
                         )
-                
+
                 # Log level validation
                 if param_name in ('LOG_LEVEL', 'DETAILED_LOG_LEVEL'):
                     if value not in [level.value for level in LogLevel]:
                         errors.append(
                             f"Parameter '{param_name}' has invalid value '{value}'. "
-                            f"Must be one of: {[l.value for l in LogLevel]}"
+                            f"Must be one of: {[level.value for level in LogLevel]}"
                         )
-                
+
             except (ValueError, TypeError) as e:
                 errors.append(
                     f"Parameter '{param_name}' has invalid type. "
                     f"Expected {param.param_type.__name__}, got '{value_str}': {e}"
                 )
-        
+
         # Safety checks
         leverage = env_dict.get('LEVERAGE', '').strip()
         risk_per_trade = env_dict.get('RISK_PER_TRADE', '').strip()
-        
+
         if leverage and risk_per_trade:
             try:
                 lev = int(float(leverage))
                 risk = float(risk_per_trade)
-                
+
                 # Warn if combined leverage and risk is very aggressive
                 if lev * risk > 0.5:  # More than 50% of equity at risk
                     warnings.append(
@@ -334,23 +334,23 @@ class ConfigValidator:
                     )
             except (ValueError, TypeError):
                 pass  # Already caught in type validation
-        
+
         # Return validation results
         all_messages = errors + warnings
         is_valid = len(errors) == 0
-        
+
         return is_valid, all_messages
-    
+
     @classmethod
     def get_parameter_info(cls, param_name: str) -> Optional[ConfigParameter]:
         """Get metadata for a specific parameter"""
         return cls.PARAMETERS.get(param_name)
-    
+
     @classmethod
     def list_parameters(cls) -> Dict[str, ConfigParameter]:
         """List all configuration parameters"""
         return cls.PARAMETERS.copy()
-    
+
     @classmethod
     def generate_env_example(cls) -> str:
         """Generate .env.example content from parameter definitions"""
@@ -360,32 +360,32 @@ class ConfigValidator:
             "# Copy this file to .env and fill in your values",
             "",
         ]
-        
+
         # Group parameters by category
         categories = {
             'API Configuration': ['KUCOIN_API_KEY', 'KUCOIN_API_SECRET', 'KUCOIN_API_PASSPHRASE'],
             'WebSocket': ['ENABLE_WEBSOCKET'],
             'Trading Parameters': ['LEVERAGE', 'MAX_POSITION_SIZE', 'RISK_PER_TRADE', 'MIN_PROFIT_THRESHOLD'],
-            'Bot Timing': ['CHECK_INTERVAL', 'POSITION_UPDATE_INTERVAL', 'LIVE_LOOP_INTERVAL', 
+            'Bot Timing': ['CHECK_INTERVAL', 'POSITION_UPDATE_INTERVAL', 'LIVE_LOOP_INTERVAL',
                           'TRAILING_STOP_PERCENTAGE', 'MAX_OPEN_POSITIONS', 'MAX_WORKERS',
                           'CACHE_DURATION', 'STALE_DATA_MULTIPLIER'],
             'Logging': ['LOG_LEVEL', 'LOG_FILE', 'DETAILED_LOG_LEVEL'],
             'Machine Learning': ['RETRAIN_INTERVAL', 'ML_MODEL_PATH'],
             'Reproducibility': ['RANDOM_SEED'],
         }
-        
+
         for category, param_names in categories.items():
             lines.append(f"# {category}")
             lines.append("#" + "=" * (len(category) + 2))
-            
+
             for param_name in param_names:
                 param = cls.PARAMETERS.get(param_name)
                 if not param:
                     continue
-                
+
                 # Add description
                 lines.append(f"# {param.description}")
-                
+
                 # Add constraints
                 constraints = []
                 if param.required:
@@ -396,10 +396,10 @@ class ConfigValidator:
                     constraints.append(f"max: {param.max_value}")
                 if param.default is not None:
                     constraints.append(f"default: {param.default}")
-                
+
                 if constraints:
                     lines.append(f"# [{', '.join(constraints)}]")
-                
+
                 # Add parameter line
                 if param.required:
                     if param.sensitive:
@@ -411,46 +411,46 @@ class ConfigValidator:
                         lines.append(f"# {param_name}={param.default}")
                     else:
                         lines.append(f"# {param_name}=")
-                
+
                 lines.append("")
-        
+
         return "\n".join(lines)
 
 
 def validate_and_report() -> bool:
     """
     Validate current configuration and print report
-    
+
     Returns:
         True if configuration is valid, False otherwise
     """
     is_valid, messages = ConfigValidator.validate_config()
-    
+
     if messages:
         print("=" * 70)
         print("CONFIGURATION VALIDATION REPORT")
         print("=" * 70)
-        
+
         for msg in messages:
             if msg.startswith("WARNING:"):
                 print(f"⚠️  {msg}")
             else:
                 print(f"❌ {msg}")
-        
+
         print("=" * 70)
-    
+
     if is_valid:
         print("✅ Configuration is valid")
     else:
         print("❌ Configuration has errors - please fix before running")
-    
+
     return is_valid
 
 
 if __name__ == "__main__":
     # When run directly, validate current config
     import sys
-    
+
     if len(sys.argv) > 1 and sys.argv[1] == '--generate-example':
         # Generate .env.example
         content = ConfigValidator.generate_env_example()

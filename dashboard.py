@@ -19,7 +19,7 @@ except ImportError:
 
 class TradingDashboard:
     """Real-time web dashboard for trading bot monitoring"""
-    
+
     def __init__(self, port: int = 5000):
         self.logger = Logger.get_logger()
         self.port = port
@@ -33,20 +33,20 @@ class TradingDashboard:
         self.market_info = {}
         self.system_status = {}
         self.drawdown_data = []
-        
+
         if not FLASK_AVAILABLE:
             self.logger.warning("Dashboard features disabled (Flask not installed)")
             return
-        
+
         self.setup_app()
-    
+
     def setup_app(self):
         """Setup Flask application and routes"""
         if not FLASK_AVAILABLE:
             return
-        
+
         self.app = Flask(__name__)
-        
+
         # Dashboard HTML template
         dashboard_html = """
         <!DOCTYPE html>
@@ -281,7 +281,7 @@ class TradingDashboard:
                     <span class="status-indicator {% if system_status.bot_active %}online{% else %}offline{% endif %}"></span>
                     Last Updated: {{ system_status.last_update|default('N/A') }}
                 </div>
-                
+
                 <!-- Performance Overview -->
                 <div class="section">
                     <h2>📊 Performance Overview</h2>
@@ -332,7 +332,7 @@ class TradingDashboard:
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Charts -->
                 <div class="two-column">
                     <div class="chart-container">
@@ -344,7 +344,7 @@ class TradingDashboard:
                         <div id="drawdownChart"></div>
                     </div>
                 </div>
-                
+
                 <!-- Open Positions -->
                 <div class="section">
                     <h2>💼 Open Positions</h2>
@@ -391,7 +391,7 @@ class TradingDashboard:
                     <div class="no-data">No open positions</div>
                     {% endif %}
                 </div>
-                
+
                 <!-- Risk Metrics & Strategy Info -->
                 <div class="two-column">
                     <div class="section">
@@ -429,7 +429,7 @@ class TradingDashboard:
                             <div class="info-value">{{ risk_metrics.avg_volatility|default(0)|round(2) }}%</div>
                         </div>
                     </div>
-                    
+
                     <div class="section">
                         <h2>🎯 Strategy & Market</h2>
                         <div class="info-grid">
@@ -464,7 +464,7 @@ class TradingDashboard:
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Recent Trades -->
                 <div class="section">
                     <h2>📈 Recent Trades</h2>
@@ -507,7 +507,7 @@ class TradingDashboard:
                     <div class="no-data">No trades yet</div>
                     {% endif %}
                 </div>
-                
+
                 <!-- System Status -->
                 <div class="section">
                     <h2>⚙️ System Status</h2>
@@ -540,12 +540,12 @@ class TradingDashboard:
                     </div>
                 </div>
             </div>
-            
+
             <script>
                 // Equity curve chart
                 var equityData = {{ equity_chart_data|safe }};
                 Plotly.newPlot('equityChart', equityData.data, equityData.layout, {responsive: true});
-                
+
                 // Drawdown chart
                 var drawdownData = {{ drawdown_chart_data|safe }};
                 Plotly.newPlot('drawdownChart', drawdownData.data, drawdownData.layout, {responsive: true});
@@ -553,13 +553,13 @@ class TradingDashboard:
         </body>
         </html>
         """
-        
+
         @self.app.route('/')
         def dashboard():
             # Generate equity chart
             equity_chart = self.generate_equity_chart()
             drawdown_chart = self.generate_drawdown_chart()
-            
+
             return render_template_string(
                 dashboard_html,
                 stats=self.stats,
@@ -572,15 +572,15 @@ class TradingDashboard:
                 market_info=self.market_info,
                 system_status=self.system_status
             )
-        
+
         @self.app.route('/api/stats')
         def api_stats():
             return jsonify(self.stats)
-        
+
         @self.app.route('/api/trades')
         def api_trades():
             return jsonify(self.recent_trades[-50:])  # Last 50 trades
-    
+
     def generate_equity_chart(self) -> Dict:
         """Generate Plotly equity curve chart"""
         if not self.equity_data:
@@ -588,10 +588,10 @@ class TradingDashboard:
                 'data': [],
                 'layout': {'title': 'No data available'}
             }
-        
+
         timestamps = [point['timestamp'] for point in self.equity_data]
         balances = [point['balance'] for point in self.equity_data]
-        
+
         return {
             'data': [{
                 'x': timestamps,
@@ -611,25 +611,25 @@ class TradingDashboard:
                 'margin': {'l': 50, 'r': 20, 't': 20, 'b': 50}
             }
         }
-    
+
     def update_stats(self, stats: Dict):
         """Update dashboard statistics"""
         self.stats = stats
-    
+
     def add_equity_point(self, balance: float, timestamp: datetime = None):
         """Add equity curve data point"""
         if timestamp is None:
             timestamp = datetime.now()
-        
+
         self.equity_data.append({
             'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
             'balance': balance
         })
-        
+
         # Keep only last 1000 points
         if len(self.equity_data) > 1000:
             self.equity_data = self.equity_data[-1000:]
-    
+
     def add_trade(self, trade: Dict):
         """Add recent trade to dashboard"""
         if 'timestamp' not in trade:
@@ -637,13 +637,13 @@ class TradingDashboard:
         elif isinstance(trade['timestamp'], datetime):
             trade['timestamp'] = trade['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
         # If it's already a string, leave it as is
-        
+
         self.recent_trades.append(trade)
-        
+
         # Keep only last 100 trades
         if len(self.recent_trades) > 100:
             self.recent_trades = self.recent_trades[-100:]
-    
+
     def generate_drawdown_chart(self) -> Dict:
         """Generate Plotly drawdown chart"""
         if not self.drawdown_data:
@@ -651,10 +651,10 @@ class TradingDashboard:
                 'data': [],
                 'layout': {'title': 'No data available'}
             }
-        
+
         timestamps = [point['timestamp'] for point in self.drawdown_data]
         drawdowns = [point['drawdown'] for point in self.drawdown_data]
-        
+
         return {
             'data': [{
                 'x': timestamps,
@@ -676,48 +676,48 @@ class TradingDashboard:
                 'margin': {'l': 50, 'r': 20, 't': 20, 'b': 50}
             }
         }
-    
+
     def update_positions(self, positions: List[Dict]):
         """Update open positions"""
         self.open_positions = positions
-    
+
     def update_risk_metrics(self, metrics: Dict):
         """Update risk metrics"""
         self.risk_metrics = metrics
-    
+
     def update_strategy_info(self, info: Dict):
         """Update strategy information"""
         self.strategy_info = info
-    
+
     def update_market_info(self, info: Dict):
         """Update market information"""
         self.market_info = info
-    
+
     def update_system_status(self, status: Dict):
         """Update system status"""
         status['last_update'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self.system_status = status
-    
+
     def add_drawdown_point(self, drawdown: float, timestamp: datetime = None):
         """Add drawdown data point"""
         if timestamp is None:
             timestamp = datetime.now()
-        
+
         self.drawdown_data.append({
             'timestamp': timestamp.strftime('%Y-%m-%d %H:%M:%S'),
             'drawdown': drawdown
         })
-        
+
         # Keep only last 1000 points
         if len(self.drawdown_data) > 1000:
             self.drawdown_data = self.drawdown_data[-1000:]
-    
+
     def run(self, debug: bool = False, host: str = '0.0.0.0'):
         """Start dashboard server"""
         if not FLASK_AVAILABLE or not self.app:
             self.logger.error("Cannot start dashboard: Flask not available")
             return
-        
+
         try:
             self.logger.info(f"Starting dashboard on http://{host}:{self.port}")
             self.app.run(host=host, port=self.port, debug=debug)

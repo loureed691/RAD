@@ -10,14 +10,14 @@ from unittest.mock import Mock, MagicMock
 def test_position_manager_has_advanced_exit_strategy():
     """Test that PositionManager initializes with AdvancedExitStrategy"""
     print("\nTesting PositionManager has AdvancedExitStrategy...")
-    
+
     try:
         mock_client = Mock()
         manager = PositionManager(mock_client)
-        
+
         assert hasattr(manager, 'advanced_exit_strategy'), "PositionManager should have advanced_exit_strategy attribute"
         assert isinstance(manager.advanced_exit_strategy, AdvancedExitStrategy), "advanced_exit_strategy should be an instance of AdvancedExitStrategy"
-        
+
         print("  ✓ PositionManager correctly initialized with AdvancedExitStrategy")
         return True
     except Exception as e:
@@ -28,11 +28,11 @@ def test_position_manager_has_advanced_exit_strategy():
 def test_breakeven_plus_exit_integration():
     """Test breakeven+ exit strategy in position management"""
     print("\nTesting breakeven+ exit integration...")
-    
+
     try:
         # Create advanced exit strategy
         exit_strategy = AdvancedExitStrategy()
-        
+
         # Test position with 2% profit (above 1.5% activation threshold)
         # With 10x leverage, spot P&L is 0.2% and leveraged P&L is 2%
         position_data = {
@@ -46,23 +46,23 @@ def test_breakeven_plus_exit_integration():
             'stop_loss': 49000,
             'take_profit': 55000
         }
-        
+
         market_data = {
             'volatility': 0.03,
             'momentum': 0.01,
             'rsi': 65.0,
             'trend_strength': 0.6
         }
-        
+
         should_exit, reason, new_stop = exit_strategy.get_comprehensive_exit_signal(
             position_data, market_data
         )
-        
+
         # Breakeven+ should suggest a new stop loss to lock in profit
         assert new_stop is not None, f"Breakeven+ should suggest a new stop loss, got: {new_stop}, reason: {reason}"
         assert new_stop > position_data['entry_price'], f"New stop {new_stop} should be above entry {position_data['entry_price']} (locking in profit)"
         print(f"  ✓ Breakeven+ activated: new stop = {new_stop:.2f} (entry = {position_data['entry_price']:.2f}), reason = {reason}")
-        
+
         return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
@@ -74,10 +74,10 @@ def test_breakeven_plus_exit_integration():
 def test_momentum_reversal_exit_integration():
     """Test momentum reversal detection"""
     print("\nTesting momentum reversal exit integration...")
-    
+
     try:
         exit_strategy = AdvancedExitStrategy()
-        
+
         # Test long position with negative momentum and overbought RSI
         position_data = {
             'side': 'long',
@@ -89,23 +89,23 @@ def test_momentum_reversal_exit_integration():
             'stop_loss': 49000,
             'take_profit': 55000
         }
-        
+
         market_data = {
             'volatility': 0.03,
             'momentum': -0.025,  # Strong negative momentum
             'rsi': 75.0,  # Overbought
             'trend_strength': 0.4
         }
-        
+
         should_exit, reason, _ = exit_strategy.get_comprehensive_exit_signal(
             position_data, market_data
         )
-        
+
         # Should detect momentum reversal
-        assert should_exit == True, "Should exit on momentum reversal"
+        assert should_exit is True, "Should exit on momentum reversal"
         assert 'reversal' in reason.lower(), "Reason should mention momentum reversal"
         print(f"  ✓ Momentum reversal detected: {reason}")
-        
+
         return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
@@ -115,10 +115,10 @@ def test_momentum_reversal_exit_integration():
 def test_profit_lock_exit_integration():
     """Test profit lock exit strategy"""
     print("\nTesting profit lock exit integration...")
-    
+
     try:
         exit_strategy = AdvancedExitStrategy()
-        
+
         # Test position with significant profit retracement
         # Peak was at 5%, now at 3.0% = 40% retracement (above 30% threshold)
         position_data = {
@@ -132,22 +132,22 @@ def test_profit_lock_exit_integration():
             'stop_loss': 49500,
             'take_profit': 55000
         }
-        
+
         market_data = {
             'volatility': 0.04,
             'momentum': -0.01,
             'rsi': 62.0,
             'trend_strength': 0.5
         }
-        
+
         should_exit, reason, _ = exit_strategy.get_comprehensive_exit_signal(
             position_data, market_data
         )
-        
+
         # Profit lock should trigger (retraced from 5% to 3% = 40% retracement)
-        assert should_exit == True, f"Should exit on profit lock (40% retracement), got exit={should_exit}, reason={reason}"
+        assert should_exit is True, f"Should exit on profit lock (40% retracement), got exit={should_exit}, reason={reason}"
         print(f"  ✓ Profit lock triggered: {reason}")
-        
+
         return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
@@ -157,10 +157,10 @@ def test_profit_lock_exit_integration():
 def test_time_based_exit_integration():
     """Test time-based exit strategy"""
     print("\nTesting time-based exit integration...")
-    
+
     try:
         exit_strategy = AdvancedExitStrategy()
-        
+
         # Test position held for over 24 hours
         position_data = {
             'side': 'long',
@@ -172,23 +172,23 @@ def test_time_based_exit_integration():
             'stop_loss': 49000,
             'take_profit': 55000
         }
-        
+
         market_data = {
             'volatility': 0.03,
             'momentum': 0.005,
             'rsi': 52.0,
             'trend_strength': 0.4
         }
-        
+
         should_exit, reason, _ = exit_strategy.get_comprehensive_exit_signal(
             position_data, market_data
         )
-        
+
         # Time-based exit should trigger
-        assert should_exit == True, "Should exit after max hold time"
+        assert should_exit is True, "Should exit after max hold time"
         assert 'time' in reason.lower() or 'hold' in reason.lower(), "Reason should mention time/hold"
         print(f"  ✓ Time-based exit triggered: {reason}")
-        
+
         return True
     except Exception as e:
         print(f"  ✗ Test error: {e}")
@@ -198,10 +198,10 @@ def test_time_based_exit_integration():
 def test_volatility_spike_exit_integration():
     """Test volatility spike exit strategy"""
     print("\nTesting volatility spike exit integration...")
-    
+
     try:
         exit_strategy = AdvancedExitStrategy()
-        
+
         # Test position with high volatility spike
         # Need to simulate entry volatility stored somewhere
         position_data = {
@@ -214,7 +214,7 @@ def test_volatility_spike_exit_integration():
             'stop_loss': 49000,
             'take_profit': 55000
         }
-        
+
         # Very high volatility (simulating spike)
         market_data = {
             'volatility': 0.10,  # 10% volatility is very high
@@ -222,13 +222,13 @@ def test_volatility_spike_exit_integration():
             'rsi': 58.0,
             'trend_strength': 0.5
         }
-        
+
         # Note: Volatility spike detection requires entry volatility tracking
         # For now, this test validates the integration works
         should_exit, reason, _ = exit_strategy.get_comprehensive_exit_signal(
             position_data, market_data
         )
-        
+
         print(f"  ✓ Volatility spike handling tested (exit={should_exit}, reason={reason})")
         return True
     except Exception as e:
@@ -239,16 +239,16 @@ def test_volatility_spike_exit_integration():
 def test_position_update_with_advanced_exits():
     """Test that position updates properly integrate advanced exit strategies"""
     print("\nTesting position updates with advanced exits...")
-    
+
     try:
         # Create mock client
         mock_client = Mock()
         mock_client.get_ticker.return_value = {'last': 51000}
         mock_client.get_ohlcv.return_value = None  # Simulate no market data
-        
+
         # Create position manager
         manager = PositionManager(mock_client)
-        
+
         # Create a test position
         position = Position(
             symbol='BTC-USDT',
@@ -262,10 +262,10 @@ def test_position_update_with_advanced_exits():
         # Set it to profitable to trigger breakeven+
         position.max_favorable_excursion = 0.02
         manager.positions['BTC-USDT'] = position
-        
+
         # Update positions (this should use advanced exit strategies)
         closed_positions = list(manager.update_positions())
-        
+
         print(f"  ✓ Position update integrated with advanced exit strategies (closed: {len(closed_positions)})")
         return True
     except Exception as e:
@@ -280,7 +280,7 @@ def main():
     print("=" * 60)
     print("Running Advanced Strategy Integration Tests")
     print("=" * 60)
-    
+
     tests = [
         test_position_manager_has_advanced_exit_strategy,
         test_breakeven_plus_exit_integration,
@@ -290,7 +290,7 @@ def main():
         test_volatility_spike_exit_integration,
         test_position_update_with_advanced_exits,
     ]
-    
+
     results = []
     for test in tests:
         try:
@@ -299,11 +299,11 @@ def main():
         except Exception as e:
             print(f"✗ Test failed with exception: {e}")
             results.append(False)
-    
+
     print("\n" + "=" * 60)
     print(f"Test Results: {sum(results)}/{len(results)} passed")
     print("=" * 60)
-    
+
     if all(results):
         print("\n✓ All advanced strategy integration tests passed!")
         return 0

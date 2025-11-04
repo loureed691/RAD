@@ -18,17 +18,17 @@ def test_with_attention_weighting():
     print("\n" + "="*70)
     print("Testing Feature Names Warning Fix with Attention Weighting")
     print("="*70)
-    
+
     # Create ML model instance
     model = MLModel(model_path='models/test_attention_model.pkl')
-    
+
     # Initialize attention selector (2025 AI Enhancement)
     attention_selector = AttentionFeatureSelector(n_features=len(MLModel.FEATURE_NAMES), learning_rate=0.01)
     model.attention_selector = attention_selector
-    
+
     print("\n1. Generating training data with attention selector...")
     np.random.seed(42)
-    
+
     # Generate 150 samples for training
     for i in range(150):
         indicators = {
@@ -52,33 +52,33 @@ def test_with_attention_weighting():
             'sma_20': 49900,
             'sma_50': 49500
         }
-        
+
         profit_loss = np.random.uniform(-0.03, 0.03)
         signal = 'BUY' if np.random.random() > 0.5 else 'SELL'
-        
+
         model.record_outcome(indicators, signal, profit_loss)
-    
+
     print(f"   ✓ Generated {len(model.training_data)} training samples")
     print(f"   ✓ Attention selector initialized with {attention_selector.n_features} features")
-    
+
     print("\n2. Training model with attention selector...")
-    
+
     # Capture warnings during training
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        
+
         success = model.train(min_samples=100)
-        
+
         if not success:
             print("   ✗ Training failed")
             return False
-        
+
         # Check for feature name warnings
         feature_name_warnings = [
-            warning for warning in w 
+            warning for warning in w
             if "feature names" in str(warning.message).lower()
         ]
-        
+
         if feature_name_warnings:
             print(f"   ✗ Found {len(feature_name_warnings)} feature name warning(s):")
             for warning in feature_name_warnings:
@@ -86,9 +86,9 @@ def test_with_attention_weighting():
             return False
         else:
             print("   ✓ No feature name warnings during training")
-    
+
     print("\n3. Making predictions with attention-based feature weighting...")
-    
+
     # Test prediction with multiple samples
     test_indicators_list = [
         {
@@ -113,22 +113,22 @@ def test_with_attention_weighting():
             'ema_12': 50000, 'ema_26': 50000, 'sma_20': 50000, 'sma_50': 50000
         }
     ]
-    
+
     # Capture warnings during prediction
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        
+
         predictions = []
         for test_indicators in test_indicators_list:
             signal, confidence = model.predict(test_indicators)
             predictions.append((signal, confidence))
-        
+
         # Check for feature name warnings
         feature_name_warnings = [
-            warning for warning in w 
+            warning for warning in w
             if "feature names" in str(warning.message).lower()
         ]
-        
+
         if feature_name_warnings:
             print(f"   ✗ Found {len(feature_name_warnings)} feature name warning(s):")
             for warning in feature_name_warnings:
@@ -136,7 +136,7 @@ def test_with_attention_weighting():
             return False
         else:
             print("   ✓ No feature name warnings during prediction with attention weighting")
-    
+
     print("\n4. Verifying predictions with attention-based feature weighting...")
     for i, (signal, confidence) in enumerate(predictions, 1):
         print(f"   Sample {i}: Signal={signal}, Confidence={confidence:.3f}")
@@ -147,7 +147,7 @@ def test_with_attention_weighting():
             print(f"   ✗ Invalid confidence: {confidence}")
             return False
     print("   ✓ All predictions valid with attention weighting")
-    
+
     print("\n5. Verifying attention mechanism is working...")
     top_features = attention_selector.get_top_features(5)
     if top_features:
@@ -156,12 +156,12 @@ def test_with_attention_weighting():
             print(f"      {i}. {feature}: {weight:.6f}")
     else:
         print("   ⚠ Attention features not yet populated (expected for new model)")
-    
+
     # Cleanup
     if os.path.exists('models/test_attention_model.pkl'):
         os.remove('models/test_attention_model.pkl')
         print("\n   ✓ Cleaned up test model file")
-    
+
     print("\n" + "="*70)
     print("✓ Feature Names Warning Fix Verified with Attention Weighting!")
     print("="*70)
@@ -171,9 +171,9 @@ if __name__ == '__main__':
     print("\n" + "="*70)
     print("Feature Names Warning Fix Test with Attention Weighting")
     print("="*70)
-    
+
     success = test_with_attention_weighting()
-    
+
     if success:
         print("\n✓ TEST PASSED: No feature name warnings with attention weighting")
         sys.exit(0)

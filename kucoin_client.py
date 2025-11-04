@@ -19,7 +19,7 @@ def track_api_performance(func):
         start_time = time.time()
         success = True
         retried = False
-        
+
         try:
             result = func(*args, **kwargs)
             return result
@@ -38,7 +38,7 @@ def track_api_performance(func):
                 monitor.record_api_call(duration, success, retried)
             except Exception as monitor_exc:
                 Logger.get_logger().debug(f"Performance monitoring failed in track_api_performance: {monitor_exc}")
-    
+
     return wrapper
 
 
@@ -51,31 +51,31 @@ class APICallPriority(IntEnum):
 
 class KuCoinClient:
     """Wrapper for KuCoin Futures API using ccxt with API call prioritization"""
-    
+
     def __init__(self, api_key: str, api_secret: str, api_passphrase: str, enable_websocket: bool = True):
         """Initialize KuCoin client with priority queue system and WebSocket support"""
         self.logger = Logger.get_logger()
         self.orders_logger = Logger.get_orders_logger()
-        
+
         # Initialize API call priority queue system
         # This ensures trading operations always execute before scanning operations
         self._pending_critical_calls = 0  # Track critical calls in progress
         self._critical_call_lock = threading.Lock()
         self._closing = False  # Flag to indicate client is shutting down
-        
+
 
         # PRIORITY 1 SAFETY: Symbol metadata cache for exchange invariant validation
         self._symbol_metadata_cache = {}  # Cache symbol specs (min qty, price step, etc.)
         self._metadata_cache_time = None
         self._metadata_refresh_interval = 3600  # Refresh every hour
         self._metadata_lock = threading.Lock()
-        
+
         # PRIORITY 1 SAFETY: Clock sync tracking
         self._server_time_offset = 0  # Milliseconds difference between local and server
         self._last_sync_check = None
         self._max_time_drift_ms = 5000  # Max 5 seconds drift allowed
         self._sync_check_interval = 3600  # Check every hour
-        
+
         try:
             self.exchange = ccxt.kucoinfutures({
                 'apiKey': api_key,
@@ -91,10 +91,10 @@ class KuCoinClient:
             })
             self.logger.info("KuCoin Futures client initialized successfully")
             self.logger.info("✅ API Call Priority System: ENABLED (Trading operations have priority)")
-            
+
             # PRIORITY 1 SAFETY: Verify clock sync at startup
             self._verify_clock_sync()
-            
+
             # Set position mode to one-way (single position per symbol)
             # This prevents error 330011: "position mode does not match"
             try:
@@ -103,7 +103,7 @@ class KuCoinClient:
             except Exception as e:
                 # Some exchanges may not support this or it might already be set
                 self.logger.warning(f"Could not set position mode: {e}")
-            
+
             # Initialize WebSocket for real-time market data
             self.websocket = None
             self.enable_websocket = enable_websocket
@@ -121,11 +121,11 @@ class KuCoinClient:
                 except Exception as e:
                     self.logger.warning(f"⚠️  Could not initialize WebSocket: {e}, will use REST API only")
                     self.websocket = None
-                
+
         except Exception as e:
             self.logger.error(f"Failed to initialize KuCoin client: {e}")
             raise
-    
+
     def _wait_for_critical_calls(self, priority: APICallPriority):
         """
         Wait if there are pending critical calls and current call is not critical.
@@ -135,13 +135,13 @@ class KuCoinClient:
             # Non-critical call - wait for any pending critical calls to complete
             max_wait = 5.0  # Maximum 5 seconds wait
             start_time = time.time()
-            
+
             while time.time() - start_time < max_wait:
                 with self._critical_call_lock:
                     if self._pending_critical_calls == 0:
                         break
                 time.sleep(0.05)  # Short sleep to avoid busy waiting
-    
+
     def _track_critical_call(self, priority: APICallPriority, increment: bool):
         """Track critical API calls in progress"""
         if priority == APICallPriority.CRITICAL:
@@ -150,43 +150,43 @@ class KuCoinClient:
                     self._pending_critical_calls += 1
                 else:
                     self._pending_critical_calls = max(0, self._pending_critical_calls - 1)
-    
+
     def _should_use_rest_api(self) -> bool:
         """
         Check if we should use REST API instead of WebSocket due to subscription limits.
-        
+
         Returns:
             True if we should use REST API, False if we can use WebSocket
         """
         if not self.websocket or not self.websocket.is_connected():
             return True
-        
+
         # Check if we're approaching subscription limit (leave buffer of 30)
         subscription_count = self.websocket.get_subscription_count()
         if subscription_count >= 350:
             self.logger.debug(f"WebSocket subscription count high ({subscription_count}), using REST API")
             return True
-        
-        return False
-    
 
-    def _handle_api_error(self, func: Callable, max_retries: int = 3, 
-                          exponential_backoff: bool = True, 
+        return False
+
+
+    def _handle_api_error(self, func: Callable, max_retries: int = 3,
+                          exponential_backoff: bool = True,
                           operation_name: str = "API call",
                           is_critical: bool = False) -> Any:
         """
         Handle API errors with retry logic and exponential backoff.
-        
+
         Args:
             func: Function to execute (should be a lambda or callable)
             max_retries: Maximum number of retry attempts
             exponential_backoff: If True, use exponential backoff (1s, 2s, 4s, etc.)
             operation_name: Name of the operation for logging
             is_critical: If True, uses more aggressive retry for critical operations (closing positions, etc.)
-            
+
         Returns:
             Result from func if successful, None if all retries failed
-            
+
         Handles:
             - RateLimitExceeded (429): Retry with backoff
             - NetworkError: Retry with backoff
@@ -196,23 +196,23 @@ class KuCoinClient:
             - ExchangeError: Retry for transient errors, fail for permanent ones
         """
         last_exception = None
-        
+
         # For critical operations (closing positions), use more retries
         # to ensure trades are executed even with transient errors
         effective_retries = max_retries * 3 if is_critical else max_retries
-        
+
         for attempt in range(effective_retries):
             try:
                 result = func()
-                
+
                 # Log if we recovered from an error
                 if attempt > 0:
                     self.logger.info(
                         f"{operation_name} succeeded after {attempt} retry attempt(s)"
                     )
-                
+
                 return result
-                
+
             except ccxt.RateLimitExceeded as e:
                 last_exception = e
                 # Calculate backoff delay
@@ -221,10 +221,10 @@ class KuCoinClient:
                     delay = (2 ** attempt) * base_delay  # 1s, 2s, 4s, 8s...
                 else:
                     delay = base_delay  # Fixed 1s delay
-                
+
                 # Cap maximum delay at 30 seconds
                 delay = min(delay, 30)
-                
+
                 if attempt < effective_retries - 1:
                     self.logger.warning(
                         f"Rate limit exceeded for {operation_name} "
@@ -237,14 +237,14 @@ class KuCoinClient:
                         f"Rate limit exceeded for {operation_name} after {effective_retries} attempts. "
                         f"Error: {str(e)}"
                     )
-                    
+
             except ccxt.InsufficientFunds as e:
                 # Don't retry - this is a permanent error until balance changes
                 self.logger.error(
                     f"Insufficient funds for {operation_name}: {str(e)}"
                 )
                 return None
-                
+
             except ccxt.InvalidOrder as e:
                 # Don't retry - order parameters are invalid
                 # Check if this is the expected "no position to close" error
@@ -261,14 +261,14 @@ class KuCoinClient:
                         f"Invalid order parameters for {operation_name}: {error_str}"
                     )
                 return None
-                
+
             except ccxt.AuthenticationError as e:
                 # Don't retry - credentials are wrong, this is critical
                 self.logger.error(
                     f"Authentication failed for {operation_name}: {str(e)}"
                 )
                 raise  # Re-raise to stop bot execution
-                
+
             except ccxt.NetworkError as e:
                 last_exception = e
                 # Retry for network errors
@@ -276,9 +276,9 @@ class KuCoinClient:
                     delay = (2 ** attempt)
                 else:
                     delay = 2
-                    
+
                 delay = min(delay, 30)
-                
+
                 if attempt < effective_retries - 1:
                     self.logger.warning(
                         f"Network error for {operation_name} "
@@ -291,11 +291,11 @@ class KuCoinClient:
                         f"Network error for {operation_name} after {effective_retries} attempts. "
                         f"Error: {str(e)}"
                     )
-                    
+
             except ccxt.ExchangeError as e:
                 last_exception = e
                 error_str = str(e).lower()
-                
+
                 # Check for specific KuCoin error codes
                 # 400 errors - usually permanent (bad request)
                 if '400' in error_str or 'invalid' in error_str:
@@ -303,14 +303,14 @@ class KuCoinClient:
                         f"Invalid request for {operation_name}: {str(e)}"
                     )
                     return None
-                    
+
                 # 403 errors - permission denied (permanent)
                 elif '403' in error_str or 'permission' in error_str or 'forbidden' in error_str:
                     self.logger.error(
                         f"Permission denied for {operation_name}: {str(e)}"
                     )
                     return None
-                    
+
                 # 429 errors - rate limit (should be caught above, but just in case)
                 elif '429' in error_str or 'too many' in error_str:
                     if exponential_backoff:
@@ -318,7 +318,7 @@ class KuCoinClient:
                     else:
                         delay = 2
                     delay = min(delay, 30)
-                    
+
                     if attempt < effective_retries - 1:
                         self.logger.warning(
                             f"Rate limit error for {operation_name} "
@@ -331,7 +331,7 @@ class KuCoinClient:
                             f"Rate limit error for {operation_name} after {effective_retries} attempts. "
                             f"Error: {str(e)}"
                         )
-                        
+
                 # 500 errors - server error (transient, retry)
                 elif '500' in error_str or '502' in error_str or '503' in error_str or '504' in error_str:
                     if exponential_backoff:
@@ -339,7 +339,7 @@ class KuCoinClient:
                     else:
                         delay = 2
                     delay = min(delay, 30)
-                    
+
                     if attempt < effective_retries - 1:
                         self.logger.warning(
                             f"Server error for {operation_name} "
@@ -358,7 +358,7 @@ class KuCoinClient:
                         f"Exchange error for {operation_name}: {str(e)}"
                     )
                     return None
-                    
+
             except Exception as e:
                 # Catch-all for unexpected errors
                 last_exception = e
@@ -367,17 +367,17 @@ class KuCoinClient:
                 )
                 # Don't retry unexpected errors
                 return None
-        
+
         # All retries exhausted
         if last_exception:
             self.logger.error(
                 f"Failed {operation_name} after {effective_retries} attempts. "
                 f"Last error: {type(last_exception).__name__}: {str(last_exception)}"
             )
-        
+
         return None
-    
-    def _execute_with_priority(self, func: Callable, priority: APICallPriority, 
+
+    def _execute_with_priority(self, func: Callable, priority: APICallPriority,
                                call_name: str, *args, **kwargs) -> Any:
         """
         Execute an API call with priority handling.
@@ -386,31 +386,31 @@ class KuCoinClient:
         """
         # Wait for critical calls if this is a non-critical call
         self._wait_for_critical_calls(priority)
-        
+
         # Track if this is a critical call
         self._track_critical_call(priority, increment=True)
-        
+
         try:
             # Log priority for critical operations
             if priority == APICallPriority.CRITICAL:
                 self.logger.debug(f"🔴 CRITICAL API call: {call_name}")
-            
+
             # Execute the actual API call
             result = func(*args, **kwargs)
             return result
         finally:
             # Always decrement critical call counter
             self._track_critical_call(priority, increment=False)
-    
+
     def get_active_futures(self, include_volume: bool = True) -> List[Dict]:
         """Get all active futures trading pairs (perpetual swaps and quarterly futures) - USDT pairs only
-        
+
         This is a SCANNING operation with NORMAL priority.
         Will wait for any critical trading operations to complete first.
-        
+
         Args:
             include_volume: If True, fetch ticker data to include 24h volume (adds API call overhead)
-        
+
         Returns:
             List of futures with symbol, info, swap, future, and optionally quoteVolume
         """
@@ -428,7 +428,7 @@ class KuCoinClient:
                     if (market.get('swap') or market.get('future')) and market.get('active') and ':USDT' in symbol
                 ]
                 self.logger.info(f"Found {len(futures)} active USDT futures pairs")
-                
+
                 # Optionally fetch volume data from tickers
                 if include_volume:
                     try:
@@ -443,7 +443,7 @@ class KuCoinClient:
                     except Exception as e:
                         self.logger.warning(f"Could not fetch volume data: {e}")
                         # Continue without volume data
-                
+
                 # Log details of found pairs for debugging
                 if futures:
                     swap_only_count = sum(1 for f in futures if f.get('swap') and not f.get('future'))
@@ -454,24 +454,24 @@ class KuCoinClient:
                         f"{future_only_count} dated futures only, "
                         f"{both_count} instruments that are both swap and future"
                     )
-                
+
                 return futures
             except Exception as e:
                 self.logger.error(f"Error fetching active futures: {e}")
                 return []
-        
+
         # Execute with NORMAL priority - will wait for CRITICAL operations
         return self._execute_with_priority(_fetch, APICallPriority.NORMAL, 'get_active_futures')
-    
+
     def get_ticker(self, symbol: str, priority: APICallPriority = APICallPriority.HIGH) -> Optional[Dict]:
         """Get ticker information for a symbol
-        
+
         Uses WebSocket data if available, falls back to REST API.
-        
+
         Args:
             symbol: Trading pair symbol
             priority: Priority level (HIGH for position monitoring, NORMAL for scanning)
-        
+
         Returns:
             Ticker dict or None
         """
@@ -479,7 +479,7 @@ class KuCoinClient:
         if getattr(self, '_closing', False):
             self.logger.debug(f"Skipping get_ticker({symbol}) - client is closing")
             return None
-        
+
         # Try WebSocket first if enabled and connected
         if self.websocket and self.websocket.is_connected():
             # Check if we're approaching subscription limit and cleanup if needed
@@ -509,13 +509,13 @@ class KuCoinClient:
                             waited += interval
                     # Fall through to REST API if no WebSocket data
                     self.logger.debug(f"No WebSocket data for {symbol}, using REST API")
-        
+
         # Fallback to REST API
         def _fetch():
             def _fetch_ticker():
                 ticker = self.exchange.fetch_ticker(symbol)
                 return ticker
-            
+
             # Use error handling with retries
             is_critical = priority <= APICallPriority.HIGH
             result = self._handle_api_error(
@@ -525,23 +525,23 @@ class KuCoinClient:
                 operation_name=f"get_ticker({symbol})",
                 is_critical=is_critical
             )
-            
+
             return result
-        
+
         return self._execute_with_priority(_fetch, priority, f'get_ticker({symbol})')
-    
+
     def get_ohlcv(self, symbol: str, timeframe: str = '1h', limit: int = 100) -> List:
         """Get OHLCV data for a symbol with retry logic
-        
+
         Uses WebSocket data if available, falls back to REST API.
         This is typically used for SCANNING, so uses NORMAL priority by default.
         Will wait for critical trading operations to complete first.
-        
+
         Args:
             symbol: Trading pair symbol
             timeframe: Timeframe (1h, 4h, 1d, etc.)
             limit: Number of candles to retrieve
-            
+
         Returns:
             List of OHLCV candles
         """
@@ -549,7 +549,7 @@ class KuCoinClient:
         if getattr(self, '_closing', False):
             self.logger.debug(f"Skipping get_ohlcv({symbol}) - client is closing")
             return []
-        
+
         # Try WebSocket first if enabled and connected
         if self.websocket and self.websocket.is_connected():
             # Use helper to check if we should use REST API due to subscription limit
@@ -576,7 +576,7 @@ class KuCoinClient:
                         self.logger.debug(f"Insufficient WebSocket data for {symbol} (got {len(ohlcv)}, need {min(50, limit)}), using REST API")
                     else:
                         self.logger.debug(f"No WebSocket data for {symbol} {timeframe}, using REST API")
-        
+
         # Fallback to REST API
         def _fetch():
             def _fetch_ohlcv():
@@ -584,10 +584,10 @@ class KuCoinClient:
                 if not ohlcv:
                     self.logger.warning(f"Empty OHLCV data returned for {symbol}")
                     return []
-                
+
                 self.logger.debug(f"Fetched {len(ohlcv)} candles for {symbol} from REST API")
                 return ohlcv
-            
+
             # Use error handling with retries
             result = self._handle_api_error(
                 _fetch_ohlcv,
@@ -595,19 +595,19 @@ class KuCoinClient:
                 exponential_backoff=True,
                 operation_name=f"get_ohlcv({symbol})"
             )
-            
+
             return result if result is not None else []
-        
+
         # Execute with NORMAL priority - will wait for CRITICAL and HIGH operations
         return self._execute_with_priority(_fetch, APICallPriority.NORMAL, f'get_ohlcv({symbol})')
-    
+
     def get_balance(self) -> Dict:
         """Get account balance - HIGH priority for position monitoring"""
         def _fetch():
             def _fetch_balance():
                 balance = self.exchange.fetch_balance()
                 return balance
-            
+
             # Use error handling with retries
             # Balance checks are critical for risk management
             result = self._handle_api_error(
@@ -617,11 +617,11 @@ class KuCoinClient:
                 operation_name="get_balance",
                 is_critical=True
             )
-            
+
             return result if result is not None else {}
-        
+
         return self._execute_with_priority(_fetch, APICallPriority.HIGH, 'get_balance')
-    
+
     def get_market_limits(self, symbol: str) -> Optional[Dict]:
         """Get market limits for a symbol (min/max order size)"""
         try:
@@ -643,14 +643,14 @@ class KuCoinClient:
         except Exception as e:
             self.logger.error(f"Error fetching market limits for {symbol}: {e}")
             return None
-    
+
     def validate_and_cap_amount(self, symbol: str, amount: float) -> float:
         """Validate and cap order amount to exchange limits
-        
+
         Args:
             symbol: Trading pair symbol
             amount: Desired order amount in contracts
-            
+
         Returns:
             Validated amount capped at exchange limits
         """
@@ -666,7 +666,7 @@ class KuCoinClient:
                 )
                 return default_max
             return amount
-        
+
         # Check minimum
         min_amount = limits['amount']['min']
         if min_amount and amount < min_amount:
@@ -675,7 +675,7 @@ class KuCoinClient:
                 f"adjusting to minimum"
             )
             return min_amount
-        
+
         # Check maximum
         max_amount = limits['amount']['max']
         if max_amount and amount > max_amount:
@@ -684,88 +684,88 @@ class KuCoinClient:
                 f"capping to {max_amount}"
             )
             return max_amount
-        
+
         return amount
-    
+
     def _predict_slippage(self, order_size: float, levels: List, reference_price: float) -> float:
         """
         Predict slippage for an order based on order book depth
-        
+
         Args:
             order_size: Size of the order in contracts
             levels: Order book levels (list of [price, amount])
             reference_price: Current market price
-        
+
         Returns:
             Predicted slippage as percentage
         """
         if not levels or order_size <= 0:
             return 0.0
-        
+
         try:
             cumulative_amount = 0.0
             weighted_price = 0.0
-            
+
             for price, amount in levels:
                 price_float = float(price)
                 amount_float = float(amount)
-                
+
                 # Calculate how much of this level we'd consume
                 remaining = order_size - cumulative_amount
                 consumed = min(remaining, amount_float)
-                
+
                 # Add to weighted average
                 weighted_price += price_float * consumed
                 cumulative_amount += consumed
-                
+
                 if cumulative_amount >= order_size:
                     break
-            
+
             if cumulative_amount > 0:
                 avg_fill_price = weighted_price / cumulative_amount
                 slippage = abs(avg_fill_price - reference_price) / reference_price
                 return slippage
-            
+
         except Exception as e:
             self.logger.debug(f"Error predicting slippage: {e}")
-        
+
         return 0.0
-    
+
     def _calculate_spread(self, order_book: Dict) -> float:
         """
         Calculate bid-ask spread as percentage
-        
+
         Args:
             order_book: Order book with bids and asks
-        
+
         Returns:
             Spread as percentage
         """
         try:
             if not order_book or not order_book.get('bids') or not order_book.get('asks'):
                 return 0.0
-            
+
             best_bid = float(order_book['bids'][0][0])
             best_ask = float(order_book['asks'][0][0])
-            
+
             if best_bid > 0:
                 spread = (best_ask - best_bid) / best_bid
                 return spread
         except Exception as e:
             self.logger.debug(f"Error calculating spread: {e}")
-        
+
         return 0.0
-    
-    def calculate_required_margin(self, symbol: str, amount: float, 
+
+    def calculate_required_margin(self, symbol: str, amount: float,
                                   price: float, leverage: int) -> float:
         """Calculate margin required to open a position
-        
+
         Args:
             symbol: Trading pair symbol
             amount: Position size in contracts
             price: Entry price
             leverage: Leverage to use
-            
+
         Returns:
             Required margin in USDT
         """
@@ -776,7 +776,7 @@ class KuCoinClient:
             contract_size = 1
             if symbol in markets:
                 contract_size = markets[symbol].get('contractSize', 1)
-            
+
             # SAFETY: Validate inputs before calculation
             if leverage <= 0:
                 self.logger.error(f"Invalid leverage: {leverage}, using 1x")
@@ -784,10 +784,10 @@ class KuCoinClient:
             if amount <= 0 or price <= 0:
                 self.logger.error(f"Invalid amount ({amount}) or price ({price})")
                 return 0
-            
+
             position_value = amount * price * contract_size
             required_margin = position_value / leverage
-            
+
             return required_margin
         except Exception as e:
             self.logger.error(f"Error calculating required margin: {e}")
@@ -795,43 +795,43 @@ class KuCoinClient:
             if leverage <= 0:
                 leverage = 1
             return (amount * price) / leverage if (amount > 0 and price > 0) else 0
-    
-    def check_available_margin(self, symbol: str, amount: float, 
+
+    def check_available_margin(self, symbol: str, amount: float,
                                price: float, leverage: int) -> tuple[bool, float, str]:
         """Check if there's enough margin available to open a position
-        
+
         Args:
             symbol: Trading pair symbol
             amount: Position size in contracts
             price: Entry price
             leverage: Leverage to use
-            
+
         Returns:
             Tuple of (is_sufficient, available_margin, reason)
         """
         try:
             balance = self.get_balance()
-            
+
             # Handle case where balance fetch fails or is empty
             if not balance or 'free' not in balance or 'USDT' not in balance.get('free', {}):
                 # If we can't get balance, assume sufficient margin to avoid blocking trades
                 # The exchange will reject if there's actually insufficient margin
                 self.logger.debug("Could not determine available margin, proceeding with order")
                 return True, 0, "Unable to verify margin, proceeding"
-            
+
             available_margin = float(balance.get('free', {}).get('USDT', 0))
-            
+
             required_margin = self.calculate_required_margin(symbol, amount, price, leverage)
-            
+
             # Get contract size for accurate position value display
             markets = self.exchange.load_markets()
             contract_size = 1
             if symbol in markets:
                 contract_size = markets[symbol].get('contractSize', 1)
-            
+
             # Add 5% buffer for safety and fees
             required_with_buffer = required_margin * 1.05
-            
+
             if available_margin < required_with_buffer:
                 # Calculate actual position value including contract size
                 position_value = amount * price * contract_size
@@ -841,78 +841,78 @@ class KuCoinClient:
                     f"leverage={leverage}x)"
                 )
                 return False, available_margin, reason
-            
+
             return True, available_margin, "Sufficient margin available"
-            
+
         except Exception as e:
             self.logger.error(f"Error checking available margin: {e}")
             # If error checking, proceed with order and let exchange handle it
             return True, 0, f"Error checking margin: {e}"
-    
+
     def is_position_viable(self, symbol: str, amount: float, price: float, leverage: int) -> tuple[bool, str]:
         """Check if a position size is viable for trading
-        
+
         Args:
             symbol: Trading pair symbol
             amount: Position size in contracts
             price: Entry price
             leverage: Leverage to use
-            
+
         Returns:
             Tuple of (is_viable, reason)
         """
         try:
             # Get market limits
             limits = self.get_market_limits(symbol)
-            
+
             # Check against exchange minimum amount
             if limits and limits['amount']['min']:
                 min_amount = limits['amount']['min']
                 if amount < min_amount:
                     return False, f"Position size {amount:.4f} below exchange minimum {min_amount}"
-            
+
             # Get contract size for accurate position value
             markets = self.exchange.load_markets()
             contract_size = 1
             if symbol in markets:
                 contract_size = markets[symbol].get('contractSize', 1)
-            
+
             # Calculate position value
             position_value = amount * price * contract_size
-            
+
             # Check against exchange minimum cost
             if limits and limits['cost']['min']:
                 min_cost = limits['cost']['min']
                 if position_value < min_cost:
                     return False, f"Position value ${position_value:.2f} below exchange minimum ${min_cost}"
-            
+
             # Check that position value is meaningful (at least $1)
             if position_value < 1.0:
                 return False, f"Position value ${position_value:.2f} too small to be meaningful"
-            
+
             # Check that required margin is meaningful (at least $0.10)
             required_margin = self.calculate_required_margin(symbol, amount, price, leverage)
             if required_margin < 0.10:
                 return False, f"Required margin ${required_margin:.4f} too small to be meaningful"
-            
+
             return True, "Position is viable"
-            
+
         except Exception as e:
             self.logger.error(f"Error checking position viability: {e}")
             # If we can't check, assume it's viable and let exchange handle it
             return True, "Unable to verify viability, proceeding"
-    
-    def adjust_position_for_margin(self, symbol: str, amount: float, price: float, 
+
+    def adjust_position_for_margin(self, symbol: str, amount: float, price: float,
                                    leverage: int, available_margin: float) -> tuple[float, int]:
         """Adjust position size and/or leverage to fit available margin
-        
+
         Args:
             symbol: Trading pair symbol
             amount: Desired position size in contracts
             price: Entry price
             leverage: Desired leverage
             available_margin: Available margin in USDT
-            
+
         Returns:
             Tuple of (adjusted_amount, adjusted_leverage)
         """
@@ -925,34 +925,34 @@ class KuCoinClient:
                 )
                 # Return minimal viable values that will fail viability check
                 return 0.0, 1
-            
+
             # Get contract size for accurate calculations
             markets = self.exchange.load_markets()
             contract_size = 1
             if symbol in markets:
                 contract_size = markets[symbol].get('contractSize', 1)
-            
+
             # Check for zero price to prevent division by zero
             if price <= 0:
                 self.logger.error(f"Cannot adjust position: invalid price {price}")
                 return 0.0, 1
-            
+
             # Reserve 10% of available margin for safety and fees
             usable_margin = available_margin * 0.90
-            
+
             # Calculate maximum position value we can take
             max_position_value = usable_margin * leverage
-            
+
             # Calculate adjusted amount based on available margin
             adjusted_amount = max_position_value / (price * contract_size)
-            
+
             # If adjusted amount is still too large, also reduce leverage
             if adjusted_amount > amount:
                 adjusted_amount = amount
-            
+
             # Validate adjusted amount
             adjusted_amount = self.validate_and_cap_amount(symbol, adjusted_amount)
-            
+
             # If we still can't fit, reduce leverage
             required_margin = self.calculate_required_margin(symbol, adjusted_amount, price, leverage)
             if required_margin > usable_margin:
@@ -964,32 +964,32 @@ class KuCoinClient:
                     return 0, 1  # Return minimal values to prevent trading
                 adjusted_leverage = int(position_value / usable_margin)
                 adjusted_leverage = max(1, min(adjusted_leverage, leverage))
-                
+
                 self.logger.warning(
                     f"Reducing leverage from {leverage}x to {adjusted_leverage}x to fit available margin"
                 )
                 return adjusted_amount, adjusted_leverage
-            
+
             self.logger.warning(
                 f"Reducing position size from {amount:.4f} to {adjusted_amount:.4f} contracts "
                 f"to fit available margin (${usable_margin:.2f})"
             )
-            
+
             return adjusted_amount, leverage
-            
+
         except Exception as e:
             self.logger.error(f"Error adjusting position for margin: {e}")
             # Return conservative values
             return amount * 0.5, max(1, leverage // 2)
-    
-    def create_market_order(self, symbol: str, side: str, amount: float, 
+
+    def create_market_order(self, symbol: str, side: str, amount: float,
                            leverage: int = 10, max_slippage: float = 0.01,
                            validate_depth: bool = True, reduce_only: bool = False,
                            is_critical: bool = False) -> Optional[Dict]:
         """Create a market order with leverage and slippage protection
-        
+
         🔴 CRITICAL PRIORITY: This order operation executes BEFORE any scanning operations.
-        
+
         Args:
             symbol: Trading pair symbol
             side: 'buy' or 'sell'
@@ -999,13 +999,13 @@ class KuCoinClient:
             validate_depth: Check order book depth before large orders
             reduce_only: If True, order only reduces position (for closing positions)
             is_critical: If True, uses more aggressive retry for critical operations
-        
+
         Returns:
             Order dict if successful, None otherwise
         """
         def _create_order():
             nonlocal leverage
-            
+
             # PRIORITY 1 SAFETY: Validate order locally before submitting to exchange
             is_valid, rejection_reason = self.validate_order_locally(symbol, amount, 0)  # Price check comes later
             if not is_valid:
@@ -1015,33 +1015,33 @@ class KuCoinClient:
                     f"Amount: {amount:.4f} | Reason: {rejection_reason}"
                 )
                 return None
-            
+
             # Get current price first for margin checks (use HIGH priority for position-related ticker)
             ticker = self.get_ticker(symbol, priority=APICallPriority.HIGH)
             if not ticker:
                 self.logger.error(f"Could not get ticker for {symbol}")
                 return None
-                
+
             reference_price = ticker['last']
             self.logger.debug(f"Reference price for {symbol}: {reference_price}")
-            
+
             # Validate and cap amount to exchange limits
             validated_amount = self.validate_and_cap_amount(symbol, amount)
-            
+
             # Skip margin check for reduce_only orders as they close positions
             if not reduce_only:
                 # Check if we have enough margin for this position (error 330008 prevention)
                 has_margin, available_margin, margin_reason = self.check_available_margin(
                     symbol, validated_amount, reference_price, leverage
                 )
-            
+
                 if not has_margin:
                     self.logger.warning(f"Margin check failed: {margin_reason}")
                     # Try to adjust position to fit available margin
                     adjusted_amount, adjusted_leverage = self.adjust_position_for_margin(
                         symbol, validated_amount, reference_price, leverage, available_margin
                     )
-                    
+
                     # Check if adjusted position is viable (meets exchange minimums and meaningful size)
                     is_viable, viability_reason = self.is_position_viable(
                         symbol, adjusted_amount, reference_price, adjusted_leverage
@@ -1052,26 +1052,26 @@ class KuCoinClient:
                             f"(adjusted: {adjusted_amount:.4f}, desired: {validated_amount:.4f})"
                         )
                         return None
-                    
+
                     # Use adjusted values
                     validated_amount = adjusted_amount
                     leverage = adjusted_leverage
                     self.logger.info(
                         f"Adjusted position to fit margin: {adjusted_amount:.4f} contracts at {adjusted_leverage}x leverage"
                     )
-            
+
             # For large orders, check order book depth and predict slippage
             if validate_depth and validated_amount > 100:  # Threshold for "large" order
                 order_book = self.get_order_book(symbol, limit=20)
                 if order_book:
                     levels = order_book['bids'] if side == 'sell' else order_book['asks']
                     total_liquidity = sum(level[1] for level in levels)
-                    
+
                     # Predict slippage based on order book
                     predicted_slippage = self._predict_slippage(
                         validated_amount, levels, reference_price
                     )
-                    
+
                     if predicted_slippage > max_slippage:
                         self.logger.warning(
                             f"High predicted slippage for {symbol}: {predicted_slippage:.2%} "
@@ -1085,13 +1085,13 @@ class KuCoinClient:
                                 f"to limit slippage"
                             )
                             validated_amount = safe_amount
-                    
+
                     if total_liquidity < validated_amount * 1.5:
                         self.logger.warning(
                             f"Low liquidity for {symbol}: order size {validated_amount} vs "
                             f"book depth {total_liquidity:.2f}. Potential high slippage."
                         )
-                    
+
                     # Check spread for timing
                     spread = self._calculate_spread(order_book)
                     if spread > 0.005:  # >0.5% spread
@@ -1099,7 +1099,7 @@ class KuCoinClient:
                             f"Wide spread detected for {symbol}: {spread:.2%}. "
                             f"Consider waiting for tighter spread."
                         )
-            
+
             # Use error handling wrapper for the actual order placement
             def _place_order():
                 # Skip leverage/margin mode setting for reduce_only orders (closing positions)
@@ -1107,15 +1107,15 @@ class KuCoinClient:
                 if not reduce_only:
                     # Switch to cross margin mode first (fixes error 330006)
                     self.exchange.set_margin_mode('cross', symbol)
-                    
+
                     # Set leverage with cross margin mode
                     self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
-                
+
                 # Build order parameters
                 params = {"marginMode": "cross"}
                 if reduce_only:
                     params["reduceOnly"] = True
-                
+
                 # Create market order
                 order = self.exchange.create_order(
                     symbol=symbol,
@@ -1124,21 +1124,21 @@ class KuCoinClient:
                     amount=validated_amount,
                     params=params
                 )
-                
+
                 return order
-            
+
             # Execute with error handling and retry logic
             order = self._handle_api_error(
-                _place_order, 
+                _place_order,
                 max_retries=3,
                 exponential_backoff=True,
                 operation_name=f"create_market_order({symbol}, {side})",
                 is_critical=is_critical or reduce_only  # Closing positions is critical
             )
-            
+
             if not order:
                 return None
-            
+
             # Wait briefly for order to be filled and fetch updated status
             # Market orders typically fill immediately, but we need to fetch the status to get fill details
             time.sleep(0.5)  # Brief pause to allow order to be processed
@@ -1157,14 +1157,14 @@ class KuCoinClient:
                 except Exception as e:
                     # This is expected for very new orders - log at DEBUG level
                     self.logger.debug(f"Could not fetch order status immediately (order may be too new): {e}")
-            
+
             # Log order details to main logger
             avg_price = order.get('average') or order.get('price') or reference_price
             self.logger.info(
                 f"Created {side} market order for {validated_amount} {symbol} "
                 f"at {leverage}x leverage (avg fill: {avg_price})"
             )
-            
+
             # Log detailed order information to orders logger
             self.orders_logger.info("=" * 80)
             self.orders_logger.info(f"{side.upper()} ORDER EXECUTED: {symbol}")
@@ -1185,7 +1185,7 @@ class KuCoinClient:
             # Display timestamp exactly as KuCoin returns it (in milliseconds)
             timestamp = order.get('timestamp', 'N/A')
             self.orders_logger.info(f"  Timestamp: {timestamp}")
-            
+
             # Check actual slippage if we have both prices
             if order.get('average'):
                 actual_slippage = abs(order['average'] - reference_price) / reference_price
@@ -1198,21 +1198,21 @@ class KuCoinClient:
                     )
             self.orders_logger.info("=" * 80)
             self.orders_logger.info("")  # Empty line for readability
-            
+
             return order
-        
+
         # Execute with CRITICAL priority - this will block scanning operations
         return self._execute_with_priority(_create_order, APICallPriority.CRITICAL, f'create_market_order({symbol}, {side})')
-    
-    def create_limit_order(self, symbol: str, side: str, amount: float, 
+
+    def create_limit_order(self, symbol: str, side: str, amount: float,
                           price: float, leverage: int = 10, post_only: bool = False,
                           reduce_only: bool = False, is_critical: bool = False) -> Optional[Dict]:
         """Create a limit order with leverage.
-        
+
         🔴 CRITICAL PRIORITY: This order operation executes BEFORE any scanning operations.
 
         Cross margin mode is enforced when setting leverage.
-        
+
         Args:
             symbol: Trading pair symbol
             side: 'buy' or 'sell'
@@ -1227,21 +1227,21 @@ class KuCoinClient:
             nonlocal leverage
             # Validate and cap amount to exchange limits
             validated_amount = self.validate_and_cap_amount(symbol, amount)
-            
+
             # Check if we have enough margin for this position (error 330008 prevention)
             # Skip margin check for reduce_only orders as they close positions
             if not reduce_only:
                 has_margin, available_margin, margin_reason = self.check_available_margin(
                     symbol, validated_amount, price, leverage
                 )
-                
+
                 if not has_margin:
                     self.logger.warning(f"Margin check failed: {margin_reason}")
                     # Try to adjust position to fit available margin
                     adjusted_amount, adjusted_leverage = self.adjust_position_for_margin(
                         symbol, validated_amount, price, leverage, available_margin
                     )
-                    
+
                     # Check if adjusted position is viable (meets exchange minimums and meaningful size)
                     is_viable, viability_reason = self.is_position_viable(
                         symbol, adjusted_amount, price, adjusted_leverage
@@ -1252,14 +1252,14 @@ class KuCoinClient:
                             f"(adjusted: {adjusted_amount:.4f}, desired: {validated_amount:.4f})"
                         )
                         return None
-                    
+
                     # Use adjusted values
                     validated_amount = adjusted_amount
                     leverage = adjusted_leverage
                     self.logger.info(
                         f"Adjusted limit order to fit margin: {adjusted_amount:.4f} contracts at {adjusted_leverage}x leverage"
                     )
-            
+
             # Use error handling wrapper for the actual order placement
             def _place_order():
                 # Skip leverage/margin mode setting for reduce_only orders (closing positions)
@@ -1267,17 +1267,17 @@ class KuCoinClient:
                 if not reduce_only:
                     # Switch to cross margin mode first (fixes error 330006)
                     self.exchange.set_margin_mode('cross', symbol)
-                    
+
                     # Set leverage with cross margin mode
                     self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
-                
+
                 # Build order parameters
                 params = {"marginMode": "cross"}
                 if post_only:
                     params["postOnly"] = True
                 if reduce_only:
                     params["reduceOnly"] = True
-                
+
                 # Create limit order with cross margin mode explicitly set
                 order = self.exchange.create_order(
                     symbol=symbol,
@@ -1287,9 +1287,9 @@ class KuCoinClient:
                     price=price,
                     params=params
                 )
-                
+
                 return order
-            
+
             # Execute with error handling and retry logic
             order = self._handle_api_error(
                 _place_order,
@@ -1298,16 +1298,16 @@ class KuCoinClient:
                 operation_name=f"create_limit_order({symbol}, {side})",
                 is_critical=is_critical or reduce_only  # Closing positions is critical
             )
-            
+
             if not order:
                 return None
-            
+
             # Log order details to main logger
             self.logger.info(
                 f"Created {side} limit order for {validated_amount} {symbol} at {price} "
                 f"(leverage={leverage}x, post_only={post_only}, reduce_only={reduce_only})"
             )
-            
+
             # Log detailed order information to orders logger
             self.orders_logger.info("=" * 80)
             self.orders_logger.info(f"{side.upper()} ORDER CREATED: {symbol}")
@@ -1325,19 +1325,19 @@ class KuCoinClient:
             self.orders_logger.info(f"  Timestamp: {order.get('timestamp', 'N/A')}")
             self.orders_logger.info("=" * 80)
             self.orders_logger.info("")  # Empty line for readability
-            
+
             return order
-        
+
         # Execute with CRITICAL priority
         return self._execute_with_priority(_create_order, APICallPriority.CRITICAL, f'create_limit_order({symbol}, {side})')
-    
+
     def cancel_order(self, order_id: str, symbol: str) -> bool:
         """Cancel an order - CRITICAL priority for risk management"""
         def _cancel():
             def _do_cancel():
                 self.exchange.cancel_order(order_id, symbol)
                 return True
-            
+
             # Execute with error handling
             result = self._handle_api_error(
                 _do_cancel,
@@ -1345,10 +1345,10 @@ class KuCoinClient:
                 exponential_backoff=True,
                 operation_name=f"cancel_order({order_id}, {symbol})"
             )
-            
+
             if result:
                 self.logger.info(f"Cancelled order {order_id} for {symbol}")
-                
+
                 # Log cancellation to orders logger
                 self.orders_logger.info("=" * 80)
                 self.orders_logger.info(f"ORDER CANCELLED: {symbol}")
@@ -1357,13 +1357,13 @@ class KuCoinClient:
                 self.orders_logger.info(f"  Symbol: {symbol}")
                 self.orders_logger.info("=" * 80)
                 self.orders_logger.info("")  # Empty line for readability
-                
+
                 return True
             return False
-        
+
         # Execute with CRITICAL priority
         return self._execute_with_priority(_cancel, APICallPriority.CRITICAL, f'cancel_order({order_id})')
-    
+
     def get_open_positions(self) -> List[Dict]:
         """Get all open positions - HIGH priority for position monitoring"""
         def _fetch():
@@ -1374,23 +1374,23 @@ class KuCoinClient:
             except Exception as e:
                 self.logger.error(f"Error fetching positions: {e}")
                 return []
-        
+
         return self._execute_with_priority(_fetch, APICallPriority.HIGH, 'get_open_positions')
-    
-    def close_position(self, symbol: str, use_limit: bool = False, 
+
+    def close_position(self, symbol: str, use_limit: bool = False,
                       slippage_tolerance: float = 0.002, max_close_retries: int = 5) -> bool:
         """Close a position with optional limit order for better execution
-        
+
         This method will retry multiple times to ensure the position is closed,
         as closing positions is a critical operation that should not fail due to
         transient network issues or rate limits.
-        
+
         Args:
             symbol: Trading pair symbol
             use_limit: If True, uses limit order instead of market order
             slippage_tolerance: Maximum acceptable slippage (default 0.2%)
             max_close_retries: Maximum number of retries for the entire close operation (default 5)
-        
+
         Returns:
             True if position closed successfully, False otherwise
         """
@@ -1398,13 +1398,13 @@ class KuCoinClient:
             try:
                 positions = self.get_open_positions()
                 position_found = False
-                
+
                 for pos in positions:
                     if pos['symbol'] == symbol:
                         position_found = True
                         contracts = float(pos['contracts'])
                         side = 'sell' if pos['side'] == 'long' else 'buy'
-                        
+
                         # Extract leverage from position data (multi-source)
                         # 1. Try CCXT unified 'leverage' field
                         leverage = pos.get('leverage')
@@ -1434,7 +1434,7 @@ class KuCoinClient:
                                 self.logger.warning(
                                     f"Leverage not found for {symbol} when closing, defaulting to 10x"
                                 )
-                        
+
                         if use_limit:
                             # Get current market price
                             ticker = self.get_ticker(symbol)
@@ -1448,14 +1448,14 @@ class KuCoinClient:
                                     limit_price = current_price * (1 - slippage_tolerance)
                                 else:
                                     limit_price = current_price * (1 + slippage_tolerance)
-                                
+
                                 order = self.create_limit_order(
                                     symbol, side, abs(contracts), limit_price, leverage,
                                     reduce_only=True, is_critical=True
                                 )
                         else:
                             order = self.create_market_order(symbol, side, abs(contracts), leverage, reduce_only=True, is_critical=True)
-                        
+
                         if order:
                             self.logger.info(f"Closed position for {symbol} with {leverage}x leverage")
                             return True
@@ -1472,12 +1472,12 @@ class KuCoinClient:
                                 )
                                 time.sleep(retry_delay)
                             continue
-                
+
                 # If position not found, it may have already been closed
                 if not position_found:
                     self.logger.info(f"Position {symbol} not found (may already be closed)")
                     return True
-                    
+
             except Exception as e:
                 self.logger.error(
                     f"Error closing position {symbol} "
@@ -1489,21 +1489,21 @@ class KuCoinClient:
                         f"Retrying close_position for {symbol} in {retry_delay}s..."
                     )
                     time.sleep(retry_delay)
-        
+
         # All retries exhausted
         self.logger.error(
             f"Failed to close position {symbol} after {max_close_retries} attempts. "
             f"Position may still be open!"
         )
         return False
-    
+
     def create_stop_limit_order(self, symbol: str, side: str, amount: float,
-                               stop_price: float, limit_price: float, 
+                               stop_price: float, limit_price: float,
                                leverage: int = 10, reduce_only: bool = False) -> Optional[Dict]:
         """Create a stop-limit order for stop loss or take profit
-        
+
         🔴 CRITICAL PRIORITY: This order operation executes BEFORE any scanning operations.
-        
+
         Args:
             symbol: Trading pair symbol
             side: 'buy' or 'sell'
@@ -1512,7 +1512,7 @@ class KuCoinClient:
             limit_price: Limit price after stop triggers
             leverage: Leverage to use
             reduce_only: If True, order only reduces position
-        
+
         Returns:
             Order dict if successful, None otherwise
         """
@@ -1520,13 +1520,13 @@ class KuCoinClient:
             try:
                 # Validate and cap amount to exchange limits
                 validated_amount = self.validate_and_cap_amount(symbol, amount)
-                
+
                 # Switch to cross margin mode first
                 self.exchange.set_margin_mode('cross', symbol)
-                
+
                 # Set leverage with cross margin mode
                 self.exchange.set_leverage(leverage, symbol, params={"marginMode": "cross"})
-                
+
                 # Build order parameters
                 params = {
                     "marginMode": "cross",
@@ -1534,7 +1534,7 @@ class KuCoinClient:
                 }
                 if reduce_only:
                     params["reduceOnly"] = True
-                
+
                 # Create stop-limit order
                 order = self.exchange.create_order(
                     symbol=symbol,
@@ -1544,13 +1544,13 @@ class KuCoinClient:
                     price=limit_price,
                     params=params
                 )
-                
+
                 # Log order details to main logger
                 self.logger.info(
                     f"Created {side} stop-limit order for {validated_amount} {symbol} "
                     f"(stop={stop_price}, limit={limit_price}, reduce_only={reduce_only})"
                 )
-                
+
                 # Log detailed order information to orders logger
                 self.orders_logger.info("=" * 80)
                 self.orders_logger.info(f"{side.upper()} ORDER CREATED: {symbol}")
@@ -1568,22 +1568,22 @@ class KuCoinClient:
                 self.orders_logger.info(f"  Timestamp: {order.get('timestamp', 'N/A')}")
                 self.orders_logger.info("=" * 80)
                 self.orders_logger.info("")  # Empty line for readability
-                
+
                 return order
             except Exception as e:
                 self.logger.error(f"Error creating stop-limit order: {e}")
                 return None
-        
+
         # Execute with CRITICAL priority
         return self._execute_with_priority(_create_order, APICallPriority.CRITICAL, f'create_stop_limit_order({symbol}, {side})')
-    
+
     def get_order_status(self, order_id: str, symbol: str) -> Optional[Dict]:
         """Get the status of an order
-        
+
         Args:
             order_id: Order ID to check
             symbol: Trading pair symbol
-        
+
         Returns:
             Order status dict with fields like 'status', 'filled', 'remaining', etc.
         """
@@ -1603,48 +1603,48 @@ class KuCoinClient:
         except Exception as e:
             self.logger.error(f"Error fetching order status for {order_id}: {e}")
             return None
-    
-    def wait_for_order_fill(self, order_id: str, symbol: str, 
+
+    def wait_for_order_fill(self, order_id: str, symbol: str,
                            timeout: int = 30, check_interval: int = 2) -> Optional[Dict]:
         """Wait for an order to be filled (or partially filled)
-        
+
         Args:
             order_id: Order ID to monitor
             symbol: Trading pair symbol
             timeout: Maximum time to wait in seconds
             check_interval: How often to check order status in seconds
-        
+
         Returns:
             Final order status dict, or None if timeout or error
         """
         start_time = time.time()
-        
+
         while time.time() - start_time < timeout:
             status = self.get_order_status(order_id, symbol)
-            
+
             if not status:
                 self.logger.error(f"Could not get status for order {order_id}")
                 return None
-            
+
             # Order is fully filled
             if status['status'] == 'closed' and status['remaining'] == 0:
                 self.logger.info(f"Order {order_id} fully filled at avg price {status['average']}")
                 return status
-            
+
             # Order is canceled or expired
             if status['status'] in ['canceled', 'expired']:
                 self.logger.warning(f"Order {order_id} was {status['status']}")
                 return status
-            
+
             # Order is partially filled
             if status['filled'] > 0 and status['remaining'] > 0:
                 self.logger.info(
                     f"Order {order_id} partially filled: "
                     f"{status['filled']}/{status['amount']} contracts"
                 )
-            
+
             time.sleep(check_interval)
-        
+
         # Timeout reached
         final_status = self.get_order_status(order_id, symbol)
         if final_status and final_status['filled'] > 0:
@@ -1654,16 +1654,16 @@ class KuCoinClient:
             )
         else:
             self.logger.warning(f"Order {order_id} timeout: not filled")
-        
+
         return final_status
-    
+
     def get_order_book(self, symbol: str, limit: int = 20) -> Optional[Dict]:
         """Get order book depth for a symbol
-        
+
         Args:
             symbol: Trading pair symbol
             limit: Number of bid/ask levels to fetch
-        
+
         Returns:
             Dict with 'bids' and 'asks' lists, or None if error
         """
@@ -1677,18 +1677,18 @@ class KuCoinClient:
         except Exception as e:
             self.logger.error(f"Error fetching order book for {symbol}: {e}")
             return None
-    
-    def validate_price_with_slippage(self, symbol: str, side: str, 
-                                    expected_price: float, 
+
+    def validate_price_with_slippage(self, symbol: str, side: str,
+                                    expected_price: float,
                                     max_slippage: float = 0.005) -> tuple[bool, float]:
         """Validate current market price is within acceptable slippage
-        
+
         Args:
             symbol: Trading pair symbol
             side: 'buy' or 'sell'
             expected_price: Expected/reference price
             max_slippage: Maximum acceptable slippage (default 0.5%)
-        
+
         Returns:
             Tuple of (is_valid, current_price)
         """
@@ -1696,52 +1696,52 @@ class KuCoinClient:
             ticker = self.get_ticker(symbol)
             if not ticker:
                 return False, 0.0
-            
+
             current_price = ticker['last']
-            
+
             if side == 'buy':
                 # For buys, we don't want price to have gone up too much
                 slippage = (current_price - expected_price) / expected_price
             else:
                 # For sells, we don't want price to have gone down too much
                 slippage = (expected_price - current_price) / expected_price
-            
+
             is_valid = slippage <= max_slippage
-            
+
             if not is_valid:
                 self.logger.warning(
                     f"Price slippage {slippage:.2%} exceeds maximum {max_slippage:.2%} "
                     f"for {side} {symbol} (expected: {expected_price}, current: {current_price})"
                 )
-            
+
             return is_valid, current_price
-            
+
         except Exception as e:
             self.logger.error(f"Error validating price slippage: {e}")
             return False, 0.0
-    
+
     # PRIORITY 1 SAFETY: Clock Sync and Metadata Caching
-    
+
     def _verify_clock_sync(self) -> bool:
         """
         Verify local time vs KuCoin server time and refuse to trade if drift > threshold
-        
+
         Returns:
             True if clock sync is OK, False if drift is too large
         """
         try:
-            
-            
+
+
             # Get server time
             server_time = self.exchange.fetch_time()  # milliseconds
             local_time = int(time.time() * 1000)  # milliseconds
-            
+
             # Calculate drift
             self._server_time_offset = server_time - local_time
             drift_ms = abs(self._server_time_offset)
-            
+
             self._last_sync_check = time.time()
-            
+
             if drift_ms > self._max_time_drift_ms:
                 self.logger.critical(
                     f"⚠️  CLOCK DRIFT TOO LARGE: {drift_ms}ms (max: {self._max_time_drift_ms}ms)"
@@ -1758,23 +1758,23 @@ class KuCoinClient:
                     f"✅ Clock sync OK: drift={drift_ms}ms (threshold: {self._max_time_drift_ms}ms)"
                 )
                 return True
-                
+
         except Exception as e:
             self.logger.error(f"Error checking clock sync: {e}")
             # Fail safe - allow trading but log warning
             self.logger.warning("⚠️  Could not verify clock sync, proceeding with caution")
             return True
-    
+
     def should_check_clock_sync(self) -> bool:
         """Check if it's time for hourly clock sync verification"""
         if self._last_sync_check is None:
             return True
         return (time.time() - self._last_sync_check) > self._sync_check_interval
-    
+
     def verify_clock_sync_if_needed(self) -> bool:
         """
         Verify clock sync if enough time has passed (hourly check)
-        
+
         Returns:
             True if sync is OK or check not needed, False if drift too large
         """
@@ -1782,22 +1782,22 @@ class KuCoinClient:
             self.logger.info("⏰ Performing hourly clock sync check...")
             return self._verify_clock_sync()
         return True  # Check not needed yet
-    
+
     def get_cached_symbol_metadata(self, symbol: str, force_refresh: bool = False) -> Optional[Dict]:
         """
         Get cached symbol metadata (min qty, price step, contract size) with scheduled refresh
-        
+
         PRIORITY 1: Cache and validate exchange invariants locally before placing orders
-        
+
         Args:
             symbol: Trading pair symbol
             force_refresh: Force refresh even if cache is valid
-        
+
         Returns:
             Dictionary with symbol metadata or None if not available
         """
         current_time = time.time()
-        
+
         with self._metadata_lock:
             # Check if cache needs refresh
             needs_refresh = (
@@ -1806,14 +1806,14 @@ class KuCoinClient:
                 (current_time - self._metadata_cache_time) > self._metadata_refresh_interval or
                 symbol not in self._symbol_metadata_cache
             )
-            
+
             if needs_refresh:
                 # Refresh metadata for this symbol
                 try:
                     markets = self.exchange.load_markets()
                     if symbol in markets:
                         market = markets[symbol]
-                        
+
                         # Extract key metadata for order validation
                         metadata = {
                             'symbol': symbol,
@@ -1828,41 +1828,41 @@ class KuCoinClient:
                             'active': market.get('active', False),
                             'cached_at': current_time
                         }
-                        
+
                         self._symbol_metadata_cache[symbol] = metadata
-                        
+
                         # Update cache time only after successful refresh
                         self._metadata_cache_time = current_time
-                        
+
                         self.logger.debug(
                             f"Cached metadata for {symbol}: "
                             f"min={metadata['min_amount']}, max={metadata['max_amount']}, "
                             f"contract_size={metadata['contract_size']}"
                         )
-                        
+
                         return metadata
                     else:
                         self.logger.warning(f"Symbol {symbol} not found in markets")
                         return None
-                        
+
                 except Exception as e:
                     self.logger.error(f"Error caching symbol metadata for {symbol}: {e}")
                     return None
-            
+
             # Return cached data
             return self._symbol_metadata_cache.get(symbol)
-    
+
     def validate_order_locally(self, symbol: str, amount: float, price: float) -> tuple[bool, str]:
         """
         Validate order against cached exchange invariants BEFORE submitting to API
-        
+
         PRIORITY 1: Reject invalid orders locally to avoid API churn
-        
+
         Args:
             symbol: Trading pair symbol
             amount: Order amount in contracts
             price: Order price
-        
+
         Returns:
             Tuple of (is_valid, rejection_reason)
         """
@@ -1873,41 +1873,41 @@ class KuCoinClient:
                 # If we can't get metadata, allow but log warning
                 self.logger.warning(f"No metadata available for {symbol}, allowing order")
                 return True, "metadata_unavailable"
-            
+
             # Check if market is active
             if not metadata.get('active', False):
                 return False, f"Market {symbol} is not active"
-            
+
             # Validate minimum amount
             min_amount = metadata.get('min_amount')
             if min_amount and amount < min_amount:
                 return False, f"Amount {amount:.4f} below minimum {min_amount}"
-            
+
             # Validate maximum amount
             max_amount = metadata.get('max_amount')
             if max_amount and amount > max_amount:
                 return False, f"Amount {amount:.4f} exceeds maximum {max_amount}"
-            
+
             # Validate minimum cost (skip for market orders where price=0)
             if price > 0:
                 cost = amount * price
                 min_cost = metadata.get('min_cost')
                 if min_cost and cost < min_cost:
                     return False, f"Order cost ${cost:.2f} below minimum ${min_cost:.2f}"
-                
+
                 # Validate maximum cost
                 max_cost = metadata.get('max_cost')
                 if max_cost and cost > max_cost:
                     return False, f"Order cost ${cost:.2f} exceeds maximum ${max_cost:.2f}"
-            
+
             # All validations passed
             return True, "valid"
-            
+
         except Exception as e:
             self.logger.error(f"Error validating order locally: {e}")
             # Fail safe - allow order but log error
             return True, f"validation_error: {str(e)}"
-    
+
     def close(self):
         """Close connections and cleanup resources"""
         if self.websocket:
@@ -1918,7 +1918,7 @@ class KuCoinClient:
                 self.logger.warning(f"Error disconnecting WebSocket: {e}")
             finally:
                 self.websocket = None
-        
+
         # Mark the exchange as closed to prevent further API calls
         if hasattr(self, 'exchange'):
             self._closing = True

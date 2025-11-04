@@ -19,9 +19,9 @@ def test_portfolio_heat():
     print("\n" + "="*70)
     print("TESTING PORTFOLIO HEAT CALCULATION")
     print("="*70)
-    
+
     rm = RiskManager(1000, 0.02, 3)
-    
+
     # Test with no positions
     print("\n1. Empty Portfolio...")
     heat0 = rm.get_portfolio_heat([])
@@ -29,7 +29,7 @@ def test_portfolio_heat():
     print(f"   Portfolio Heat: ${heat0:.2f}")
     assert heat0 == 0.0, "Empty portfolio should have 0 heat"
     print("   ✓ Empty portfolio handled correctly")
-    
+
     # Test with one position
     print("\n2. Single Position...")
     positions1 = [
@@ -42,7 +42,7 @@ def test_portfolio_heat():
     print(f"   Portfolio Heat: ${heat1:.2f}")
     assert heat1 > 0, "Should have positive heat"
     print("   ✓ Single position heat calculated")
-    
+
     # Test with multiple positions
     print("\n3. Multiple Positions...")
     positions2 = [
@@ -55,7 +55,7 @@ def test_portfolio_heat():
     print(f"   Portfolio Heat: ${heat2:.2f}")
     assert heat2 > heat1, "More positions should have higher heat"
     print("   ✓ Multiple position heat calculated")
-    
+
     print("\n✓ All portfolio heat tests passed!")
     return True
 
@@ -64,9 +64,9 @@ def test_correlation_risk():
     print("\n" + "="*70)
     print("TESTING CORRELATION RISK MANAGEMENT")
     print("="*70)
-    
+
     rm = RiskManager(1000, 0.02, 3)
-    
+
     # Test with no positions
     print("\n1. Empty Portfolio (Any Asset Safe)...")
     safe, reason = rm.check_correlation_risk('BTC/USDT:USDT', [])
@@ -75,7 +75,7 @@ def test_correlation_risk():
     print(f"   Safe to add: {safe}")
     assert safe, "Should be safe with no positions"
     print("   ✓ Empty portfolio allows any asset")
-    
+
     # Test with one major coin
     print("\n2. One Major Coin (Another Major Safe)...")
     positions1 = [
@@ -87,7 +87,7 @@ def test_correlation_risk():
     print(f"   Safe to add: {safe}")
     assert safe, "Should allow 2 from same group"
     print("   ✓ Two assets from same group allowed")
-    
+
     # Test with two major coins (third should be blocked)
     print("\n3. Two Major Coins (Third Blocked)...")
     positions2 = [
@@ -101,7 +101,7 @@ def test_correlation_risk():
     print(f"   Reason: {reason}")
     assert not safe, "Should block 3rd from same group"
     print("   ✓ Third asset from same group correctly blocked")
-    
+
     # Test with different groups
     print("\n4. Different Groups (Allowed)...")
     positions3 = [
@@ -114,7 +114,7 @@ def test_correlation_risk():
     print(f"   Safe to add: {safe}")
     assert safe, "Should allow different groups"
     print("   ✓ Different correlation groups allowed")
-    
+
     print("\n✓ All correlation risk tests passed!")
     return True
 
@@ -123,10 +123,10 @@ def test_risk_adjustment():
     print("\n" + "="*70)
     print("TESTING DYNAMIC RISK ADJUSTMENT")
     print("="*70)
-    
+
     rm = RiskManager(1000, 0.02, 3)
     base_risk = 0.02  # 2%
-    
+
     # Test win streak adjustment
     print("\n1. Win Streak Adjustment...")
     rm.win_streak = 4
@@ -138,7 +138,7 @@ def test_risk_adjustment():
     print(f"   Change: {(adjusted1/base_risk - 1)*100:+.0f}%")
     assert adjusted1 > base_risk, "Win streak should increase risk"
     print("   ✓ Win streak increases risk")
-    
+
     # Test loss streak adjustment
     print("\n2. Loss Streak Adjustment...")
     rm2 = RiskManager(1000, 0.02, 3)
@@ -151,7 +151,7 @@ def test_risk_adjustment():
     print(f"   Change: {(adjusted2/base_risk - 1)*100:+.0f}%")
     assert adjusted2 < base_risk, "Loss streak should decrease risk"
     print("   ✓ Loss streak decreases risk")
-    
+
     # Test high volatility adjustment
     print("\n3. High Volatility Adjustment...")
     rm3 = RiskManager(1000, 0.02, 3)
@@ -162,7 +162,7 @@ def test_risk_adjustment():
     print(f"   Change: {(adjusted3/base_risk - 1)*100:+.0f}%")
     assert adjusted3 < base_risk, "High volatility should decrease risk"
     print("   ✓ High volatility decreases risk")
-    
+
     # Test high win rate adjustment
     print("\n4. High Win Rate Adjustment...")
     rm4 = RiskManager(1000, 0.02, 3)
@@ -173,7 +173,7 @@ def test_risk_adjustment():
     print(f"   Change: {(adjusted4/base_risk - 1)*100:+.0f}%")
     assert adjusted4 > base_risk, "High win rate should increase risk"
     print("   ✓ High win rate increases risk")
-    
+
     # Test drawdown protection
     print("\n5. Drawdown Protection...")
     rm5 = RiskManager(1000, 0.02, 3)
@@ -185,7 +185,7 @@ def test_risk_adjustment():
     print(f"   Change: {(adjusted5/base_risk - 1)*100:+.0f}%")
     assert adjusted5 < base_risk, "Drawdown should decrease risk"
     print("   ✓ Drawdown protection active")
-    
+
     # Test combined effects
     print("\n6. Combined Effects (Cold Streak + High Vol)...")
     rm6 = RiskManager(1000, 0.02, 3)
@@ -197,7 +197,7 @@ def test_risk_adjustment():
     print(f"   Change: {(adjusted6/base_risk - 1)*100:+.0f}%")
     assert adjusted6 < base_risk * 0.5, "Multiple negative factors should significantly reduce risk"
     print("   ✓ Combined effects work correctly")
-    
+
     print("\n✓ All risk adjustment tests passed!")
     return True
 
@@ -207,13 +207,13 @@ def main():
     print("🧪 RISK MANAGEMENT & ORDER EXECUTION - VALIDATION TESTS")
     print("="*70)
     print("\nValidating advanced risk management features...")
-    
+
     try:
         success = True
         success = test_portfolio_heat() and success
         success = test_correlation_risk() and success
         success = test_risk_adjustment() and success
-        
+
         print("\n" + "="*70)
         if success:
             print("✅ ALL RISK MANAGEMENT TESTS PASSED!")
@@ -225,9 +225,9 @@ def main():
         else:
             print("❌ SOME TESTS FAILED")
         print("="*70)
-        
+
         return 0 if success else 1
-        
+
     except Exception as e:
         print(f"\n❌ TEST SUITE FAILED: {e}")
         import traceback

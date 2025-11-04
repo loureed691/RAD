@@ -15,12 +15,12 @@ def test_modern_gradient_boosting():
     print("\n" + "="*70)
     print("Testing Modern Gradient Boosting Implementation")
     print("="*70)
-    
+
     from ml_model import MLModel
-    
+
     # Create ML model instance
     model = MLModel(model_path='models/test_modern_gb_model.pkl')
-    
+
     # Test 1: Verify imports and model initialization
     print("\n1. Verifying modern gradient boosting imports...")
     try:
@@ -33,11 +33,11 @@ def test_modern_gradient_boosting():
     except Exception as e:
         print(f"   ✗ Import error: {e}")
         return False
-    
+
     # Test 2: Generate synthetic training data
     print("\n2. Generating synthetic training data (200 samples)...")
     np.random.seed(42)
-    
+
     for i in range(200):
         # Create diverse synthetic indicators
         indicators = {
@@ -61,60 +61,60 @@ def test_modern_gradient_boosting():
             'sma_20': 49900,
             'sma_50': 49500
         }
-        
+
         # Create diverse outcomes
         profit_loss = np.random.uniform(-0.03, 0.03)
         signal = 'BUY' if np.random.random() > 0.5 else 'SELL'
-        
+
         model.record_outcome(indicators, signal, profit_loss)
-    
+
     print(f"   ✓ Generated {len(model.training_data)} training samples")
-    
+
     # Test 3: Train model and measure time
     print("\n3. Training modern gradient boosting ensemble...")
     print("   Models: XGBoost + LightGBM + CatBoost")
-    
+
     start_time = time.time()
     success = model.train(min_samples=100)
     training_time = time.time() - start_time
-    
+
     if not success:
         print("   ✗ Training failed")
         return False
-    
+
     print(f"   ✓ Training completed in {training_time:.2f} seconds")
     print(f"   ✓ Training time per 100 samples: {(training_time / 2):.2f}s")
-    
+
     # Test 4: Verify model components
     print("\n4. Verifying ensemble components...")
     if model.model is not None:
         # The model is wrapped in CalibratedClassifierCV
         base_estimator = model.model.calibrated_classifiers_[0].estimator
-        
+
         # Check if it's a VotingClassifier
         if hasattr(base_estimator, 'estimators_'):
             estimators = base_estimator.estimators_
             print(f"   ✓ Ensemble has {len(estimators)} models")
-            
+
             # Verify model types
             model_types = []
             for estimator in estimators:
                 model_type = type(estimator).__name__
                 model_types.append(model_type)
                 print(f"   ✓ Found: {model_type}")
-            
+
             # Check for modern gradient boosting models
             has_xgb = any('XGB' in t for t in model_types)
             has_lgb = any('LGBM' in t or 'LightGBM' in t for t in model_types)
             has_cat = any('CatBoost' in t for t in model_types)
-            
+
             if has_xgb:
                 print("   ✓ XGBoost present in ensemble")
             if has_lgb:
                 print("   ✓ LightGBM present in ensemble")
             if has_cat:
                 print("   ✓ CatBoost present in ensemble")
-            
+
             if not (has_xgb or has_lgb or has_cat):
                 print("   ✗ No modern gradient boosting models found!")
                 return False
@@ -124,7 +124,7 @@ def test_modern_gradient_boosting():
     else:
         print("   ✗ Model is None after training")
         return False
-    
+
     # Test 5: Test prediction functionality
     print("\n5. Testing prediction with modern ensemble...")
     test_indicators = {
@@ -148,19 +148,19 @@ def test_modern_gradient_boosting():
         'sma_20': 49900,
         'sma_50': 49500
     }
-    
+
     signal, confidence = model.predict(test_indicators)
     print(f"   ✓ Prediction: {signal}")
     print(f"   ✓ Confidence: {confidence:.3f}")
-    
+
     if signal not in ['BUY', 'SELL', 'HOLD']:
         print(f"   ✗ Invalid signal: {signal}")
         return False
-    
+
     if confidence < 0 or confidence > 1:
         print(f"   ✗ Invalid confidence: {confidence}")
         return False
-    
+
     # Test 6: Verify feature importance extraction
     print("\n6. Verifying feature importance extraction...")
     if model.feature_importance:
@@ -171,19 +171,19 @@ def test_modern_gradient_boosting():
             print(f"      - {feature}: {importance:.4f}")
     else:
         print("   ⚠ Feature importance not extracted (may be expected)")
-    
+
     # Test 7: Performance summary
     print("\n7. Performance Summary:")
     print(f"   Training Time: {training_time:.2f}s for 200 samples")
     print(f"   Expected: ~30% faster than old GradientBoosting")
     print(f"   Estimated improvement: 2-4x faster on larger datasets")
     print(f"   Expected accuracy improvement: +5-15%")
-    
+
     # Cleanup
     if os.path.exists('models/test_modern_gb_model.pkl'):
         os.remove('models/test_modern_gb_model.pkl')
         print("\n   ✓ Cleaned up test model file")
-    
+
     print("\n" + "="*70)
     print("✓ All Modern Gradient Boosting Tests Passed!")
     print("="*70)
@@ -194,7 +194,7 @@ def test_training_speed_comparison():
     print("\n" + "="*70)
     print("Training Speed Comparison")
     print("="*70)
-    
+
     print("\nNote: Old GradientBoosting implementation no longer available")
     print("Expected improvements based on modern gradient boosting:")
     print("  - XGBoost: ~2-3x faster with histogram-based tree method")
@@ -202,32 +202,32 @@ def test_training_speed_comparison():
     print("  - CatBoost: ~2x faster with ordered boosting")
     print("  - Overall: ~30-50% faster training time")
     print("  - Better accuracy: +5-15% from ensemble of modern methods")
-    
+
     return True
 
 if __name__ == '__main__':
     print("\n" + "="*70)
     print("Modern Gradient Boosting Test Suite")
     print("="*70)
-    
+
     results = []
-    
+
     # Run tests
     results.append(("Modern Gradient Boosting", test_modern_gradient_boosting()))
     results.append(("Training Speed Comparison", test_training_speed_comparison()))
-    
+
     # Summary
     print("\n" + "="*70)
     print("Test Summary")
     print("="*70)
     passed = sum(1 for _, result in results if result)
     total = len(results)
-    
+
     for name, result in results:
         status = "✓ PASSED" if result else "✗ FAILED"
         print(f"{status}: {name}")
-    
+
     print(f"\n{passed}/{total} test suites passed")
     print("="*70)
-    
+
     sys.exit(0 if passed == total else 1)

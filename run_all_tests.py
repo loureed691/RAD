@@ -38,12 +38,12 @@ def print_header():
 def run_test_suite(name, file, expected_count):
     """
     Run a single test suite
-    
+
     Args:
         name: Display name of the test suite
         file: Python test file to run
         expected_count: Expected number of tests in the suite
-        
+
     Returns:
         tuple: (success: bool, test_count: int)
     """
@@ -55,7 +55,7 @@ def run_test_suite(name, file, expected_count):
             timeout=60,
             cwd=os.path.dirname(os.path.abspath(__file__))
         )
-        
+
         if result.returncode == 0:
             return True, expected_count
         else:
@@ -64,7 +64,7 @@ def run_test_suite(name, file, expected_count):
                 if line.strip():
                     print(f"      {line}")
             return False, 0
-            
+
     except subprocess.TimeoutExpired:
         print(f"\n   ⚠️  Test timed out after 60 seconds")
         return False, 0
@@ -76,14 +76,14 @@ def print_summary(results, total_tests):
     """Print test results summary"""
     passed = sum(1 for r in results if r)
     total = len(results)
-    
+
     print("\n" + "=" * 70)
     print(f"📊 TEST RESULTS SUMMARY")
     print("=" * 70)
     print(f"Test Suites Passed: {passed}/{total}")
     print(f"Individual Tests Passed: {total_tests}")
     print("=" * 70)
-    
+
     if all(results):
         print("\n✅ ALL TEST SUITES PASSED!")
         print("\n🎉 Bot functionality verified completely!")
@@ -100,24 +100,24 @@ def print_summary(results, total_tests):
 def main():
     """Main test runner"""
     print_header()
-    
+
     results = []
     total_tests = 0
-    
+
     for i, (name, file, expected_count) in enumerate(TEST_SUITES, 1):
         print(f"\n{i}️⃣  Running {name} ({file})...")
-        
+
         success, count = run_test_suite(name, file, expected_count)
         results.append(success)
-        
+
         if success:
             print(f"   ✅ PASSED ({count}/{count} tests)")
             total_tests += count
         else:
             print(f"   ❌ FAILED")
-    
+
     print_summary(results, total_tests)
-    
+
     return 0 if all(results) else 1
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ from indicators import Indicators
 def create_test_dataframe(rows=100, price=50000, trend='bullish'):
     """Create a test dataframe with specified characteristics"""
     dates = pd.date_range(end=pd.Timestamp.now(), periods=rows, freq='1h')
-    
+
     if trend == 'bullish':
         # Strong bullish trend
         closes = np.linspace(price * 0.9, price * 1.1, rows)
@@ -34,7 +34,7 @@ def create_test_dataframe(rows=100, price=50000, trend='bullish'):
         # Weak trend with low volume
         closes = np.linspace(price * 0.95, price * 1.05, rows)
         volumes = np.random.uniform(300, 600, rows)  # Low volume
-    
+
     df = pd.DataFrame({
         'timestamp': dates,
         'open': closes * 0.99,
@@ -43,7 +43,7 @@ def create_test_dataframe(rows=100, price=50000, trend='bullish'):
         'close': closes,
         'volume': volumes
     })
-    
+
     # Calculate indicators
     df = Indicators.calculate_all(df)
     return df
@@ -54,21 +54,21 @@ def test_increased_base_threshold():
     print("\n" + "="*60)
     print("Testing Increased Base Threshold (0.72)")
     print("="*60)
-    
+
     try:
         sg = SignalGenerator()
-        
+
         # Verify threshold is set correctly
         assert sg.adaptive_threshold == 0.72, f"Expected 0.72, got {sg.adaptive_threshold}"
         print(f"  ✓ Base threshold increased to {sg.adaptive_threshold} (was 0.68)")
-        
+
         # Create a moderate signal that would have passed with 0.68 but not with 0.72
         df = create_test_dataframe(rows=100, price=50000, trend='bullish')
         signal, confidence, reasons = sg.generate_signal(df)
-        
+
         print(f"  ✓ Signal: {signal}, Confidence: {confidence:.2%}")
         print(f"  ✓ Market regime: {sg.market_regime}")
-        
+
         return True
     except Exception as e:
         print(f"  ✗ Test failed: {e}")
@@ -82,25 +82,25 @@ def test_regime_specific_thresholds():
     print("\n" + "="*60)
     print("Testing Regime-Specific Thresholds")
     print("="*60)
-    
+
     try:
         sg = SignalGenerator()
-        
+
         # Test trending market threshold (should be 0.70)
         df_trending = create_test_dataframe(rows=100, price=50000, trend='bullish')
         signal_trend, conf_trend, reasons_trend = sg.generate_signal(df_trending)
         print(f"  ✓ Trending market: {sg.market_regime}")
         print(f"    Signal: {signal_trend}, Confidence: {conf_trend:.2%}")
-        
+
         # Test ranging market threshold (should be 0.76)
         df_ranging = create_test_dataframe(rows=100, price=50000, trend='ranging')
         signal_range, conf_range, reasons_range = sg.generate_signal(df_ranging)
         print(f"  ✓ Ranging market: {sg.market_regime}")
         print(f"    Signal: {signal_range}, Confidence: {conf_range:.2%}")
-        
+
         # Ranging markets should be more selective
         print(f"  ✓ Ranging markets require higher confidence (0.76 vs 0.70)")
-        
+
         return True
     except Exception as e:
         print(f"  ✗ Test failed: {e}")
@@ -114,17 +114,17 @@ def test_signal_ratio_requirement():
     print("\n" + "="*60)
     print("Testing Signal Ratio Requirement (3.0:1)")
     print("="*60)
-    
+
     try:
         sg = SignalGenerator()
-        
+
         # Create a weak signal scenario with mixed signals
         df = create_test_dataframe(rows=100, price=50000, trend='weak')
         signal, confidence, reasons = sg.generate_signal(df)
-        
+
         print(f"  ✓ Weak/mixed signal test")
         print(f"    Signal: {signal}, Confidence: {confidence:.2%}")
-        
+
         # Check if signal was rejected due to weak ratio
         if 'weak_signal_ratio' in reasons:
             print(f"    ✓ Signal correctly rejected: {reasons['weak_signal_ratio']}")
@@ -133,7 +133,7 @@ def test_signal_ratio_requirement():
             print(f"    ✓ Signal held due to other filters")
         else:
             print(f"    ℹ Strong signal passed all filters")
-        
+
         return True
     except Exception as e:
         print(f"  ✗ Test failed: {e}")
@@ -147,28 +147,28 @@ def test_volume_requirement():
     print("\n" + "="*60)
     print("Testing Stricter Volume Requirements (1.0)")
     print("="*60)
-    
+
     try:
         sg = SignalGenerator()
-        
+
         # Create data with low volume
         df = create_test_dataframe(rows=100, price=50000, trend='weak')
-        
+
         # Manually check volume ratio in indicators
         indicators = Indicators.get_latest_indicators(df)
         volume_ratio = indicators.get('volume_ratio', 0)
-        
+
         print(f"  ✓ Volume ratio: {volume_ratio:.2f}")
-        
+
         signal, confidence, reasons = sg.generate_signal(df)
-        
+
         if volume_ratio < 1.0:
             print(f"    ✓ Low volume detected (< 1.0)")
             if 'volume' in reasons:
                 print(f"    ✓ Volume filter applied: {reasons['volume']}")
         else:
             print(f"    ✓ Adequate volume (>= 1.0)")
-        
+
         return True
     except Exception as e:
         print(f"  ✗ Test failed: {e}")
@@ -182,24 +182,24 @@ def test_trend_momentum_alignment():
     print("\n" + "="*60)
     print("Testing Trend AND Momentum Alignment (Strengthened)")
     print("="*60)
-    
+
     try:
         sg = SignalGenerator()
-        
+
         # Create a bullish trend
         df = create_test_dataframe(rows=100, price=50000, trend='bullish')
         signal, confidence, reasons = sg.generate_signal(df)
-        
+
         print(f"  ✓ Bullish trend test")
         print(f"    Signal: {signal}, Confidence: {confidence:.2%}")
-        
+
         # Check if alignment was required
         if 'trend_momentum_mismatch' in reasons:
             print(f"    ✓ Alignment requirement enforced: {reasons['trend_momentum_mismatch']}")
             assert 'AND' in reasons['trend_momentum_mismatch'], "Should require AND, not OR"
         elif signal != 'HOLD':
             print(f"    ✓ Signal passed with proper trend AND momentum alignment")
-        
+
         return True
     except Exception as e:
         print(f"  ✗ Test failed: {e}")
@@ -213,20 +213,20 @@ def test_confluence_requirements():
     print("\n" + "="*60)
     print("Testing Stricter Confluence Requirements (0.55)")
     print("="*60)
-    
+
     try:
         sg = SignalGenerator()
-        
+
         df = create_test_dataframe(rows=100, price=50000, trend='bullish')
         signal, confidence, reasons = sg.generate_signal(df)
-        
+
         print(f"  ✓ Signal: {signal}, Confidence: {confidence:.2%}")
-        
+
         if 'confluence' in reasons:
             print(f"    ✓ Confluence check applied: {reasons['confluence']}")
         else:
             print(f"    ℹ No confluence data in reasons (may be HOLD)")
-        
+
         return True
     except Exception as e:
         print(f"  ✗ Test failed: {e}")
@@ -240,25 +240,25 @@ def test_mtf_conflict_penalty():
     print("\n" + "="*60)
     print("Testing Stronger MTF Conflict Penalty (0.5)")
     print("="*60)
-    
+
     try:
         sg = SignalGenerator()
-        
+
         # Create conflicting timeframes (1h bullish, but we'll simulate bearish higher TF)
         df_1h = create_test_dataframe(rows=100, price=50000, trend='bullish')
         df_4h = create_test_dataframe(rows=100, price=50000, trend='bearish')
-        
+
         signal, confidence, reasons = sg.generate_signal(df_1h, df_4h)
-        
+
         print(f"  ✓ Signal: {signal}, Confidence: {confidence:.2%}")
-        
+
         if 'mtf_conflict' in reasons:
             print(f"    ✓ MTF conflict detected and penalized")
         elif 'mtf_boost' in reasons:
             print(f"    ✓ MTF alignment rewarded: {reasons['mtf_boost']}")
         else:
             print(f"    ℹ No MTF data available")
-        
+
         return True
     except Exception as e:
         print(f"  ✗ Test failed: {e}")
@@ -272,26 +272,26 @@ def test_neutral_regime_filter():
     print("\n" + "="*60)
     print("Testing Neutral Regime Additional Filter (>75%)")
     print("="*60)
-    
+
     try:
         sg = SignalGenerator()
-        
+
         # Create neutral/choppy market
         df = create_test_dataframe(rows=100, price=50000, trend='ranging')
-        
+
         # Force neutral regime for testing
         sg.market_regime = 'neutral'
-        
+
         signal, confidence, reasons = sg.generate_signal(df)
-        
+
         print(f"  ✓ Market regime: {sg.market_regime}")
         print(f"  ✓ Signal: {signal}, Confidence: {confidence:.2%}")
-        
+
         if 'neutral_regime_no_mtf' in reasons:
             print(f"    ✓ Neutral regime filter triggered: {reasons['neutral_regime_no_mtf']}")
         elif signal != 'HOLD':
             print(f"    ✓ Signal passed with confidence > 75%")
-        
+
         return True
     except Exception as e:
         print(f"  ✗ Test failed: {e}")
@@ -305,10 +305,10 @@ def test_overall_selectivity():
     print("\n" + "="*60)
     print("Testing Overall Selectivity")
     print("="*60)
-    
+
     try:
         sg = SignalGenerator()
-        
+
         # Test multiple scenarios
         scenarios = [
             ('strong_bullish', 'bullish'),
@@ -316,22 +316,22 @@ def test_overall_selectivity():
             ('ranging', 'ranging'),
             ('strong_bearish', 'bearish'),
         ]
-        
+
         signal_counts = {'BUY': 0, 'SELL': 0, 'HOLD': 0}
-        
+
         for scenario_name, trend in scenarios:
             df = create_test_dataframe(rows=100, price=50000, trend=trend)
             signal, confidence, reasons = sg.generate_signal(df)
             signal_counts[signal] += 1
             print(f"  - {scenario_name:20s}: {signal:6s} ({confidence:.2%})")
-        
+
         hold_ratio = signal_counts['HOLD'] / len(scenarios)
         print(f"\n  ✓ Hold ratio: {hold_ratio:.1%} (higher is more selective)")
         print(f"  ✓ Signals: BUY={signal_counts['BUY']}, SELL={signal_counts['SELL']}, HOLD={signal_counts['HOLD']}")
-        
+
         # We expect more HOLDs with stricter requirements
         assert signal_counts['HOLD'] >= 1, "Should have at least 1 HOLD signal with stricter filters"
-        
+
         return True
     except Exception as e:
         print(f"  ✗ Test failed: {e}")
@@ -347,7 +347,7 @@ def run_all_tests():
     print("="*60)
     print("\nPurpose: Validate bot now requires higher quality signals")
     print("Expected outcome: Fewer trades, but stronger signals")
-    
+
     tests = [
         ("Base Threshold (0.72)", test_increased_base_threshold),
         ("Regime Thresholds", test_regime_specific_thresholds),
@@ -359,28 +359,28 @@ def run_all_tests():
         ("Neutral Regime Filter", test_neutral_regime_filter),
         ("Overall Selectivity", test_overall_selectivity),
     ]
-    
+
     results = []
     for test_name, test_func in tests:
         result = test_func()
         results.append((test_name, result))
-    
+
     # Summary
     print("\n" + "="*60)
     print("TEST SUMMARY")
     print("="*60)
-    
+
     passed = sum(1 for _, result in results if result)
     total = len(results)
-    
+
     for test_name, result in results:
         status = "✓ PASS" if result else "✗ FAIL"
         print(f"  {status}: {test_name}")
-    
+
     print("\n" + "="*60)
     print(f"Results: {passed}/{total} tests passed")
     print("="*60)
-    
+
     if passed == total:
         print("\n✓ All stronger signal requirement tests passed!")
         print("✓ Bot is now more selective and requires higher quality signals")

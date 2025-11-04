@@ -26,33 +26,33 @@ def check_dependencies():
 def check_config():
     """Check if configuration is set up"""
     print("\n⚙️  Checking configuration...")
-    
+
     if not os.path.exists('.env'):
         print("✗ .env file not found")
         print("\n💡 Please create .env file:")
         print("  cp .env.example .env")
         print("  # Then edit .env and add your API credentials")
         return False
-    
+
     from dotenv import load_dotenv
     load_dotenv()
-    
+
     api_key = os.getenv('KUCOIN_API_KEY', '')
     api_secret = os.getenv('KUCOIN_API_SECRET', '')
     api_passphrase = os.getenv('KUCOIN_API_PASSPHRASE', '')
-    
+
     if not api_key or api_key == 'your_api_key_here':
         print("✗ KUCOIN_API_KEY not set in .env")
         return False
-    
+
     if not api_secret or api_secret == 'your_api_secret_here':
         print("✗ KUCOIN_API_SECRET not set in .env")
         return False
-    
+
     if not api_passphrase or api_passphrase == 'your_api_passphrase_here':
         print("✗ KUCOIN_API_PASSPHRASE not set in .env")
         return False
-    
+
     print("✓ Configuration file exists and credentials are set")
     return True
 
@@ -68,24 +68,24 @@ def main():
     print("=" * 60)
     print("🤖 KuCoin Futures Trading Bot - Quick Start")
     print("=" * 60)
-    
+
     # Check dependencies
     if not check_dependencies():
         sys.exit(1)
-    
+
     # Check configuration
     if not check_config():
         sys.exit(1)
-    
+
     # Create directories
     create_directories()
-    
+
     print("\n" + "=" * 60)
     print("✅ Setup complete! Starting bot...")
     print("=" * 60)
     print("\n💡 Press Ctrl+C to stop the bot")
     print()
-    
+
     # Import and run bot
     try:
         from bot import main as run_bot

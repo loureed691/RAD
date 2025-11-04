@@ -14,7 +14,7 @@ import random
 
 def simulate_trading_data(dashboard):
     """Simulate realistic trading data for demonstration"""
-    
+
     # Update performance statistics
     dashboard.update_stats({
         'balance': 12350.50,
@@ -30,7 +30,7 @@ def simulate_trading_data(dashboard):
         'calmar_ratio': 2.1,
         'profit_factor': 2.65
     })
-    
+
     # Update open positions
     dashboard.update_positions([
         {
@@ -60,7 +60,7 @@ def simulate_trading_data(dashboard):
             'duration': '1h 22m'
         }
     ])
-    
+
     # Update risk metrics
     dashboard.update_risk_metrics({
         'max_drawdown': 14.8,
@@ -71,13 +71,13 @@ def simulate_trading_data(dashboard):
         'daily_pnl': 287.35,
         'avg_volatility': 3.2
     })
-    
+
     # Update strategy information
     dashboard.update_strategy_info({
         'active_strategy': 'Adaptive Momentum',
         'performance': 23.5
     })
-    
+
     # Update market information
     dashboard.update_market_info({
         'regime': 'bull',
@@ -86,7 +86,7 @@ def simulate_trading_data(dashboard):
         'trend': 'upward',
         'last_signal': 'BUY ETH-USDT @ 3245.80'
     })
-    
+
     # Update system status
     dashboard.update_system_status({
         'bot_active': True,
@@ -96,7 +96,7 @@ def simulate_trading_data(dashboard):
         'uptime': '8h 42m',
         'error_count': 3
     })
-    
+
     # Add historical equity curve data
     base_time = datetime.now() - timedelta(hours=24)
     balance = 10000
@@ -104,20 +104,20 @@ def simulate_trading_data(dashboard):
         balance += random.uniform(-50, 100)
         timestamp = base_time + timedelta(minutes=i*30)
         dashboard.add_equity_point(balance, timestamp)
-    
+
     # Add drawdown data
     for i in range(48):
         drawdown = -random.uniform(0, 5)
         timestamp = base_time + timedelta(minutes=i*30)
         dashboard.add_drawdown_point(drawdown, timestamp)
-    
+
     # Add some recent trades
     trades = [
         ('BTC-USDT', 'long', 66800.00, 67500.00, 0.05, 35.00, 0.0105, '2h 15m'),
         ('ETH-USDT', 'short', 3300.00, 3250.00, 1.5, 75.00, 0.0152, '1h 45m'),
         ('SOL-USDT', 'long', 142.50, 145.80, 20.0, 66.00, 0.0232, '3h 10m'),
     ]
-    
+
     for i, (symbol, side, entry, exit, amount, pnl, pnl_pct, duration) in enumerate(trades):
         dashboard.add_trade({
             'symbol': symbol,
@@ -135,13 +135,13 @@ def simulate_trading_data(dashboard):
 if __name__ == '__main__':
     print("Starting Enhanced RAD Trading Bot Dashboard...")
     print("=" * 80)
-    
+
     # Create dashboard instance on port 5000
     dashboard = TradingDashboard(port=5000)
-    
+
     # Populate with simulated trading data
     simulate_trading_data(dashboard)
-    
+
     print("\n✓ Dashboard is ready with enhanced features:")
     print("  - 📊 Performance Overview (8 key metrics)")
     print("  - 💼 Open Positions (detailed position tracking)")
@@ -153,7 +153,7 @@ if __name__ == '__main__':
     print("\n✓ Open http://localhost:5000 in your browser")
     print("✓ Press Ctrl+C to stop\n")
     print("=" * 80)
-    
+
     # Run the dashboard server
     try:
         dashboard.run(debug=False, host='0.0.0.0')
