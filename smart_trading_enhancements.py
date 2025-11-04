@@ -17,7 +17,7 @@ class SmartTradeFilter:
 
     def __init__(self):
         self.logger = Logger.get_logger()
-        self.min_quality_score = 0.65  # Minimum quality score to take trade
+        self.min_quality_score = 0.72  # Increased from 0.65 to 0.72 (10.8% more selective) for higher quality trades only
         self.trade_history = []
 
     def calculate_trade_quality_score(self,
@@ -188,21 +188,23 @@ class SmartPositionSizer:
             adjustments = {}
             multiplier = 1.0
 
-            # 1. Signal Confidence Adjustment (±30%)
-            if signal_confidence > 0.80:
-                conf_mult = 1.3
+            # 1. Signal Confidence Adjustment (±40% - increased from ±30%)
+            if signal_confidence > 0.85:
+                conf_mult = 1.4  # Very high confidence - increased from 1.3
+            elif signal_confidence > 0.80:
+                conf_mult = 1.25  # High confidence
             elif signal_confidence > 0.70:
-                conf_mult = 1.15
+                conf_mult = 1.1  # Good confidence
             elif signal_confidence > 0.60:
                 conf_mult = 1.0
             else:
-                conf_mult = 0.8
+                conf_mult = 0.75  # Low confidence - reduced from 0.8
 
             multiplier *= conf_mult
             adjustments['confidence'] = conf_mult
 
-            # 2. Trade Quality Adjustment (±25%)
-            quality_mult = 0.75 + (trade_quality_score * 0.5)  # 0.75 - 1.25
+            # 2. Trade Quality Adjustment (±30% - increased from ±25%)
+            quality_mult = 0.7 + (trade_quality_score * 0.6)  # 0.7 - 1.3 (increased range)
             multiplier *= quality_mult
             adjustments['quality'] = quality_mult
 
@@ -248,18 +250,20 @@ class SmartPositionSizer:
             multiplier *= heat_mult
             adjustments['portfolio_heat'] = heat_mult
 
-            # 6. Recent Performance Adjustment (±20%)
+            # 6. Recent Performance Adjustment (±25% - increased from ±20%)
             # Recent wins = can increase size, recent losses = reduce
-            if recent_win_rate > 0.75:
-                perf_mult = 1.2  # On a roll
-            elif recent_win_rate > 0.65:
-                perf_mult = 1.1
-            elif recent_win_rate > 0.55:
-                perf_mult = 1.0
-            elif recent_win_rate > 0.45:
-                perf_mult = 0.9
+            if recent_win_rate > 0.78:
+                perf_mult = 1.25  # Excellent streak - increased from 1.2
+            elif recent_win_rate > 0.70:
+                perf_mult = 1.15  # Strong performance - increased from 1.1
+            elif recent_win_rate > 0.60:
+                perf_mult = 1.05  # Good performance
+            elif recent_win_rate > 0.50:
+                perf_mult = 1.0  # Break-even
+            elif recent_win_rate > 0.40:
+                perf_mult = 0.85  # Below average
             else:
-                perf_mult = 0.8  # Struggling - reduce size
+                perf_mult = 0.75  # Struggling - reduce size
 
             multiplier *= perf_mult
             adjustments['performance'] = perf_mult
@@ -267,9 +271,9 @@ class SmartPositionSizer:
             # Calculate final position size
             adjusted_size = base_position_size * multiplier
 
-            # Safety bounds (don't go below 25% or above 200% of base)
-            adjusted_size = max(base_position_size * 0.25, adjusted_size)
-            adjusted_size = min(base_position_size * 2.0, adjusted_size)
+            # Safety bounds (don't go below 30% or above 250% of base - increased range)
+            adjusted_size = max(base_position_size * 0.30, adjusted_size)
+            adjusted_size = min(base_position_size * 2.5, adjusted_size)
 
             return {
                 'original_size': base_position_size,
@@ -342,16 +346,21 @@ class SmartExitOptimizer:
                     exit_score += 40
                     reasons.append("strong_momentum_reversal")
 
-            # 2. Profit Protection
-            if position_pnl > 0.03:  # >3% profit
-                # Large profit - consider taking it
+            # 2. Profit Protection (Enhanced thresholds)
+            if position_pnl > 0.025:  # >2.5% profit (reduced from 3%)
+                # Good profit - consider taking it
                 if current_momentum < 0:
-                    exit_score += 25
-                    reasons.append("protect_large_profit")
+                    exit_score += 30  # Increased from 25
+                    reasons.append("protect_good_profit")
 
-                # Very large profit - strongly consider exit
-                if position_pnl > 0.07:  # >7%
-                    exit_score += 30
+                # Large profit - strongly consider exit
+                if position_pnl > 0.05:  # >5% (reduced from 7%)
+                    exit_score += 35  # Increased from 30
+                    reasons.append("large_profit_capture")
+
+                # Very large profit - almost always exit
+                if position_pnl > 0.08:  # >8%
+                    exit_score += 40  # New tier for exceptional profits
                     reasons.append("exceptional_profit")
 
             # 3. Time-based Exit (stalled position)
@@ -385,8 +394,8 @@ class SmartExitOptimizer:
                 exit_score += 25
                 reasons.append("extreme_oversold")
 
-            # Decision threshold
-            should_exit = exit_score >= 50
+            # Decision threshold (lowered from 50 to 45 for more responsive exits)
+            should_exit = exit_score >= 45
             confidence = min(exit_score / 100.0, 1.0)
 
             return {

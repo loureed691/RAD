@@ -46,7 +46,7 @@ class Config:
     OPTIMAL DEFAULTS (fine-tuned for best performance):
     - WebSocket: Enabled (real-time data)
     - Dashboard: Enabled on port 5000 (monitor your trades)
-    - CHECK_INTERVAL: 60s (fast enough, avoids rate limits)
+    - CHECK_INTERVAL: 10s (continuous scanning with adaptive intervals)
     - MAX_WORKERS: 20 (parallel scanning, fast but safe)
     - DCA Strategy: Enabled with smart defaults
     - Hedging: Enabled for portfolio protection
@@ -80,7 +80,7 @@ class Config:
     MIN_PROFIT_THRESHOLD = float(_MIN_PROFIT_THRESHOLD_OVERRIDE) if _MIN_PROFIT_THRESHOLD_OVERRIDE else None
 
     # Bot Parameters - Optimal defaults for best performance and safety
-    CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '60'))  # 60s = optimal balance (not too fast to avoid rate limits, not too slow to miss opportunities)
+    CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '10'))  # 10s = continuous scanning for faster opportunity detection (was 60s)
     POSITION_UPDATE_INTERVAL = int(float(os.getenv('POSITION_UPDATE_INTERVAL', '3.0')))  # 3s (reduced from 5s, 40% faster trailing stops, responsive without rate limiting)
     LIVE_LOOP_INTERVAL = float(os.getenv('LIVE_LOOP_INTERVAL', '0.1'))  # 100ms = truly live monitoring, fast response to market changes
     TRAILING_STOP_PERCENTAGE = float(os.getenv('TRAILING_STOP_PERCENTAGE', '0.02'))  # 2% trailing stop = industry standard, balances protection vs noise

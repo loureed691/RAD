@@ -88,40 +88,46 @@ class SmartEntryExit:
 
             if signal == 'BUY':
                 # For BUY orders, we want strong bid support
-                if obi > 0.15:  # Strong bid pressure
-                    timing_score += 0.2
+                if obi > 0.20:  # Very strong bid pressure (increased from 0.15)
+                    timing_score += 0.25  # Increased from 0.2
+                    reason.append('very strong bid support')
+                elif obi > 0.12:  # Strong bid pressure
+                    timing_score += 0.18
                     reason.append('strong bid support')
                 elif obi < -0.15:  # Weak bids, strong asks
-                    timing_score -= 0.2
+                    timing_score -= 0.25  # Increased penalty from 0.2
                     reason.append('weak bid support')
-                    # Consider limit order below current price
-                    if spread_bps > 10:  # Wide spread
+                    # Consider limit order below current price for better entry
+                    if spread_bps > 8:  # Reduced threshold from 10
                         recommendation = 'limit'
-                        optimal_entry = best_bid + (best_ask - best_bid) * 0.3
+                        optimal_entry = best_bid + (best_ask - best_bid) * 0.25  # Improved from 0.3
                         reason.append('wide spread - use limit order')
 
                 # Check for liquidity
                 if near_liquidity > bid_volume * 0.3:
-                    timing_score += 0.15
+                    timing_score += 0.18  # Increased from 0.15
                     reason.append('good near-price liquidity')
 
             else:  # SELL
                 # For SELL orders, we want strong ask resistance
-                if obi < -0.15:  # Strong ask pressure
-                    timing_score += 0.2
+                if obi < -0.20:  # Very strong ask pressure (increased from -0.15)
+                    timing_score += 0.25  # Increased from 0.2
+                    reason.append('very strong ask resistance')
+                elif obi < -0.12:  # Strong ask pressure
+                    timing_score += 0.18
                     reason.append('strong ask resistance')
                 elif obi > 0.15:  # Weak asks, strong bids
-                    timing_score -= 0.2
+                    timing_score -= 0.25  # Increased penalty from 0.2
                     reason.append('weak ask resistance')
-                    # Consider limit order above current price
-                    if spread_bps > 10:
+                    # Consider limit order above current price for better entry
+                    if spread_bps > 8:  # Reduced threshold from 10
                         recommendation = 'limit'
-                        optimal_entry = best_ask - (best_ask - best_bid) * 0.3
+                        optimal_entry = best_ask - (best_ask - best_bid) * 0.25  # Improved from 0.3
                         reason.append('wide spread - use limit order')
 
                 # Check for liquidity
                 if near_liquidity > ask_volume * 0.3:
-                    timing_score += 0.15
+                    timing_score += 0.18  # Increased from 0.15
                     reason.append('good near-price liquidity')
 
             # Spread penalty (very wide spread = poor timing)

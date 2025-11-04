@@ -342,11 +342,11 @@ class AdaptiveExitStrategy:
             state['highest_pnl'] = max(state['highest_pnl'], unrealized_pnl_pct)
             state['lowest_pnl'] = min(state['lowest_pnl'], unrealized_pnl_pct)
 
-            # Dynamic profit targets based on volatility
+            # Dynamic profit targets based on volatility (Enhanced for better profit capture)
             # High volatility = wider targets
-            base_target_1 = 0.02  # 2%
-            base_target_2 = 0.04  # 4%
-            base_target_3 = 0.06  # 6%
+            base_target_1 = 0.018  # 1.8% (reduced from 2% for earlier profit capture)
+            base_target_2 = 0.035  # 3.5% (reduced from 4%)
+            base_target_3 = 0.055  # 5.5% (reduced from 6%)
 
             vol_multiplier = 1 + (volatility - 0.03) * 5  # Scale with volatility
             vol_multiplier = max(0.5, min(vol_multiplier, 2.0))
@@ -355,22 +355,22 @@ class AdaptiveExitStrategy:
             target_2 = base_target_2 * vol_multiplier
             target_3 = base_target_3 * vol_multiplier
 
-            # Dynamic trailing stop based on profit level
+            # Dynamic trailing stop based on profit level (Tighter stops for better protection)
             if unrealized_pnl_pct > target_3:
-                # Very profitable - tight trailing stop
-                trailing_pct = 0.015  # 1.5%
-                scale_out_pct = 0.5  # Scale out 50%
+                # Very profitable - very tight trailing stop to lock in gains
+                trailing_pct = 0.012  # 1.2% (tighter from 1.5%)
+                scale_out_pct = 0.6  # Scale out 60% (increased from 50%)
             elif unrealized_pnl_pct > target_2:
-                # Good profit - moderate trailing stop
-                trailing_pct = 0.02  # 2%
-                scale_out_pct = 0.33  # Scale out 33%
+                # Good profit - tight trailing stop
+                trailing_pct = 0.017  # 1.7% (tighter from 2%)
+                scale_out_pct = 0.4  # Scale out 40% (increased from 33%)
             elif unrealized_pnl_pct > target_1:
-                # Small profit - normal trailing stop
-                trailing_pct = 0.025  # 2.5%
-                scale_out_pct = 0.25  # Scale out 25%
+                # Small profit - moderate trailing stop
+                trailing_pct = 0.022  # 2.2% (tighter from 2.5%)
+                scale_out_pct = 0.3  # Scale out 30% (increased from 25%)
             else:
-                # Not yet profitable - wider stop
-                trailing_pct = 0.03  # 3%
+                # Not yet profitable - standard stop
+                trailing_pct = 0.028  # 2.8% (tighter from 3%)
                 scale_out_pct = 0.0  # No scaling yet
 
             # Calculate trailing stop from highest profit

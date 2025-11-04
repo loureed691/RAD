@@ -1137,13 +1137,17 @@ class TradingBot:
             self.logger.error(f"Error during position update iteration: {e}", exc_info=True)
 
     def _background_scanner(self):
-        """Background thread that continuously scans for opportunities"""
-        self.logger.info("🔍 Background scanner thread started")
+        """Background thread that continuously scans for opportunities with adaptive intervals"""
+        self.logger.info("🔍 Background scanner thread started with ADAPTIVE SCANNING")
 
         # Give position monitor thread a head start (additional safety measure)
         # This ensures critical position monitoring API calls happen first
         time.sleep(1)  # 1 second delay before first scan
         self.logger.info("🔍 [Background] Beginning market scans (position monitor has priority)")
+        
+        # Adaptive scanning state
+        consecutive_no_opportunities = 0
+        adaptive_interval = Config.CHECK_INTERVAL
 
         while self._scan_thread_running:
             try:
@@ -1162,10 +1166,26 @@ class TradingBot:
                     self._latest_opportunities = opportunities
                     self._last_opportunity_update = datetime.now()
 
+                # ADAPTIVE SCANNING: Adjust interval based on market activity
                 if opportunities:
                     self.logger.info(f"✅ [Background] Found {len(opportunities)} opportunities (scan took {scan_duration:.1f}s)")
+                    consecutive_no_opportunities = 0
+                    # Speed up scanning when opportunities exist (continuous mode)
+                    adaptive_interval = max(5, int(Config.CHECK_INTERVAL / 2))  # At least 5s, or half configured interval
+                    self.logger.info(f"🔥 [Adaptive] Speeding up scans to {adaptive_interval}s (opportunities detected)")
                 else:
                     self.logger.debug("[Background] No opportunities found in this scan")
+                    consecutive_no_opportunities += 1
+                    
+                    # Slow down gradually if no opportunities for multiple scans
+                    if consecutive_no_opportunities >= 3:
+                        # After 3 empty scans, use full interval
+                        adaptive_interval = Config.CHECK_INTERVAL
+                        self.logger.debug(f"[Adaptive] Using standard interval {adaptive_interval}s (no opportunities)")
+                    elif consecutive_no_opportunities >= 2:
+                        # After 2 empty scans, use 75% interval
+                        adaptive_interval = int(Config.CHECK_INTERVAL * 0.75)
+                        self.logger.debug(f"[Adaptive] Using {adaptive_interval}s interval")
 
                 # Report performance periodically
                 if (datetime.now() - self.last_performance_report).total_seconds() >= 900:  # Every 15 minutes
@@ -1177,9 +1197,9 @@ class TradingBot:
                     if not is_healthy:
                         self.logger.warning(f"⚠️  PERFORMANCE WARNING: {reason}")
 
-                # Sleep for the configured scan interval before next scan
+                # Sleep for the adaptive interval before next scan
                 # Check periodically if we should stop - yield control more frequently
-                for _ in range(Config.CHECK_INTERVAL):
+                for _ in range(adaptive_interval):
                     if not self._scan_thread_running:
                         break
                     time.sleep(1)
