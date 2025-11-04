@@ -389,6 +389,234 @@ class MarketMicrostructure2026:
             'quality_rating': quality
         }
 
+    def calculate_microprice(self, orderbook: Dict) -> Optional[float]:
+        """
+        Calculate microprice - a more accurate reference price than mid-price.
+        
+        Microprice weights bid/ask by opposite side depth:
+        microprice = (best_bid * ask_volume + best_ask * bid_volume) / (bid_volume + ask_volume)
+        
+        This gives more weight to the side with more liquidity, providing a better
+        estimate of the "true" price.
+        
+        Args:
+            orderbook: Order book with bids and asks
+        
+        Returns:
+            Microprice, or None if cannot be calculated
+        """
+        try:
+            bids = orderbook.get('bids', [])
+            asks = orderbook.get('asks', [])
+            
+            if not bids or not asks:
+                return None
+            
+            best_bid = float(bids[0][0])
+            best_ask = float(asks[0][0])
+            
+            # Use top 3 levels for more robust calculation
+            top_n = min(3, len(bids), len(asks))
+            bid_volume = sum(float(bid[1]) for bid in bids[:top_n])
+            ask_volume = sum(float(ask[1]) for ask in asks[:top_n])
+            
+            if bid_volume + ask_volume == 0:
+                return (best_bid + best_ask) / 2  # Fallback to mid
+            
+            # Weighted average favoring side with more depth
+            microprice = (best_bid * ask_volume + best_ask * bid_volume) / (bid_volume + ask_volume)
+            
+            return microprice
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating microprice: {e}")
+            return None
+    
+    def calculate_kyle_lambda(self, trades: List[Dict], orderbook: Dict, 
+                            window_minutes: int = 5) -> float:
+        """
+        Calculate Kyle's lambda - price impact coefficient.
+        
+        Kyle's lambda measures how much price moves per unit of order flow:
+        λ = ΔPrice / SignedVolume
+        
+        Higher lambda = higher price impact (less liquid market)
+        
+        Args:
+            trades: Recent trade history
+            orderbook: Current order book
+            window_minutes: Time window for calculation
+        
+        Returns:
+            Kyle's lambda estimate
+        """
+        try:
+            if not trades or len(trades) < 5:
+                return 0.0  # Not enough data
+            
+            # Calculate signed volume (buy = +, sell = -)
+            signed_volumes = []
+            price_changes = []
+            
+            for i in range(1, len(trades)):
+                prev_trade = trades[i-1]
+                curr_trade = trades[i]
+                
+                # Determine trade direction (buy or sell)
+                # Typically inferred from whether trade was at bid or ask
+                if 'side' in curr_trade:
+                    side = curr_trade['side']
+                    signed_vol = curr_trade['amount'] if side == 'buy' else -curr_trade['amount']
+                else:
+                    # Infer from price movement
+                    signed_vol = curr_trade['amount']  # Simplified
+                
+                price_change = curr_trade['price'] - prev_trade['price']
+                
+                signed_volumes.append(signed_vol)
+                price_changes.append(price_change)
+            
+            if not signed_volumes or sum(abs(v) for v in signed_volumes) == 0:
+                return 0.0
+            
+            # Simple linear regression: price_change ~ signed_volume
+            # λ = cov(ΔP, V) / var(V)
+            signed_volumes = np.array(signed_volumes)
+            price_changes = np.array(price_changes)
+            
+            if np.var(signed_volumes) == 0:
+                return 0.0
+            
+            kyle_lambda = np.cov(price_changes, signed_volumes)[0, 1] / np.var(signed_volumes)
+            
+            # Cap at reasonable bounds
+            kyle_lambda = np.clip(kyle_lambda, -0.1, 0.1)
+            
+            return float(kyle_lambda)
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating Kyle's lambda: {e}")
+            return 0.0
+    
+    def calculate_queue_imbalance(self, orderbook: Dict, levels: int = 5) -> float:
+        """
+        Calculate queue/order flow imbalance.
+        
+        This measures the balance of pending orders in the book:
+        QI = (Bid Quantity - Ask Quantity) / (Bid Quantity + Ask Quantity)
+        
+        Positive QI suggests buying pressure, negative suggests selling pressure.
+        
+        Args:
+            orderbook: Order book with bids and asks
+            levels: Number of price levels to consider
+        
+        Returns:
+            Queue imbalance between -1 and 1
+        """
+        try:
+            bids = orderbook.get('bids', [])
+            asks = orderbook.get('asks', [])
+            
+            if not bids or not asks:
+                return 0.0
+            
+            # Sum quantities at top N levels
+            n_levels = min(levels, len(bids), len(asks))
+            
+            bid_qty = sum(float(bid[1]) for bid in bids[:n_levels])
+            ask_qty = sum(float(ask[1]) for ask in asks[:n_levels])
+            
+            total_qty = bid_qty + ask_qty
+            
+            if total_qty == 0:
+                return 0.0
+            
+            queue_imbalance = (bid_qty - ask_qty) / total_qty
+            
+            return float(np.clip(queue_imbalance, -1.0, 1.0))
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating queue imbalance: {e}")
+            return 0.0
+    
+    def calculate_short_horizon_volatility(self, trades: List[Dict], 
+                                          window_minutes: int = 5) -> Optional[float]:
+        """
+        Calculate short-horizon realized volatility.
+        
+        Uses high-frequency trade data to estimate volatility over a short window.
+        This is more reactive than daily volatility for market making.
+        
+        Args:
+            trades: Recent trade history
+            window_minutes: Time window in minutes
+        
+        Returns:
+            Annualized volatility estimate, or None if insufficient data
+        """
+        try:
+            if not trades or len(trades) < 10:
+                return None
+            
+            # Extract prices
+            prices = np.array([float(t['price']) for t in trades])
+            
+            # Calculate log returns
+            log_returns = np.diff(np.log(prices))
+            
+            if len(log_returns) == 0:
+                return None
+            
+            # Calculate variance of returns
+            variance = np.var(log_returns)
+            
+            # Annualize (assuming trades are evenly spaced)
+            # This is a rough approximation
+            trades_per_year = (365.25 * 24 * 60 / window_minutes) * len(trades)
+            annualized_vol = np.sqrt(variance * trades_per_year)
+            
+            # Cap at reasonable bounds (0.1 to 10.0 = 10% to 1000% annual vol)
+            annualized_vol = np.clip(annualized_vol, 0.1, 10.0)
+            
+            return float(annualized_vol)
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating short-horizon volatility: {e}")
+            return None
+    
+    def get_microstructure_signals(self, orderbook: Dict, trades: List[Dict], 
+                                   volume_24h: float = 0) -> Dict:
+        """
+        Get all microstructure signals in one call.
+        
+        This is a convenience method that calculates all key microstructure metrics.
+        
+        Args:
+            orderbook: Current order book
+            trades: Recent trade history
+            volume_24h: 24-hour volume (optional)
+        
+        Returns:
+            Dictionary with all microstructure signals
+        """
+        microprice = self.calculate_microprice(orderbook)
+        kyle_lambda = self.calculate_kyle_lambda(trades, orderbook)
+        queue_imbalance = self.calculate_queue_imbalance(orderbook)
+        short_vol = self.calculate_short_horizon_volatility(trades)
+        order_book_imbalance = self.analyze_order_book_imbalance(orderbook)
+        
+        return {
+            'microprice': microprice,
+            'kyle_lambda': kyle_lambda,
+            'queue_imbalance': queue_imbalance,
+            'order_flow_imbalance': queue_imbalance,  # Alias
+            'short_horizon_volatility': short_vol,
+            'order_book_imbalance': order_book_imbalance.get('imbalance', 0.0),
+            'spread_bps': order_book_imbalance.get('spread_bps', 0.0),
+            'timestamp': datetime.utcnow()  # Use UTC for consistency
+        }
+
     def detect_spoofing(self, orderbook_history: List[Dict]) -> Dict:
         """
         Detect potential spoofing in order book
