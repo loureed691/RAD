@@ -113,8 +113,9 @@ class Position:
         
         current_pnl = self.get_pnl(current_price)
         
-        # PROFITABILITY FIX: Move to breakeven earlier at 1.5% profit (was 2%)
-        if current_pnl > 0.015:  # Changed from 0.02
+        # LOSS PREVENTION FIX: Move to breakeven much earlier at 0.8% profit (was 1.5%)
+        # This locks in profits faster and prevents giving back gains
+        if current_pnl > 0.008:  # Changed from 0.015
             if self.side == 'long':
                 new_stop = self.entry_price * (1 + buffer)
                 if new_stop > self.stop_loss:
@@ -129,6 +130,33 @@ class Position:
                     return True
         
         return False
+    
+    def should_take_partial_profit(self, current_price: float) -> Tuple[bool, float]:
+        """
+        LOSS PREVENTION FIX: Determine if partial profit should be taken
+        Takes profit at multiple levels to lock in gains incrementally
+        
+        Args:
+            current_price: Current market price
+        
+        Returns:
+            Tuple of (should_take_profit, percentage_to_close)
+        """
+        current_pnl = self.get_pnl(current_price)
+        
+        # Take 30% profit at first target (1.5% unleveraged)
+        if current_pnl > 0.015 and self.partial_exits_taken == 0:
+            return True, 0.30
+        
+        # Take another 30% at second target (3.0% unleveraged)
+        elif current_pnl > 0.030 and self.partial_exits_taken == 1:
+            return True, 0.30
+        
+        # Take another 20% at third target (5.0% unleveraged)
+        elif current_pnl > 0.050 and self.partial_exits_taken == 2:
+            return True, 0.20
+        
+        return False, 0.0
     
     def update_trailing_stop(self, current_price: float, trailing_percentage: float, 
                             volatility: float = 0.03, momentum: float = 0.0):
@@ -148,32 +176,34 @@ class Position:
         if current_pnl > self.max_favorable_excursion:
             self.max_favorable_excursion = current_pnl
         
-        # PROFITABILITY FIX: Balanced trailing to protect profits without premature exits
+        # LOSS PREVENTION FIX: Wider trailing stops to avoid premature exits from noise
+        # Reduced false exits while still protecting profits
         adaptive_trailing = trailing_percentage
         
-        # 1. Volatility adjustment - wider to avoid premature stops in volatile markets
+        # 1. Volatility adjustment - much wider to avoid premature stops
         if volatility > 0.05:
-            adaptive_trailing *= 1.5  # WIDENED - allow more room in high volatility
+            adaptive_trailing *= 2.0  # WIDENED significantly - high volatility needs room
         elif volatility < 0.02:
-            adaptive_trailing *= 0.9  # WIDENED from 0.7 in low volatility
+            adaptive_trailing *= 1.2  # WIDENED from 0.9 in low volatility
         
-        # 2. Profit-based adjustment - LESS AGGRESSIVE to avoid early exits
-        # Only tighten after significant profit to avoid giving back gains
-        if current_pnl > 0.15:  # >15% price movement (unleveraged profit, increased from 10%)
-            adaptive_trailing *= 0.6  # LESS TIGHT from 0.5 
-        elif current_pnl > 0.08:  # >8% price movement (unleveraged profit, increased from 5%)
-            adaptive_trailing *= 0.8  # LESS TIGHT from 0.7
-        elif current_pnl > 0.05:  # >5% price movement (unleveraged profit)
-            adaptive_trailing *= 0.9  # LESS TIGHT - start tightening later
+        # 2. Profit-based adjustment - WIDER to let profits run
+        # Only tighten after significant profit to lock in gains
+        if current_pnl > 0.20:  # >20% price movement (unleveraged profit)
+            adaptive_trailing *= 0.8  # WIDER from 0.6 
+        elif current_pnl > 0.12:  # >12% price movement (unleveraged profit)
+            adaptive_trailing *= 1.0  # NEUTRAL from 0.8 - don't tighten yet
+        elif current_pnl > 0.06:  # >6% price movement (unleveraged profit)
+            adaptive_trailing *= 1.1  # WIDER - give it more room
         
-        # 3. Momentum adjustment - allow positions to run
+        # 3. Momentum adjustment - allow positions to run in strong trends
         if abs(momentum) > 0.03:  # Strong momentum
-            adaptive_trailing *= 1.2  # WIDENED from 1.1 - let winners run
+            adaptive_trailing *= 1.5  # WIDENED significantly - let strong trends run
         elif abs(momentum) < 0.01:  # Weak momentum
-            adaptive_trailing *= 0.9  # LESS TIGHT from 0.8
+            adaptive_trailing *= 1.0  # NEUTRAL from 0.9
         
-        # Cap adaptive trailing between wider bounds (0.6% to 5%)
-        adaptive_trailing = max(0.006, min(adaptive_trailing, 0.05))  # Widened from 0.004-0.04
+        # Cap adaptive trailing between wider bounds (1.0% to 6%)
+        # This prevents being stopped out by normal market noise
+        adaptive_trailing = max(0.010, min(adaptive_trailing, 0.06))  # Widened from 0.006-0.05
         
         if self.side == 'long':
             if current_price > self.highest_price:
@@ -1549,6 +1579,20 @@ class PositionManager:
                     if symbol not in self.positions:
                         self.position_logger.debug(f"  Position {symbol} was closed during update cycle, skipping")
                         continue
+                
+                # LOSS PREVENTION FIX: Check for partial profit taking first
+                # This locks in profits incrementally at multiple levels
+                should_partial, partial_pct = position.should_take_partial_profit(current_price)
+                if should_partial:
+                    amount_to_close = position.amount * partial_pct
+                    self.position_logger.info(f"  💰 Taking partial profit: {partial_pct*100:.0f}% at level {position.partial_exits_taken + 1}")
+                    leveraged_pnl_result = self.scale_out_position(symbol, amount_to_close, f"partial_profit_level_{position.partial_exits_taken + 1}")
+                    if leveraged_pnl_result is not None:
+                        position.partial_exits_taken += 1  # Track that we took this level
+                        self.logger.info(
+                            f"💰 Partial profit taken: {symbol}, closed {partial_pct*100:.0f}%, "
+                            f"P/L: {leveraged_pnl_result:.2%}, Level: {position.partial_exits_taken}"
+                        )
                 
                 # Check if position should be closed
                 # First check advanced exit strategies
