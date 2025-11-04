@@ -64,6 +64,22 @@ def format_pnl_usd(pnl_usd: float) -> str:
 class Position:
     """Represents an open trading position"""
     
+    # LOSS PREVENTION: Partial profit taking levels
+    # These can be customized per-strategy or made configurable
+    PARTIAL_PROFIT_LEVEL_1_PNL = 0.015  # 1.5% profit
+    PARTIAL_PROFIT_LEVEL_1_PCT = 0.30   # Take 30%
+    PARTIAL_PROFIT_LEVEL_2_PNL = 0.030  # 3.0% profit
+    PARTIAL_PROFIT_LEVEL_2_PCT = 0.30   # Take another 30%
+    PARTIAL_PROFIT_LEVEL_3_PNL = 0.050  # 5.0% profit
+    PARTIAL_PROFIT_LEVEL_3_PCT = 0.20   # Take another 20%
+    
+    # Breakeven protection threshold
+    BREAKEVEN_THRESHOLD = 0.008  # Move to breakeven at 0.8% profit
+    
+    # Trailing stop bounds
+    MIN_TRAILING_STOP = 0.010  # 1.0% minimum trailing
+    MAX_TRAILING_STOP = 0.060  # 6.0% maximum trailing
+    
     def __init__(self, symbol: str, side: str, entry_price: float, 
                  amount: float, leverage: int, stop_loss: float, 
                  take_profit: Optional[float] = None):
@@ -113,9 +129,9 @@ class Position:
         
         current_pnl = self.get_pnl(current_price)
         
-        # LOSS PREVENTION FIX: Move to breakeven much earlier at 0.8% profit (was 1.5%)
+        # LOSS PREVENTION FIX: Move to breakeven much earlier at configured threshold
         # This locks in profits faster and prevents giving back gains
-        if current_pnl > 0.008:  # Changed from 0.015
+        if current_pnl > self.BREAKEVEN_THRESHOLD:
             if self.side == 'long':
                 new_stop = self.entry_price * (1 + buffer)
                 if new_stop > self.stop_loss:
@@ -131,7 +147,7 @@ class Position:
         
         return False
     
-    def should_take_partial_profit(self, current_price: float) -> Tuple[bool, float]:
+    def get_partial_profit_action(self, current_price: float) -> Tuple[bool, float]:
         """
         LOSS PREVENTION FIX: Determine if partial profit should be taken
         Takes profit at multiple levels to lock in gains incrementally
@@ -144,17 +160,17 @@ class Position:
         """
         current_pnl = self.get_pnl(current_price)
         
-        # Take 30% profit at first target (1.5% unleveraged)
-        if current_pnl > 0.015 and self.partial_exits_taken == 0:
-            return True, 0.30
+        # Take profit at level 1 (configurable via class constants)
+        if current_pnl > self.PARTIAL_PROFIT_LEVEL_1_PNL and self.partial_exits_taken == 0:
+            return True, self.PARTIAL_PROFIT_LEVEL_1_PCT
         
-        # Take another 30% at second target (3.0% unleveraged)
-        elif current_pnl > 0.030 and self.partial_exits_taken == 1:
-            return True, 0.30
+        # Take profit at level 2
+        elif current_pnl > self.PARTIAL_PROFIT_LEVEL_2_PNL and self.partial_exits_taken == 1:
+            return True, self.PARTIAL_PROFIT_LEVEL_2_PCT
         
-        # Take another 20% at third target (5.0% unleveraged)
-        elif current_pnl > 0.050 and self.partial_exits_taken == 2:
-            return True, 0.20
+        # Take profit at level 3
+        elif current_pnl > self.PARTIAL_PROFIT_LEVEL_3_PNL and self.partial_exits_taken == 2:
+            return True, self.PARTIAL_PROFIT_LEVEL_3_PCT
         
         return False, 0.0
     
@@ -201,9 +217,9 @@ class Position:
         elif abs(momentum) < 0.01:  # Weak momentum
             adaptive_trailing *= 1.0  # NEUTRAL from 0.9
         
-        # Cap adaptive trailing between wider bounds (1.0% to 6%)
+        # Cap adaptive trailing between wider bounds (configurable via class constants)
         # This prevents being stopped out by normal market noise
-        adaptive_trailing = max(0.010, min(adaptive_trailing, 0.06))  # Widened from 0.006-0.05
+        adaptive_trailing = max(self.MIN_TRAILING_STOP, min(adaptive_trailing, self.MAX_TRAILING_STOP))
         
         if self.side == 'long':
             if current_price > self.highest_price:
@@ -1582,7 +1598,7 @@ class PositionManager:
                 
                 # LOSS PREVENTION FIX: Check for partial profit taking first
                 # This locks in profits incrementally at multiple levels
-                should_partial, partial_pct = position.should_take_partial_profit(current_price)
+                should_partial, partial_pct = position.get_partial_profit_action(current_price)
                 if should_partial:
                     amount_to_close = position.amount * partial_pct
                     self.position_logger.info(f"  💰 Taking partial profit: {partial_pct*100:.0f}% at level {position.partial_exits_taken + 1}")

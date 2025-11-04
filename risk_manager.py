@@ -14,6 +14,21 @@ except ImportError as e:
 class RiskManager:
     """Manage trading risk and position sizing"""
     
+    # LOSS PREVENTION: Stop loss configuration
+    MIN_STOP_LOSS = 0.006  # 0.6% minimum stop loss
+    MAX_STOP_LOSS = 0.015  # 1.5% maximum stop loss
+    BASE_STOP_LOSS = 0.008  # 0.8% base stop loss
+    
+    # LOSS PREVENTION: Confidence-based position sizing thresholds
+    CONFIDENCE_THRESHOLD_LOW = 0.75    # Below this: 50% position size
+    CONFIDENCE_THRESHOLD_MED = 0.80    # Below this: 75% position size
+    CONFIDENCE_THRESHOLD_HIGH = 0.85   # Below this: 90% position size
+    # Above HIGH threshold: 100% position size
+    
+    CONFIDENCE_MULTIPLIER_LOW = 0.50   # 50% size for low confidence
+    CONFIDENCE_MULTIPLIER_MED = 0.75   # 75% size for medium confidence
+    CONFIDENCE_MULTIPLIER_HIGH = 0.90  # 90% size for high confidence
+    
     def __init__(self, max_position_size: float, risk_per_trade: float, 
                  max_open_positions: int):
         """
@@ -460,17 +475,17 @@ class RiskManager:
         # Lower confidence = smaller positions = less risk
         # This prevents full-size positions on marginal signals
         confidence_multiplier = 1.0
-        if confidence < 0.75:
+        if confidence < self.CONFIDENCE_THRESHOLD_LOW:
             # Below 75% confidence: reduce position size significantly
-            confidence_multiplier = 0.5  # 50% of normal size
+            confidence_multiplier = self.CONFIDENCE_MULTIPLIER_LOW  # 50% of normal size
             self.logger.info(f"Confidence-based sizing: {confidence:.2%} → {confidence_multiplier:.0%} of normal size")
-        elif confidence < 0.80:
+        elif confidence < self.CONFIDENCE_THRESHOLD_MED:
             # 75-80% confidence: moderate reduction
-            confidence_multiplier = 0.75  # 75% of normal size
+            confidence_multiplier = self.CONFIDENCE_MULTIPLIER_MED  # 75% of normal size
             self.logger.debug(f"Confidence-based sizing: {confidence:.2%} → {confidence_multiplier:.0%} of normal size")
-        elif confidence < 0.85:
+        elif confidence < self.CONFIDENCE_THRESHOLD_HIGH:
             # 80-85% confidence: slight reduction
-            confidence_multiplier = 0.9  # 90% of normal size
+            confidence_multiplier = self.CONFIDENCE_MULTIPLIER_HIGH  # 90% of normal size
         # Above 85% confidence: full size (1.0x)
         
         # Apply confidence multiplier to risk
@@ -569,11 +584,11 @@ class RiskManager:
             Stop loss percentage (e.g., 0.05 for 5%)
         """
         # LOSS PREVENTION FIX: Much tighter base stop loss to protect capital
-        # Reduced from 1.5% to 0.8% to prevent larger losses
+        # Reduced from 1.5% to configurable base (default 0.8%)
         # With 5x leverage: 0.8% price stop = 4% position loss (strong protection)
         # With 10x leverage: 0.8% price stop = 8% position loss
         # This dramatically reduces loss per trade while still giving room
-        base_stop = 0.008  # 0.8% (reduced from 1.5%)
+        base_stop = self.BASE_STOP_LOSS
         
         # Adjust based on volatility (adaptive approach)
         # Higher volatility = wider stop loss to avoid premature stops
@@ -591,11 +606,11 @@ class RiskManager:
         stop_loss = base_stop + volatility_adjustment
         
         # LOSS PREVENTION FIX: Much tighter caps to limit maximum loss per trade
-        # Cap between 0.6% and 1.5% (reduced from 1.2%-3.0%)
+        # Cap between configurable MIN and MAX (default 0.6% and 1.5%)
         # With 5x leverage: 1.5% price stop = 7.5% position loss (maximum acceptable)
         # With 10x leverage: 1.5% price stop = 15% position loss (still reasonable)
         # This ensures we never risk catastrophic losses on any single trade
-        stop_loss = max(0.006, min(stop_loss, 0.015))
+        stop_loss = max(self.MIN_STOP_LOSS, min(stop_loss, self.MAX_STOP_LOSS))
         
         return stop_loss
     
