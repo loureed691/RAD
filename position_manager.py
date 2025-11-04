@@ -64,6 +64,19 @@ def format_pnl_usd(pnl_usd: float) -> str:
 class Position:
     """Represents an open trading position"""
     
+    # ADAPTIVE PROFIT PROTECTION: Trailing take profit configuration
+    # Instead of fixed levels, use trailing take profit that adapts to position
+    TRAILING_TP_ACTIVATION = 0.015  # Activate trailing TP at 1.5% profit
+    TRAILING_TP_DISTANCE = 0.005    # Trail 0.5% below peak (adaptive)
+    
+    # Breakeven Plus configuration
+    BREAKEVEN_PLUS_ACTIVATION = 0.008  # Activate at 0.8% profit (earlier than TP)
+    BREAKEVEN_PLUS_LOCK = 0.003        # Lock in 0.3% profit (breakeven + 0.3%)
+    
+    # Trailing stop bounds
+    MIN_TRAILING_STOP = 0.010  # 1.0% minimum trailing
+    MAX_TRAILING_STOP = 0.060  # 6.0% maximum trailing
+    
     def __init__(self, symbol: str, side: str, entry_price: float, 
                  amount: float, leverage: int, stop_loss: float, 
                  take_profit: Optional[float] = None):
@@ -79,6 +92,10 @@ class Position:
         self.entry_time = datetime.now()
         self.trailing_stop_activated = False
         
+        # Logger for position updates
+        from logger import Logger
+        self.logger = Logger.get_logger()
+        
         # Track maximum favorable excursion for adaptive adjustments
         self.max_favorable_excursion = 0.0  # Peak profit %
         self.initial_stop_loss = stop_loss  # Store initial stop loss
@@ -90,42 +107,121 @@ class Position:
         self.profit_velocity = 0.0  # Rate of profit change (% per hour)
         
         # Breakeven and profit scaling
-        self.breakeven_moved = False
+        self.breakeven_plus_activated = False  # Track if breakeven+ is active
         self.profit_acceleration = 0.0  # Rate of change of profit velocity
-        self.partial_exits_taken = 0  # Track partial profit taking
+        self.trailing_tp_activated = False  # Track if trailing TP is active
+        self.peak_profit = 0.0  # Track peak profit for trailing TP
         
         # Volume profile analyzer for smarter exits
         self.volume_profile_analyzer = VolumeProfile()
     
-    def move_to_breakeven(self, current_price: float, buffer: float = 0.001) -> bool:
+    def move_to_breakeven_plus(self, current_price: float, volatility: float = 0.03) -> bool:
         """
-        Move stop loss to breakeven (entry price) with small buffer
+        Move stop loss to breakeven + small profit for better protection
+        Adaptive based on volatility and position performance
         
         Args:
             current_price: Current market price
-            buffer: Small buffer above/below entry (default 0.1%)
+            volatility: Current market volatility for adaptive adjustment
         
         Returns:
             True if moved, False otherwise
         """
-        if self.breakeven_moved:
+        if self.breakeven_plus_activated:
             return False
         
         current_pnl = self.get_pnl(current_price)
         
-        # PROFITABILITY FIX: Move to breakeven earlier at 1.5% profit (was 2%)
-        if current_pnl > 0.015:  # Changed from 0.02
+        # Activate breakeven+ at configured threshold
+        if current_pnl > self.BREAKEVEN_PLUS_ACTIVATION:
+            # Adaptive lock amount based on volatility
+            # Higher volatility = lock more profit to be safe
+            lock_amount = self.BREAKEVEN_PLUS_LOCK
+            if volatility > 0.05:
+                lock_amount *= 1.5  # Lock 50% more in high volatility
+            elif volatility > 0.03:
+                lock_amount *= 1.2  # Lock 20% more in medium volatility
+            
             if self.side == 'long':
-                new_stop = self.entry_price * (1 + buffer)
+                new_stop = self.entry_price * (1 + lock_amount)
                 if new_stop > self.stop_loss:
+                    old_stop = self.stop_loss
                     self.stop_loss = new_stop
-                    self.breakeven_moved = True
+                    self.breakeven_plus_activated = True
+                    self.logger.info(f"🔒 Breakeven+ activated: stop {old_stop:.4f} → {new_stop:.4f} (entry + {lock_amount*100:.1f}%)")
                     return True
             else:  # short
-                new_stop = self.entry_price * (1 - buffer)
+                new_stop = self.entry_price * (1 - lock_amount)
                 if new_stop < self.stop_loss:
+                    old_stop = self.stop_loss
                     self.stop_loss = new_stop
-                    self.breakeven_moved = True
+                    self.breakeven_plus_activated = True
+                    self.logger.info(f"🔒 Breakeven+ activated: stop {old_stop:.4f} → {new_stop:.4f} (entry - {lock_amount*100:.1f}%)")
+                    return True
+        
+        return False
+    
+    def update_trailing_take_profit(self, current_price: float, volatility: float = 0.03, 
+                                   momentum: float = 0.0) -> bool:
+        """
+        Update trailing take profit that moves up as position becomes more profitable
+        Adaptive based on volatility and momentum
+        
+        Args:
+            current_price: Current market price
+            volatility: Current market volatility for adaptive trailing distance
+            momentum: Current price momentum for adaptive trailing
+        
+        Returns:
+            True if take profit was updated, False otherwise
+        """
+        current_pnl = self.get_pnl(current_price)
+        
+        # Update peak profit
+        if current_pnl > self.peak_profit:
+            self.peak_profit = current_pnl
+        
+        # Activate trailing TP when profit reaches threshold
+        if not self.trailing_tp_activated and current_pnl > self.TRAILING_TP_ACTIVATION:
+            self.trailing_tp_activated = True
+            self.logger.info(f"📈 Trailing take profit activated at {current_pnl*100:.2f}% profit")
+        
+        # If trailing TP is active, update take profit adaptively
+        if self.trailing_tp_activated:
+            # Adaptive trailing distance based on volatility and momentum
+            trail_distance = self.TRAILING_TP_DISTANCE
+            
+            # Wider trail in high volatility to avoid premature exits
+            if volatility > 0.05:
+                trail_distance *= 1.5
+            elif volatility > 0.03:
+                trail_distance *= 1.2
+            
+            # Tighter trail when momentum weakens (take profit sooner)
+            if abs(momentum) < 0.01:
+                trail_distance *= 0.8
+            # Wider trail with strong momentum (let it run)
+            elif abs(momentum) > 0.03:
+                trail_distance *= 1.3
+            
+            # Calculate new take profit based on peak profit
+            target_pnl = self.peak_profit - trail_distance
+            
+            if self.side == 'long':
+                new_tp = self.entry_price * (1 + target_pnl)
+                if self.take_profit is None or new_tp > self.take_profit:
+                    old_tp = self.take_profit
+                    self.take_profit = new_tp
+                    self.logger.debug(f"📈 Trailing TP updated: {old_tp:.4f if old_tp else 'None'} → {new_tp:.4f} "
+                                     f"(peak: {self.peak_profit*100:.2f}%, trail: {trail_distance*100:.2f}%)")
+                    return True
+            else:  # short
+                new_tp = self.entry_price * (1 - target_pnl)
+                if self.take_profit is None or new_tp < self.take_profit:
+                    old_tp = self.take_profit
+                    self.take_profit = new_tp
+                    self.logger.debug(f"📈 Trailing TP updated: {old_tp:.4f if old_tp else 'None'} → {new_tp:.4f} "
+                                     f"(peak: {self.peak_profit*100:.2f}%, trail: {trail_distance*100:.2f}%)")
                     return True
         
         return False
@@ -148,32 +244,34 @@ class Position:
         if current_pnl > self.max_favorable_excursion:
             self.max_favorable_excursion = current_pnl
         
-        # PROFITABILITY FIX: Balanced trailing to protect profits without premature exits
+        # LOSS PREVENTION FIX: Wider trailing stops to avoid premature exits from noise
+        # Reduced false exits while still protecting profits
         adaptive_trailing = trailing_percentage
         
-        # 1. Volatility adjustment - wider to avoid premature stops in volatile markets
+        # 1. Volatility adjustment - much wider to avoid premature stops
         if volatility > 0.05:
-            adaptive_trailing *= 1.5  # WIDENED - allow more room in high volatility
+            adaptive_trailing *= 2.0  # WIDENED significantly - high volatility needs room
         elif volatility < 0.02:
-            adaptive_trailing *= 0.9  # WIDENED from 0.7 in low volatility
+            adaptive_trailing *= 1.2  # WIDENED from 0.9 in low volatility
         
-        # 2. Profit-based adjustment - LESS AGGRESSIVE to avoid early exits
-        # Only tighten after significant profit to avoid giving back gains
-        if current_pnl > 0.15:  # >15% price movement (unleveraged profit, increased from 10%)
-            adaptive_trailing *= 0.6  # LESS TIGHT from 0.5 
-        elif current_pnl > 0.08:  # >8% price movement (unleveraged profit, increased from 5%)
-            adaptive_trailing *= 0.8  # LESS TIGHT from 0.7
-        elif current_pnl > 0.05:  # >5% price movement (unleveraged profit)
-            adaptive_trailing *= 0.9  # LESS TIGHT - start tightening later
+        # 2. Profit-based adjustment - WIDER to let profits run
+        # Only tighten after significant profit to lock in gains
+        if current_pnl > 0.20:  # >20% price movement (unleveraged profit)
+            adaptive_trailing *= 0.8  # WIDER from 0.6 
+        elif current_pnl > 0.12:  # >12% price movement (unleveraged profit)
+            adaptive_trailing *= 1.0  # NEUTRAL from 0.8 - don't tighten yet
+        elif current_pnl > 0.06:  # >6% price movement (unleveraged profit)
+            adaptive_trailing *= 1.1  # WIDER - give it more room
         
-        # 3. Momentum adjustment - allow positions to run
+        # 3. Momentum adjustment - allow positions to run in strong trends
         if abs(momentum) > 0.03:  # Strong momentum
-            adaptive_trailing *= 1.2  # WIDENED from 1.1 - let winners run
+            adaptive_trailing *= 1.5  # WIDENED significantly - let strong trends run
         elif abs(momentum) < 0.01:  # Weak momentum
-            adaptive_trailing *= 0.9  # LESS TIGHT from 0.8
+            adaptive_trailing *= 1.0  # NEUTRAL from 0.9
         
-        # Cap adaptive trailing between wider bounds (0.6% to 5%)
-        adaptive_trailing = max(0.006, min(adaptive_trailing, 0.05))  # Widened from 0.004-0.04
+        # Cap adaptive trailing between wider bounds (configurable via class constants)
+        # This prevents being stopped out by normal market noise
+        adaptive_trailing = max(self.MIN_TRAILING_STOP, min(adaptive_trailing, self.MAX_TRAILING_STOP))
         
         if self.side == 'long':
             if current_price > self.highest_price:
@@ -1521,8 +1619,16 @@ class PositionManager:
                         if position.stop_loss != old_stop:
                             self.position_logger.info(f"  🔄 Trailing stop updated: {old_stop:.2f} -> {position.stop_loss:.2f}")
                         
-                        # Update take profit dynamically with all parameters
+                        # ADAPTIVE PROFIT PROTECTION: Breakeven Plus (locks small profit early)
+                        if position.move_to_breakeven_plus(current_price, volatility):
+                            self.position_logger.info(f"  🔒 Breakeven+ protection activated")
+                        
+                        # ADAPTIVE PROFIT PROTECTION: Trailing Take Profit (follows price up)
                         old_tp = position.take_profit
+                        if position.update_trailing_take_profit(current_price, volatility, momentum):
+                            self.position_logger.info(f"  📈 Trailing TP updated: {old_tp:.2f if old_tp else 'None'} -> {position.take_profit:.2f}")
+                        
+                        # Also update legacy take profit for compatibility
                         position.update_take_profit(
                             current_price,
                             momentum=momentum,
@@ -1531,9 +1637,6 @@ class PositionManager:
                             rsi=rsi,
                             support_resistance=support_resistance
                         )
-                        
-                        if position.take_profit != old_tp:
-                            self.position_logger.info(f"  🎯 Take profit adjusted: {old_tp:.2f} -> {position.take_profit:.2f}")
                     else:
                         # Fallback to simple update if indicators fail
                         self.position_logger.debug(f"  Using simple trailing stop (indicators failed)")

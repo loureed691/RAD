@@ -831,10 +831,11 @@ class TradingBot:
         # Check drawdown and adjust risk
         risk_adjustment = self.risk_manager.update_drawdown(available_balance)
         
-        # Calculate position size with Kelly Criterion if available
+        # Calculate position size with Kelly Criterion if available and confidence-based scaling
         position_size = self.risk_manager.calculate_position_size(
             available_balance, entry_price, stop_loss_price, leverage, 
-            kelly_fraction=kelly_fraction * risk_adjustment if kelly_fraction is not None else None
+            kelly_fraction=kelly_fraction * risk_adjustment if kelly_fraction is not None else None,
+            confidence=confidence  # LOSS PREVENTION FIX: Scale position size by confidence
         )
         
         # 2025 OPTIMIZATION: Correlation-based position sizing adjustment

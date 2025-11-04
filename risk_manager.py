@@ -14,6 +14,21 @@ except ImportError as e:
 class RiskManager:
     """Manage trading risk and position sizing"""
     
+    # LOSS PREVENTION: Stop loss configuration
+    MIN_STOP_LOSS = 0.006  # 0.6% minimum stop loss
+    MAX_STOP_LOSS = 0.015  # 1.5% maximum stop loss
+    BASE_STOP_LOSS = 0.008  # 0.8% base stop loss
+    
+    # LOSS PREVENTION: Confidence-based position sizing thresholds
+    CONFIDENCE_THRESHOLD_LOW = 0.75    # Below this: 50% position size
+    CONFIDENCE_THRESHOLD_MED = 0.80    # Below this: 75% position size
+    CONFIDENCE_THRESHOLD_HIGH = 0.85   # Below this: 90% position size
+    # Above HIGH threshold: 100% position size
+    
+    CONFIDENCE_MULTIPLIER_LOW = 0.50   # 50% size for low confidence
+    CONFIDENCE_MULTIPLIER_MED = 0.75   # 75% size for medium confidence
+    CONFIDENCE_MULTIPLIER_HIGH = 0.90  # 90% size for high confidence
+    
     def __init__(self, max_position_size: float, risk_per_trade: float, 
                  max_open_positions: int):
         """
@@ -424,7 +439,8 @@ class RiskManager:
     
     def calculate_position_size(self, balance: float, entry_price: float, 
                                stop_loss_price: float, leverage: int, 
-                               risk_per_trade: float = None, kelly_fraction: float = None) -> float:
+                               risk_per_trade: float = None, kelly_fraction: float = None,
+                               confidence: float = 1.0) -> float:
         """
         Calculate safe position size based on risk management with optional Kelly Criterion
         
@@ -435,6 +451,7 @@ class RiskManager:
             leverage: Leverage to use
             risk_per_trade: Optional override for risk per trade
             kelly_fraction: Optional Kelly Criterion fraction for optimal sizing
+            confidence: Signal confidence (0-1) for position size scaling
         
         Returns:
             Position size in contracts
@@ -453,6 +470,29 @@ class RiskManager:
         else:
             # Use provided risk or default
             risk = risk_per_trade if risk_per_trade is not None else self.risk_per_trade
+        
+        # LOSS PREVENTION FIX: Scale position size based on confidence
+        # Lower confidence = smaller positions = less risk
+        # This prevents full-size positions on marginal signals
+        confidence_multiplier = 1.0
+        if confidence < self.CONFIDENCE_THRESHOLD_LOW:
+            # Below 75% confidence: reduce position size significantly
+            confidence_multiplier = self.CONFIDENCE_MULTIPLIER_LOW  # 50% of normal size
+            self.logger.info(f"Confidence-based sizing: {confidence:.2%} → {confidence_multiplier:.0%} of normal size")
+        elif confidence < self.CONFIDENCE_THRESHOLD_MED:
+            # 75-80% confidence: moderate reduction
+            confidence_multiplier = self.CONFIDENCE_MULTIPLIER_MED  # 75% of normal size
+            self.logger.info(f"Confidence-based sizing: {confidence:.2%} → {confidence_multiplier:.0%} of normal size")
+        elif confidence < self.CONFIDENCE_THRESHOLD_HIGH:
+            # 80-85% confidence: slight reduction
+            confidence_multiplier = self.CONFIDENCE_MULTIPLIER_HIGH  # 90% of normal size
+            self.logger.info(f"Confidence-based sizing: {confidence:.2%} → {confidence_multiplier:.0%} of normal size")
+        else:
+            # Above 85% confidence: full size (1.0x)
+            self.logger.info(f"Confidence-based sizing: {confidence:.2%} → {confidence_multiplier:.0%} of normal size")
+        
+        # Apply confidence multiplier to risk
+        risk = risk * confidence_multiplier
         
         # Calculate risk amount
         risk_amount = balance * risk
@@ -546,32 +586,34 @@ class RiskManager:
         Returns:
             Stop loss percentage (e.g., 0.05 for 5%)
         """
-        # LOSS PREVENTION: Tighter base stop loss to protect capital
-        # Reduced from 2.0% to 1.5% to prevent larger losses
-        # With 10x leverage: 1.5% price stop = 15% ROI loss (reasonable protection)
-        # This protects capital while still giving positions some room
-        base_stop = 0.015  # 1.5% (reduced from 2.0%)
+        # LOSS PREVENTION FIX: Much tighter base stop loss to protect capital
+        # Reduced from 1.5% to configurable base (default 0.8%)
+        # With 5x leverage: 0.8% price stop = 4% position loss (strong protection)
+        # With 10x leverage: 0.8% price stop = 8% position loss
+        # This dramatically reduces loss per trade while still giving room
+        base_stop = self.BASE_STOP_LOSS
         
         # Adjust based on volatility (adaptive approach)
         # Higher volatility = wider stop loss to avoid premature stops
         # Use smaller multipliers to keep stops within reasonable range
         if volatility < 0.02:
             # Low volatility - minimal adjustment
-            volatility_adjustment = volatility * 0.5  # Slight widening
+            volatility_adjustment = volatility * 0.4  # Slight widening
         elif volatility < 0.05:
             # Medium volatility - moderate adjustment
-            volatility_adjustment = volatility * 0.8  # Moderate widening
+            volatility_adjustment = volatility * 0.6  # Moderate widening
         else:
             # High volatility - larger adjustment but capped
-            volatility_adjustment = min(volatility * 1.0, 0.015)  # Cap at 1.5%
+            volatility_adjustment = min(volatility * 0.8, 0.010)  # Cap at 1.0%
         
         stop_loss = base_stop + volatility_adjustment
         
-        # LOSS PREVENTION: Tighter caps to limit maximum loss per trade
-        # Cap between 1.2% and 3.0% (reduced from 1.5%-4.0%)
-        # With 10x leverage: 3.0% price stop = 30% ROI (maximum acceptable loss)
-        # This ensures we never risk more than 30% ROI on any single trade
-        stop_loss = max(0.012, min(stop_loss, 0.030))
+        # LOSS PREVENTION FIX: Much tighter caps to limit maximum loss per trade
+        # Cap between configurable MIN and MAX (default 0.6% and 1.5%)
+        # With 5x leverage: 1.5% price stop = 7.5% position loss (maximum acceptable)
+        # With 10x leverage: 1.5% price stop = 15% position loss (still reasonable)
+        # This ensures we never risk catastrophic losses on any single trade
+        stop_loss = max(self.MIN_STOP_LOSS, min(stop_loss, self.MAX_STOP_LOSS))
         
         return stop_loss
     
