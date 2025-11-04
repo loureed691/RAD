@@ -28,7 +28,7 @@ This document describes the enhancements made to enable **continuous market scan
 adaptive_interval = 5s  # Scan every 5 seconds (continuous mode)
 
 # No opportunities for 1 scan:
-adaptive_interval = 7.5s  # Still faster than base
+adaptive_interval = 10s  # Remain at base rate
 
 # No opportunities for 2 scans:
 adaptive_interval = 10s  # Return to base rate
