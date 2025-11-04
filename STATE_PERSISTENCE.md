@@ -4,6 +4,37 @@
 
 The trading bot now includes comprehensive state persistence to ensure all important data is tracked during operation and saved when shutting down. This prevents data loss in case of unexpected crashes or shutdowns.
 
+## 🛡️ Git Pull Safety - Your Learning is Protected!
+
+**Your trained models and learning data are completely safe from `git pull` operations!**
+
+All model files are automatically protected by `.gitignore`:
+- ✅ `models/` directory contents are never tracked by git
+- ✅ `git pull` will NEVER overwrite your trained models
+- ✅ Your learning progress is preserved across all git operations
+- ✅ Each bot instance maintains its own independent learning
+
+**What this means:**
+- You can safely run `git pull` at any time without losing learning data
+- Your models stay on your local machine only
+- Updates to the code don't affect your trained models
+- Your bot continues learning from exactly where it left off
+
+**Extra Safety (Optional):**
+If you want additional backup protection, use the backup utility:
+```bash
+# Create a backup before major updates (optional)
+./backup_models.sh backup
+
+# List all backups
+./backup_models.sh list
+
+# Restore if needed
+./backup_models.sh restore
+```
+
+See `models/README.md` for complete details on how your data is protected.
+
 ## What Is Saved
 
 ### 1. Analytics State (`models/analytics_state.pkl`)

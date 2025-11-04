@@ -38,7 +38,8 @@ A production-grade, fully automated, self-learning KuCoin Futures trading bot wi
 👉 **See [2025_AI_QUICKSTART.md](2025_AI_QUICKSTART.md) for quick integration guide** 🆕  
 👉 **See [2026_ENHANCEMENTS.md](2026_ENHANCEMENTS.md) for advanced features guide**  
 👉 **See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions**
-👉 **See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for web dashboard details** 🆕
+👉 **See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for web dashboard details** 🆕  
+👉 **🛡️ Your ML models are protected! See [STATE_PERSISTENCE.md](STATE_PERSISTENCE.md) - git pull is safe!** 🔒
 
 ---
 

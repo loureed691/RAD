@@ -50,9 +50,13 @@ logs/
 # Data and models
 data/
 models/
+models_backups/
 *.pkl
 *.h5
 *.pt
+*.keras
+*.npy
+*.joblib
 
 # CatBoost training artifacts
 catboost_info/

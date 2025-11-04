@@ -1,0 +1,2 @@
+# This file ensures the models/ directory exists in git
+# All model files (*.pkl, *.h5, *.pt, *.keras) are gitignored to prevent losing your learning data
